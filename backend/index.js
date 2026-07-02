@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('frontend'));
+app.use(express.static('../frontend'));
 
 // Стартовая статичная база данных (Шапка А и B всегда заполнены)
 function createInitialTree() {
