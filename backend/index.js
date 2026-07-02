@@ -24,37 +24,18 @@ let treeDB = createInitialTree();
 
 // Вспомогательная функция для генерации ячеек конкретного уровня в БД
 function ensureLevelExists(tree, levelLetter, totalCells) {
-    for (let i = 1; i <= totalCells; i++) {
-        const cellId = `${levelLetter}${i}`;
-        if (!tree[cellId]) {
-            tree[cellId] = { id: cellId, level: levelLetter, user: null };
-        }
-    }
-}
-
-// Умный бесконечный веерный поиск по Закону Четырёх Секторов
 function getNextEmptyCell(tree) {
-    // 1. Уровень C (база)
+    // 1. Уровень C (по порядку)
     const levelC = ['C1', 'C2', 'C3', 'C4'];
     for (const cellId of levelC) {
+        if (!tree[cellId]) tree[cellId] = { id: cellId, level: 'C', user: null };
         if (!tree[cellId].user) return cellId;
     }
 
-    // 2. Уровень D (веерное заполнение: 1-5, 2-6, 3-7, 4-8)
-    const sequenceD = [1, 5, 2, 6, 3, 7, 4, 8];
-    for (const num of sequenceD) {
-        const cellId = `D${num}`;
+    // 2. Уровень D (веерный порядок: D1, D5, D2, D6, D3, D7, D4, D8)
+    const levelD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
+    for (const cellId of levelD) {
         if (!tree[cellId]) tree[cellId] = { id: cellId, level: 'D', user: null };
-        if (!tree[cellId].user) return cellId;
-    }
-
-    // 3. Уровень E (авто-открытие ячеек)
-    const levelE = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'];
-    for (const cellId of levelE) {
-        if (!tree[cellId]) tree[cellId] = { id: cellId, level: 'E', user: null };
-    }
-    
-    for (const cellId of levelE) {
         if (!tree[cellId].user) return cellId;
     }
 
