@@ -37,29 +37,33 @@ function getNextEmptyCell(tree) {
         if (!tree[id]) tree[id] = { id, level: 'D', user: null };
     }
 
-    // --- ДИАГНОСТИКА: выводим в консоль статус D4 ---
-    console.log("Checking D4:", tree['D4'] ? tree['D4'].user : "Not initialized");
+    // --- МОНИТОРИНГ ---
+    // Постоянно логируем состояние триггеров для понимания хода процесса
+    console.log(`[TREE LOG] D4 user: ${tree['D4']?.user || 'null'}, D8 user: ${tree['D8']?.user || 'null'}`);
 
     // 3. Триггеры появления уровня E
-    // Проверка D4
+    // Если D4 занят -> создаем E1-E8
     if (tree['D4'] && tree['D4'].user) {
-        console.log("D4 is filled! Initializing E1-E8...");
         for (let i = 1; i <= 8; i++) {
             const eid = `E${i}`;
-            if (!tree[eid]) tree[eid] = { id: eid, level: 'E', user: null };
+            if (!tree[eid]) {
+                tree[eid] = { id: eid, level: 'E', user: null };
+                console.log(`[TREE LOG] Event: Initialized ${eid}`);
+            }
         }
     }
-
-    // Проверка D8
+    // Если D8 занят -> создаем E9-E16
     if (tree['D8'] && tree['D8'].user) {
-        console.log("D8 is filled! Initializing E9-E16...");
         for (let i = 9; i <= 16; i++) {
             const eid = `E${i}`;
-            if (!tree[eid]) tree[eid] = { id: eid, level: 'E', user: null };
+            if (!tree[eid]) {
+                tree[eid] = { id: eid, level: 'E', user: null };
+                console.log(`[TREE LOG] Event: Initialized ${eid}`);
+            }
         }
     }
 
-    // 4. Заполнение уровня D (веер)
+    // 4. Заполнение уровня D (веерный алгоритм)
     const sequenceD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
     for (const id of sequenceD) {
         if (!tree[id].user) return id;
@@ -71,7 +75,7 @@ function getNextEmptyCell(tree) {
         if (tree[eid] && !tree[eid].user) return eid;
     }
 
-    return null; 
+    return null; // Уровни C, D и E заполнены
 }
 
 // API: Передача дерева на фронтенд
