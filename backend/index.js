@@ -23,7 +23,6 @@ function createInitialTree() {
 let treeDB = createInitialTree();
 
 // Вспомогательная функция для генерации ячеек конкретного уровня в БД
-function ensureLevelExists(tree, levelLetter, totalCells) {
 function getNextEmptyCell(tree) {
     // 1. Уровень C (по порядку)
     const levelC = ['C1', 'C2', 'C3', 'C4'];
