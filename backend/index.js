@@ -24,21 +24,25 @@ let treeDB = createInitialTree();
 
 // Вспомогательная функция для генерации ячеек конкретного уровня в БД
 function getNextEmptyCell(tree) {
-    // 1. Уровень C (по порядку)
+    // 1. Уровень C (проверяем по порядку)
     const levelC = ['C1', 'C2', 'C3', 'C4'];
     for (const cellId of levelC) {
         if (!tree[cellId]) tree[cellId] = { id: cellId, level: 'C', user: null };
-        if (!tree[cellId].user) return cellId;
+        if (!tree[cellId].user) return cellId; // Если есть место в С — отдаем его
     }
 
-    // 2. Уровень D (веерный порядок: D1, D5, D2, D6, D3, D7, D4, D8)
-    const levelD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
+    // 2. Уровень D (если дошли сюда, значит С заполнены)
+    // Создаем ВСЕ 8 ячеек D в системе
+    const levelD = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'];
     for (const cellId of levelD) {
-        if (!tree[cellId]) tree[cellId] = { id: cellId, level: 'D', user: null };
-        if (!tree[cellId].user) return cellId;
+        if (!tree[cellId]) {
+            tree[cellId] = { id: cellId, level: 'D', user: null };
+        }
     }
 
-    return null;
+    // Возвращаем null, чтобы регистратор пока остановился, 
+    // так как "пока точка" (ячейки появились, но заполнение не идет)
+    return null; 
 }
 
 // API: Передача дерева на фронтенд
