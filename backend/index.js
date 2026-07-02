@@ -24,48 +24,54 @@ let treeDB = createInitialTree();
 
 // Вспомогательная функция для генерации ячеек конкретного уровня в БД
 function getNextEmptyCell(tree) {
-    // 1. Уровень C (проверка)
+    // 1. Уровень C
     const levelC = ['C1', 'C2', 'C3', 'C4'];
     for (const id of levelC) {
         if (!tree[id]) tree[id] = { id, level: 'C', user: null };
         if (!tree[id].user) return id; 
     }
 
-    // 2. Уровень D (инициализация и триггеры E)
+    // 2. Уровень D (инициализация)
     const levelD = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'];
     for (const id of levelD) {
         if (!tree[id]) tree[id] = { id, level: 'D', user: null };
     }
 
-    // Триггеры появления уровня E
+    // --- ДИАГНОСТИКА: выводим в консоль статус D4 ---
+    console.log("Checking D4:", tree['D4'] ? tree['D4'].user : "Not initialized");
+
+    // 3. Триггеры появления уровня E
+    // Проверка D4
     if (tree['D4'] && tree['D4'].user) {
+        console.log("D4 is filled! Initializing E1-E8...");
         for (let i = 1; i <= 8; i++) {
             const eid = `E${i}`;
             if (!tree[eid]) tree[eid] = { id: eid, level: 'E', user: null };
         }
     }
+
+    // Проверка D8
     if (tree['D8'] && tree['D8'].user) {
+        console.log("D8 is filled! Initializing E9-E16...");
         for (let i = 9; i <= 16; i++) {
             const eid = `E${i}`;
             if (!tree[eid]) tree[eid] = { id: eid, level: 'E', user: null };
         }
     }
 
-    // 3. Заполнение уровня D (веерный алгоритм)
+    // 4. Заполнение уровня D (веер)
     const sequenceD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
     for (const id of sequenceD) {
         if (!tree[id].user) return id;
     }
 
-    // 4. Заполнение уровня E
-    // Проходим по порядку от E1 до E16. 
-    // Если ячейка уже создана в БД (через триггеры выше) и пуста — занимаем её.
+    // 5. Заполнение уровня E
     for (let i = 1; i <= 16; i++) {
         const eid = `E${i}`;
         if (tree[eid] && !tree[eid].user) return eid;
     }
 
-    return null; // Если всё дерево (C, D и E) заполнено
+    return null; 
 }
 
 // API: Передача дерева на фронтенд
