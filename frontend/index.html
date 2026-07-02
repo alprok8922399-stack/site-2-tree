@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Панель Админа — Структура Дерева (Сайт №2)</title>
     <style>
         body {
@@ -39,12 +39,19 @@
             width: 100%;
             font-weight: bold;
         }
+        /* Специальная обертка, чтобы широкая матрица не сжималась на телефонах */
+        .scroll-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            display: flex;
+            justify-content: center;
+            padding: 10px 0;
+        }
         .tree-container {
             display: flex;
             flex-direction: column;
             gap: 20px;
-            width: 100%;
-            max-width: 600px;
+            min-width: 540px; /* Фиксированная ширина, чтобы было что зумить и двигать */
             align-items: center;
         }
         .level-row {
@@ -52,18 +59,18 @@
             justify-content: center;
             gap: 10px;
             width: 100%;
-            flex-wrap: wrap;
         }
         .cell {
             background: #2c2c3e;
             border: 2px solid #3e3e56;
             border-radius: 8px;
             padding: 10px;
-            min-width: 70px;
+            width: 75px;
             text-align: center;
-            font-size: 12px;
+            font-size: 11px;
             transition: all 0.3s;
             box-sizing: border-box;
+            flex-shrink: 0; /* Запрещаем ячейкам сплющиваться */
         }
         .cell.occupied {
             border-color: #05c46b;
@@ -73,12 +80,13 @@
             font-weight: bold;
             color: #00cbc6;
             margin-bottom: 4px;
-            font-size: 14px;
+            font-size: 13px;
         }
         .cell-user {
             color: #d2dae2;
             word-break: break-all;
             min-height: 14px;
+            line-height: 1.2;
         }
     </style>
 </head>
@@ -90,14 +98,16 @@
         <button class="btn-reset" id="resetBtn">Сбросить дерево (Очистить БД)</button>
     </div>
 
-    <div class="tree-container">
-        <div class="level-row" id="level-A"></div>
-        
-        <div class="level-row" id="level-B"></div>
-        
-        <div class="level-row" id="level-C"></div>
-        
-        <div class="level-row" id="level-D"></div>
+    <div class="scroll-wrapper">
+        <div class="tree-container">
+            <div class="level-row" id="level-A"></div>
+            
+            <div class="level-row" id="level-B"></div>
+            
+            <div class="level-row" id="level-C"></div>
+            
+            <div class="level-row" id="level-D"></div>
+        </div>
     </div>
 
 <script src="script.js"></script>
