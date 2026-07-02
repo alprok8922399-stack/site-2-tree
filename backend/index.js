@@ -34,52 +34,31 @@ function ensureLevelExists(tree, levelLetter, totalCells) {
 
 // Умный бесконечный веерный поиск по Закону Четырёх Секторов
 function getNextEmptyCell(tree) {
-    // 1. Уровень C заполняется строго по порядку (базовые 4 ячейки)
+    // 1. Уровень C (база)
     const levelC = ['C1', 'C2', 'C3', 'C4'];
     for (const cellId of levelC) {
         if (!tree[cellId].user) return cellId;
     }
 
-    // 2. Бесконечный цикл по всем последующим уровням (D, E, F, G...)
-    const levels = [
-        { current: 'D', next: 'E', currentCount: 8,  nextCount: 16 },
-        { current: 'E', next: 'F', currentCount: 16, nextCount: 32 },
-        { current: 'F', next: 'G', currentCount: 32, nextCount: 64 },
-        { current: 'G', next: 'H', currentCount: 64, nextCount: 128 }
-        // Можно добавлять буквы дальше, логика подхватит автоматически
-    ];
-
-    for (const lvl of levels) {
-        // Проверяем, созданы ли ячейки текущего уровня в БД
-        ensureLevelExists(tree, lvl.current, lvl.currentCount);
-
-        // Рассчитываем размер одного сектора (всего ячеек делим на 4 сектора)
-        const sectorSize = lvl.currentCount / 4;
-
-        // Генерируем точный веерный порядок для этого уровня: 
-        // Сначала первые места всех 4-х секторов, потом вторые, третьи и т.д.
-        const dynamicOrder = [];
-        for (let pos = 0; pos < sectorSize; pos++) {
-            for (let sec = 0; sec < 4; sec++) {
-                // Вычисляем реальный номер ячейки в ряду
-                const cellIndex = (sec * sectorSize) + pos + 1;
-                dynamicOrder.push(`${lvl.current}${cellIndex}`);
-            }
-        }
-
-        // Ищем пустую ячейку по этому веерному порядку
-        for (const cellId of dynamicOrder) {
-            if (!tree[cellId].user) {
-                return cellId;
-            }
-        }
-
-        // Если мы здесь, значит текущий уровеньlvl.current заполнен на 100%!
-        // Автоматически открываем ячейки следующего уровня в базе (Защитный барьер пройден)
-        ensureLevelExists(tree, lvl.next, lvl.nextCount);
+    // 2. Уровень D (веерное заполнение: 1-5, 2-6, 3-7, 4-8)
+    const sequenceD = [1, 5, 2, 6, 3, 7, 4, 8];
+    for (const num of sequenceD) {
+        const cellId = `D${num}`;
+        if (!tree[cellId]) tree[cellId] = { id: cellId, level: 'D', user: null };
+        if (!tree[cellId].user) return cellId;
     }
 
-    return null; 
+    // 3. Уровень E (авто-открытие ячеек)
+    const levelE = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'];
+    for (const cellId of levelE) {
+        if (!tree[cellId]) tree[cellId] = { id: cellId, level: 'E', user: null };
+    }
+    
+    for (const cellId of levelE) {
+        if (!tree[cellId].user) return cellId;
+    }
+
+    return null;
 }
 
 // API: Передача дерева на фронтенд
