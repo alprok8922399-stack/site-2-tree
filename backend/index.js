@@ -24,15 +24,14 @@ let treeDB = createInitialTree();
 
 // Вспомогательная функция для генерации ячеек конкретного уровня в БД
 function getNextEmptyCell(tree) {
-    // 1. Уровень C (проверяем по порядку)
+    // 1. Уровень C (проверка по порядку)
     const levelC = ['C1', 'C2', 'C3', 'C4'];
     for (const cellId of levelC) {
         if (!tree[cellId]) tree[cellId] = { id: cellId, level: 'C', user: null };
-        if (!tree[cellId].user) return cellId; // Если есть место в С — отдаем его
+        if (!tree[cellId].user) return cellId;
     }
 
-    // 2. Уровень D (если дошли сюда, значит С заполнены)
-    // Создаем ВСЕ 8 ячеек D в системе
+    // 2. Уровень D (инициализация: создаем ВСЕ 8 ячеек, чтобы они существовали)
     const levelD = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'];
     for (const cellId of levelD) {
         if (!tree[cellId]) {
@@ -40,9 +39,13 @@ function getNextEmptyCell(tree) {
         }
     }
 
-    // Возвращаем null, чтобы регистратор пока остановился, 
-    // так как "пока точка" (ячейки появились, но заполнение не идет)
-    return null; 
+    // 3. Уровень D (заполнение строго по веерному сценарию)
+    const sequenceD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
+    for (const cellId of sequenceD) {
+        if (!tree[cellId].user) return cellId;
+    }
+
+    return null; // Если всё заполнено
 }
 
 // API: Передача дерева на фронтенд
