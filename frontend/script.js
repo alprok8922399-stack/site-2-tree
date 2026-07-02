@@ -1,5 +1,5 @@
-// Позже мы заменим этот URL на реальный адрес бэкенда на Render!
-const BACKEND_URL = 'http://localhost:5000';
+// Указываем реальный адрес бэкенда на Render вместо localhost
+const BACKEND_URL = 'https://site-2-tree.onrender.com';
 
 const resetBtn = document.getElementById('resetBtn');
 
