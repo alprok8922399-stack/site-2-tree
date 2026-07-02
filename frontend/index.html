@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель Админа — Структура Дерева (Сайт №2)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1a1a24;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-sizing: border-box;
+            min-height: 100vh;
+        }
+        h1 {
+            font-size: 22px;
+            color: #00cbc6;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .controls {
+            margin-bottom: 25px;
+            width: 100%;
+            max-width: 500px;
+        }
+        .btn-reset {
+            background-color: #ff5e57;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            font-size: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+        }
+        .tree-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+            max-width: 600px;
+            align-items: center;
+        }
+        .level-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+        .cell {
+            background: #2c2c3e;
+            border: 2px solid #3e3e56;
+            border-radius: 8px;
+            padding: 10px;
+            min-width: 70px;
+            text-align: center;
+            font-size: 12px;
+            transition: all 0.3s;
+            box-sizing: border-box;
+        }
+        .cell.occupied {
+            border-color: #05c46b;
+            background: #1e3d2f;
+        }
+        .cell-id {
+            font-weight: bold;
+            color: #00cbc6;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+        .cell-user {
+            color: #d2dae2;
+            word-break: break-all;
+            min-height: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>📊 Визуальная структура дерева</h1>
+    
+    <div class="controls">
+        <button class="btn-reset" id="resetBtn">Сбросить дерево (Очистить БД)</button>
+    </div>
+
+    <div class="tree-container">
+        <div class="level-row" id="level-A"></div>
+        
+        <div class="level-row" id="level-B"></div>
+        
+        <div class="level-row" id="level-C"></div>
+        
+        <div class="level-row" id="level-D"></div>
+    </div>
+
+<script src="script.js"></script>
+</body>
+</html>
