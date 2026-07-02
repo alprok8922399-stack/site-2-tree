@@ -35,7 +35,7 @@ function loadTree() {
     return JSON.parse(JSON.stringify(initialTree));
 }
 
-// Функция сохранения дерева в файл tree.json
+// Функция保存ения дерева в файл tree.json
 function saveTree(tree) {
     try {
         fs.writeFileSync(FILE_PATH, JSON.stringify(tree, null, 2), 'utf8');
@@ -117,7 +117,7 @@ app.post('/api/register', (req, res) => {
     });
 });
 
-// API-эндпоинт получения текущего дерева (для будущего фронтенда админа)
+// API-эндпоинт получения текущего дерева (для фронтенда админа)
 app.get('/api/tree', (req, res) => {
     const tree = loadTree();
     res.json(tree);
@@ -127,6 +127,14 @@ app.get('/api/tree', (req, res) => {
 app.post('/api/reset', (req, res) => {
     saveTree(initialTree);
     res.json({ message: "Дерево успешно сброшено в начальное состояние" });
+});
+
+// Говорим серверу отдавать статические файлы (HTML, CSS, JS) из папки frontend
+app.use(express.static(path.join(__dirname, '../frontend')));
+
+// При заходе на главный URL — отдаем наш index.html для админки
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
 app.listen(PORT, () => {
