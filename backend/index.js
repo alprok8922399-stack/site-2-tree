@@ -24,33 +24,26 @@ let treeDB = createInitialTree();
 
 // Вспомогательная функция для генерации ячеек конкретного уровня в БД
 function getNextEmptyCell(tree) {
-    // 1. Уровень C (проверяем по порядку)
+    // 1. Уровень C (проверка)
     const levelC = ['C1', 'C2', 'C3', 'C4'];
-    for (const cellId of levelC) {
-        if (!tree[cellId]) tree[cellId] = { id: cellId, level: 'C', user: null };
-        if (!tree[cellId].user) return cellId; 
+    for (const id of levelC) {
+        if (!tree[id]) tree[id] = { id, level: 'C', user: null };
+        if (!tree[id].user) return id; 
     }
 
-    // 2. Уровень D (если дошли сюда, значит С заполнены)
-    // Сначала инициализируем все D, если их еще нет
+    // 2. Уровень D (инициализация и триггеры E)
     const levelD = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'];
-    for (const cellId of levelD) {
-        if (!tree[cellId]) {
-            tree[cellId] = { id: cellId, level: 'D', user: null };
-        }
+    for (const id of levelD) {
+        if (!tree[id]) tree[id] = { id, level: 'D', user: null };
     }
 
-    // 3. Триггеры для появления ячеек E (если условия выполнены)
-    
-    // Если заполнилась D4 — появляются E1-E8
+    // Триггеры появления уровня E
     if (tree['D4'] && tree['D4'].user) {
         for (let i = 1; i <= 8; i++) {
             const eid = `E${i}`;
             if (!tree[eid]) tree[eid] = { id: eid, level: 'E', user: null };
         }
     }
-
-    // Если заполнилась D8 — появляются E9-E16
     if (tree['D8'] && tree['D8'].user) {
         for (let i = 9; i <= 16; i++) {
             const eid = `E${i}`;
@@ -58,15 +51,21 @@ function getNextEmptyCell(tree) {
         }
     }
 
-    // 4. Заполнение уровня D (веерный порядок)
+    // 3. Заполнение уровня D (веерный алгоритм)
     const sequenceD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
-    for (const cellId of sequenceD) {
-        if (!tree[cellId].user) return cellId;
+    for (const id of sequenceD) {
+        if (!tree[id].user) return id;
     }
 
-    // Если уровень D полностью заполнен, возвращаем null (стоп).
-    // Хотя ячейки E к этому моменту уже могут быть созданы в tree.
-    return null; 
+    // 4. Заполнение уровня E
+    // Проходим по порядку от E1 до E16. 
+    // Если ячейка уже создана в БД (через триггеры выше) и пуста — занимаем её.
+    for (let i = 1; i <= 16; i++) {
+        const eid = `E${i}`;
+        if (tree[eid] && !tree[eid].user) return eid;
+    }
+
+    return null; // Если всё дерево (C, D и E) заполнено
 }
 
 // API: Передача дерева на фронтенд
