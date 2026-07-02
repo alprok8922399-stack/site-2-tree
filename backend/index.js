@@ -1,142 +1,116 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
-
 const app = express();
 const PORT = process.env.PORT || 5000;
-const FILE_PATH = path.join(__dirname, 'tree.json');
 
-// Включаем CORS, чтобы Сайт №1 мог слать нам запросы по сети
 app.use(cors());
 app.use(express.json());
+app.use(express.static('frontend'));
 
-// Структура дерева по умолчанию (начальное состояние)
-const initialTree = {
-    "A1": { id: "A1", user: null, level: "A", status: "open" },
-    "B1": { id: "B1", user: null, level: "B", status: "open" },
-    "B2": { id: "B2", user: null, level: "B", status: "open" },
-    "C1": { id: "C1", user: null, level: "C", status: "open" },
-    "C2": { id: "C2", user: null, level: "C", status: "open" },
-    "C3": { id: "C3", user: null, level: "C", status: "open" },
-    "C4": { id: "C4", user: null, level: "C", status: "open" }
-};
-
-// Функция загрузки дерева из файла tree.json
-function loadTree() {
-    try {
-        if (fs.existsSync(FILE_PATH)) {
-            const data = fs.readFileSync(FILE_PATH, 'utf8');
-            return JSON.parse(data);
-        }
-    } catch (e) {
-        console.error("Ошибка чтения файла дерева, создаем заново:", e);
-    }
-    return JSON.parse(JSON.stringify(initialTree));
+// Стартовая статичная база данных (Шапка А и B всегда заполнены)
+function createInitialTree() {
+    return {
+        'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
+        'B1': { id: 'B1', level: 'B', user: 'LEADER_1' },
+        'B2': { id: 'B2', level: 'B', user: 'LEADER_2' },
+        'C1': { id: 'C1', level: 'C', user: null },
+        'C2': { id: 'C2', level: 'C', user: null },
+        'C3': { id: 'C3', level: 'C', user: null },
+        'C4': { id: 'C4', level: 'C', user: null }
+    };
 }
 
-// Функция保存ения дерева в файл tree.json
-function saveTree(tree) {
-    try {
-        fs.writeFileSync(FILE_PATH, JSON.stringify(tree, null, 2), 'utf8');
-    } catch (e) {
-        console.error("Не удалось сохранить дерево в файл:", e);
+let treeDB = createInitialTree();
+
+// Вспомогательная функция для генерации ячеек конкретного уровня в БД
+function ensureLevelExists(tree, levelLetter, totalCells) {
+    for (let i = 1; i <= totalCells; i++) {
+        const cellId = `${levelLetter}${i}`;
+        if (!tree[cellId]) {
+            tree[cellId] = { id: cellId, level: levelLetter, user: null };
+        }
     }
 }
 
-// Поиск первой свободной открытой ячейки через СТЭК (без рекурсии)
-function findEmptyCell(tree) {
-    // Порядок проверки ячеек (от верхних уровней к нижним)
-    const priority = ["A1", "B1", "B2", "C1", "C2", "C3", "C4"];
-    
-    // Если открыт уровень D, добавляем его в приоритет поиска
-    for (let i = 1; i <= 8; i++) {
-        if (tree[`D${i}`]) {
-            priority.push(`D${i}`);
-        }
+// Умный бесконечный веерный поиск по Закону Четырёх Секторов
+function getNextEmptyCell(tree) {
+    // 1. Уровень C заполняется строго по порядку (базовые 4 ячейки)
+    const levelC = ['C1', 'C2', 'C3', 'C4'];
+    for (const cellId of levelC) {
+        if (!tree[cellId].user) return cellId;
     }
 
-    // Ищем перебором массива (стек-логика)
-    for (const cellId of priority) {
-        if (tree[cellId] && tree[cellId].user === null && tree[cellId].status === "open") {
-            return cellId;
-        }
-    }
-    return null;
-}
+    // 2. Бесконечный цикл по всем последующим уровням (D, E, F, G...)
+    const levels = [
+        { current: 'D', next: 'E', currentCount: 8,  nextCount: 16 },
+        { current: 'E', next: 'F', currentCount: 16, nextCount: 32 },
+        { current: 'F', next: 'G', currentCount: 32, nextCount: 64 },
+        { current: 'G', next: 'H', currentCount: 64, nextCount: 128 }
+        // Можно добавлять буквы дальше, логика подхватит автоматически
+    ];
 
-// Проверка «Правила четырёх» для автоматического открытия уровня D
-function checkAndOpenLevelD(tree) {
-    // Проверяем, заполнена ли вся четвёрка на уровне C
-    const isC1Full = tree["C1"] && tree["C1"].user !== null;
-    const isC2Full = tree["C2"] && tree["C2"].user !== null;
-    const isC3Full = tree["C3"] && tree["C3"].user !== null;
-    const isC4Full = tree["C4"] && tree["C4"].user !== null;
+    for (const lvl of levels) {
+        // Проверяем, созданы ли ячейки текущего уровня в БД
+        ensureLevelExists(tree, lvl.current, lvl.currentCount);
 
-    if (isC1Full && isC2Full && isC3Full && isC4Full) {
-        // Если заполнена вся четвёрка, а восьмёрок (уровня D) ещё нет — создаём их!
-        if (!tree["D1"]) {
-            console.log("🔥 'Правило четырёх' сработало! Открываем 'восьмёрки' (уровень D)...");
-            for (let i = 1; i <= 8; i++) {
-                tree[`D${i}`] = { id: `D${i}`, user: null, level: "D", status: "open" };
+        // Рассчитываем размер одного сектора (всего ячеек делим на 4 сектора)
+        const sectorSize = lvl.currentCount / 4;
+
+        // Генерируем точный веерный порядок для этого уровня: 
+        // Сначала первые места всех 4-х секторов, потом вторые, третьи и т.д.
+        const dynamicOrder = [];
+        for (let pos = 0; pos < sectorSize; pos++) {
+            for (let sec = 0; sec < 4; sec++) {
+                // Вычисляем реальный номер ячейки в ряду
+                const cellIndex = (sec * sectorSize) + pos + 1;
+                dynamicOrder.push(`${lvl.current}${cellIndex}`);
             }
         }
+
+        // Ищем пустую ячейку по этому веерному порядку
+        for (const cellId of dynamicOrder) {
+            if (!tree[cellId].user) {
+                return cellId;
+            }
+        }
+
+        // Если мы здесь, значит текущий уровеньlvl.current заполнен на 100%!
+        // Автоматически открываем ячейки следующего уровня в базе (Защитный барьер пройден)
+        ensureLevelExists(tree, lvl.next, lvl.nextCount);
     }
+
+    return null; 
 }
 
-// API-эндпоинт для регистрации нового пользователя
+// API: Передача дерева на фронтенд
+app.get('/api/tree', (req, res) => {
+    res.json(treeDB);
+});
+
+// API: Регистрация нового пользователя роботом с Сайта №1
 app.post('/api/register', (req, res) => {
     const { username } = req.body;
     if (!username) {
-        return res.status(400).json({ message: "Имя пользователя обязательно" });
+        return res.status(400).json({ error: 'Имя пользователя обязательно' });
     }
 
-    let tree = loadTree();
-    
-    // Находим свободную ячейку
-    const targetCell = findEmptyCell(tree);
-
-    if (!targetCell) {
-        return res.status(400).json({ message: "Нет свободных мест в структуре!" });
+    const nextCellId = getNextEmptyCell(treeDB);
+    if (!nextCellId) {
+        return res.status(400).json({ error: 'Достигнут предел тестовых уровней' });
     }
 
-    // Записываем пользователя в ячейку
-    tree[targetCell].user = username;
-    console.log(`👤 Пользователь ${username} успешно зарегистрирован в ячейку ${targetCell}`);
+    treeDB[nextCellId].user = username;
+    getNextEmptyCell(treeDB); // Актуализируем триггеры барьеров
 
-    // Проверяем, не пора ли открыть уровень D по Правилу четырёх
-    checkAndOpenLevelD(tree);
-
-    // Сохраняем обновленное состояние в базу данных (файл)
-    saveTree(tree);
-
-    res.json({
-        message: "Регистрация успешна",
-        cell: targetCell,
-        user: username
-    });
+    res.json({ success: true, cellId: nextCellId, user: username });
 });
 
-// API-эндпоинт получения текущего дерева (для фронтенда админа)
-app.get('/api/tree', (req, res) => {
-    const tree = loadTree();
-    res.json(tree);
-});
-
-// Сброс дерева в начальное состояние (для тестов)
+// API: Сброс базы данных к начальному статичному состоянию
 app.post('/api/reset', (req, res) => {
-    saveTree(initialTree);
-    res.json({ message: "Дерево успешно сброшено в начальное состояние" });
-});
-
-// Говорим серверу отдавать статические файлы (HTML, CSS, JS) из папки frontend
-app.use(express.static(path.join(__dirname, '../frontend')));
-
-// При заходе на главный URL — отдаем наш index.html для админки
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/index.html'));
+    treeDB = createInitialTree();
+    res.json({ success: true, message: 'Дерево сброшено к начальному состоянию' });
 });
 
 app.listen(PORT, () => {
-    console.log(`Сервер структуры (БД дерева) запущен на порту ${PORT}`);
+    console.log(`Сервер Сайта №2 запущен на порту ${PORT}`);
 });
