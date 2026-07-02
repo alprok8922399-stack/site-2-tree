@@ -24,28 +24,42 @@ let treeDB = createInitialTree();
 
 // Вспомогательная функция для генерации ячеек конкретного уровня в БД
 function getNextEmptyCell(tree) {
-    // 1. Уровень C (проверка по порядку)
+    // 1. Уровень C (строго по порядку)
     const levelC = ['C1', 'C2', 'C3', 'C4'];
-    for (const cellId of levelC) {
-        if (!tree[cellId]) tree[cellId] = { id: cellId, level: 'C', user: null };
-        if (!tree[cellId].user) return cellId;
+    for (const id of levelC) {
+        if (!tree[id]) tree[id] = { id, level: 'C', user: null };
+        if (!tree[id].user) return id;
     }
 
-    // 2. Уровень D (инициализация: создаем ВСЕ 8 ячеек, чтобы они существовали)
-    const levelD = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'];
-    for (const cellId of levelD) {
-        if (!tree[cellId]) {
-            tree[cellId] = { id: cellId, level: 'D', user: null };
+    // 2. Уровень D (веерный порядок: D1, D5, D2, D6, D3, D7, D4, D8)
+    const levelD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
+    for (const id of levelD) {
+        // Если ячейки D нет — создаем
+        if (!tree[id]) tree[id] = { id, level: 'D', user: null };
+
+        // Триггеры для E (проверяем выполнение условий)
+        // Когда заполнилась D4 — появляются E1-E8
+        if (id === 'D4' && tree['D4'].user) {
+            const eFirst = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'];
+            for (const eid of eFirst) {
+                if (!tree[eid]) tree[eid] = { id: eid, level: 'E', user: null };
+            }
         }
+        // Когда заполнилась D8 — появляются E9-E16
+        if (id === 'D8' && tree['D8'].user) {
+            const eSecond = ['E9', 'E10', 'E11', 'E12', 'E13', 'E14', 'E15', 'E16'];
+            for (const eid of eSecond) {
+                if (!tree[eid]) tree[eid] = { id: eid, level: 'E', user: null };
+            }
+        }
+
+        // Возвращаем пустую ячейку D для заполнения
+        if (!tree[id].user) return id;
     }
 
-    // 3. Уровень D (заполнение строго по веерному сценарию)
-    const sequenceD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
-    for (const cellId of sequenceD) {
-        if (!tree[cellId].user) return cellId;
-    }
-
-    return null; // Если всё заполнено
+    // 3. Стоп: ячейки E созданы в tree, но функция возвращает null, 
+    // поэтому система их не заполняет.
+    return null; 
 }
 
 // API: Передача дерева на фронтенд
