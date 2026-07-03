@@ -2,8 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.2, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes">
-    <title>Панель Админа — Структура Дерева (Сайт №2)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=0.4, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes">
+    <title>Панель Admina — Структура Дерева (Сайт №2)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -39,20 +39,25 @@
             width: 100%;
             font-weight: bold;
         }
+        /* Обертка для прокрутки: разрешает скролл во все стороны на телефоне */
         .scroll-wrapper {
             width: 100%;
             overflow: auto;
-            display: flex;
-            justify-content: center;
-            padding: 10px 0;
-            touch-action: pan-x pan-y pinch-zoom;
+            display: block;
+            padding: 20px 0;
+            touch-action: pan-x pan-y;
+            -webkit-overflow-scrolling: touch;
         }
+        /* Контейнер матрицы: теперь он имеет запас ширины и высоты, чтобы при масштабировании ничего не скрывалось */
         .tree-container {
             display: flex;
             flex-direction: column;
             gap: 20px;
             align-items: center;
-            width: max-content; 
+            width: max-content;
+            margin: 0 auto;
+            padding: 20px;
+            transition: transform 0.1s ease-out;
         }
         .level-row {
             display: flex;
@@ -64,7 +69,7 @@
         .split-container {
             display: flex;
             justify-content: center;
-            gap: 40px; /* Отступ между левой и правой половиной */
+            gap: 40px; 
             width: 100%;
         }
         .split-block {
@@ -81,7 +86,6 @@
             width: 75px;
             text-align: center;
             font-size: 11px;
-            transition: all 0.3s;
             box-sizing: border-box;
             flex-shrink: 0;
         }
@@ -128,7 +132,7 @@
     
     <div class="controls">
         <button class="btn-reset" id="resetBtn">Сбросить дерево (Очистить БД)</button>
-        <input type="range" id="zoomSlider" min="0.2" max="1.5" step="0.1" value="0.6" style="width: 100%; margin-top: 15px;">
+        <input type="range" id="zoomSlider" min="0.1" max="1.5" step="0.05" value="0.6" style="width: 100%; margin-top: 15px;">
     </div>
 
     <div class="scroll-wrapper">
