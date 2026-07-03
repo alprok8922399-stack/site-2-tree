@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=0.4, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes">
+    <title>Панель Админа — Структура Дерева (Сайт №2)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1a1a24;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-sizing: border-box;
+            min-height: 100vh;
+        }
+        h1 {
+            font-size: 22px;
+            color: #00cbc6;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .controls {
+            margin-bottom: 25px;
+            width: 100%;
+            max-width: 500px;
+        }
+        .btn-reset {
+            background-color: #ff5e57;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            font-size: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+        }
+        /* Обертка позволяет двигать и свободно сжимать содержимое */
+        .scroll-wrapper {
+            width: 100%;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            padding: 10px 0;
+            touch-action: pan-x pan-y pinch-zoom;
+        }
+        .tree-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+            /* Убрали жесткую минимальную ширину, чтобы матрица могла сужаться в точку */
+            width: max-content; 
+        }
+        .level-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+        }
+        .cell {
+            background: #2c2c3e;
+            border: 2px solid #3e3e56;
+            border-radius: 8px;
+            padding: 10px;
+            width: 75px;
+            text-align: center;
+            font-size: 11px;
+            transition: all 0.3s;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        /* Стили для разных типов окраски ячеек */
+        .cell.color-gold {
+            background: #ffd700;
+            border-color: #b8860b;
+            color: #000;
+        }
+        .cell.color-gold .cell-id {
+            color: #000;
+        }
+        .cell.color-gold .cell-user {
+            color: #111;
+        }
+
+        .cell.color-blue {
+            background: #1e90ff;
+            border-color: #0000ff;
+            color: #fff;
+        }
+        .cell.color-blue .cell-id {
+            color: #fff;
+        }
+        .cell.color-blue .cell-user {
+            color: #f0f0f0;
+        }
+
+        .cell.color-gray {
+            background: #2c2c3e;
+            border: 2px solid #3e3e56;
+        }
+
+        .cell.occupied {
+            border-color: #05c46b;
+        }
+        .cell-id {
+            font-weight: bold;
+            color: #00cbc6;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+        .cell-user {
+            color: #d2dae2;
+            word-break: break-all;
+            min-height: 14px;
+            line-height: 1.2;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>📊 Визуальная структура дерева</h1>
+    
+    <div class="controls">
+        <button class="btn-reset" id="resetBtn">Сбросить дерево (Очистить БД)</button>
+        <input type="range" id="zoomSlider" min="0.2" max="1.5" step="0.1" value="0.6" style="width: 100%; margin-top: 15px;">
+    </div>
+
+    <div class="scroll-wrapper">
+        <div class="tree-container">
+            <div class="level-row" id="level-A"></div>
+            
+            <div class="level-row" id="level-B"></div>
+            
+            <div class="level-row" id="level-C"></div>
+            
+            <div class="level-row" id="level-D"></div>
+            
+            <div class="level-row" id="level-E"></div>
+        </div>
+    </div>
+
+<script src="script.js"></script>
+</body>
+</html>
