@@ -39,7 +39,6 @@
             width: 100%;
             font-weight: bold;
         }
-        /* Обертка позволяет двигать и свободно сжимать содержимое */
         .scroll-wrapper {
             width: 100%;
             overflow: auto;
@@ -53,7 +52,6 @@
             flex-direction: column;
             gap: 20px;
             align-items: center;
-            /* Убрали жесткую минимальную ширину, чтобы матрица могла сужаться в точку */
             width: max-content; 
         }
         .level-row {
@@ -61,6 +59,19 @@
             justify-content: center;
             gap: 10px;
             width: 100%;
+        }
+        /* Обертка для разделения нижних блоков на левый и правый */
+        .split-container {
+            display: flex;
+            justify-content: center;
+            gap: 40px; /* Отступ между левой и правой половиной */
+            width: 100%;
+        }
+        .split-block {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
         }
         .cell {
             background: #2c2c3e;
@@ -74,36 +85,26 @@
             box-sizing: border-box;
             flex-shrink: 0;
         }
-        /* Стили для разных типов окраски ячеек */
         .cell.color-gold {
             background: #ffd700;
             border-color: #b8860b;
             color: #000;
         }
-        .cell.color-gold .cell-id {
-            color: #000;
-        }
-        .cell.color-gold .cell-user {
-            color: #111;
-        }
+        .cell.color-gold .cell-id { color: #000; }
+        .cell.color-gold .cell-user { color: #111; }
 
         .cell.color-blue {
             background: #1e90ff;
             border-color: #0000ff;
             color: #fff;
         }
-        .cell.color-blue .cell-id {
-            color: #fff;
-        }
-        .cell.color-blue .cell-user {
-            color: #f0f0f0;
-        }
+        .cell.color-blue .cell-id { color: #fff; }
+        .cell.color-blue .cell-user { color: #f0f0f0; }
 
         .cell.color-gray {
             background: #2c2c3e;
             border: 2px solid #3e3e56;
         }
-
         .cell.occupied {
             border-color: #05c46b;
         }
@@ -133,14 +134,20 @@
     <div class="scroll-wrapper">
         <div class="tree-container">
             <div class="level-row" id="level-A"></div>
-            
             <div class="level-row" id="level-B"></div>
-            
             <div class="level-row" id="level-C"></div>
             
-            <div class="level-row" id="level-D"></div>
-            
-            <div class="level-row" id="level-E"></div>
+            <div class="split-container">
+                <div class="split-block">
+                    <div class="level-row" id="level-D-left"></div>
+                    <div class="level-row" id="level-E-left"></div>
+                </div>
+                
+                <div class="split-block">
+                    <div class="level-row" id="level-D-right"></div>
+                    <div class="level-row" id="level-E-right"></div>
+                </div>
+            </div>
         </div>
     </div>
 
