@@ -21,7 +21,16 @@ function createInitialTree() {
         'C1': { id: 'C1', level: 'C', user: null, color: 'gray' },
         'C2': { id: 'C2', level: 'C', user: null, color: 'gray' },
         'C3': { id: 'C3', level: 'C', user: null, color: 'gray' },
-        'C4': { id: 'C4', level: 'C', user: null, color: 'gray' }
+        'C4': { id: 'C4', level: 'C', user: null, color: 'gray' },
+        // Сразу добавляем пустой ряд D из 8 ячеек, чтобы они были видны на экране
+        'D1': { id: 'D1', level: 'D', user: null, color: 'gray' },
+        'D2': { id: 'D2', level: 'D', user: null, color: 'gray' },
+        'D3': { id: 'D3', level: 'D', user: null, color: 'gray' },
+        'D4': { id: 'D4', level: 'D', user: null, color: 'gray' },
+        'D5': { id: 'D5', level: 'D', user: null, color: 'gray' },
+        'D6': { id: 'D6', level: 'D', user: null, color: 'gray' },
+        'D7': { id: 'D7', level: 'D', user: null, color: 'gray' },
+        'D8': { id: 'D8', level: 'D', user: null, color: 'gray' }
     };
 }
 
