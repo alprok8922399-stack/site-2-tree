@@ -74,9 +74,38 @@
             box-sizing: border-box;
             flex-shrink: 0;
         }
+        /* Стили для разных типов окраски ячеек */
+        .cell.color-gold {
+            background: #ffd700;
+            border-color: #b8860b;
+            color: #000;
+        }
+        .cell.color-gold .cell-id {
+            color: #000;
+        }
+        .cell.color-gold .cell-user {
+            color: #111;
+        }
+
+        .cell.color-blue {
+            background: #1e90ff;
+            border-color: #0000ff;
+            color: #fff;
+        }
+        .cell.color-blue .cell-id {
+            color: #fff;
+        }
+        .cell.color-blue .cell-user {
+            color: #f0f0f0;
+        }
+
+        .cell.color-gray {
+            background: #2c2c3e;
+            border: 2px solid #3e3e56;
+        }
+
         .cell.occupied {
             border-color: #05c46b;
-            background: #1e3d2f;
         }
         .cell-id {
             font-weight: bold;
@@ -110,6 +139,8 @@
             <div class="level-row" id="level-C"></div>
             
             <div class="level-row" id="level-D"></div>
+            
+            <div class="level-row" id="level-E"></div>
         </div>
     </div>
 
