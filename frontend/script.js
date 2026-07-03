@@ -10,10 +10,13 @@ function renderTree(tree) {
         A: document.getElementById('level-A'),
         B: document.getElementById('level-B'),
         C: document.getElementById('level-C'),
-        D: document.getElementById('level-D')
+        D: document.getElementById('level-D'),
+        E: document.getElementById('level-E')
     };
     
-    Object.values(levels).forEach(el => el.innerHTML = '');
+    Object.values(levels).forEach(el => {
+        if (el) el.innerHTML = '';
+    });
 
     // Пробегаемся по всем ячейкам из базы данных
     Object.keys(tree).forEach(cellId => {
@@ -23,6 +26,12 @@ function renderTree(tree) {
         // Создаем графический блок ячейки
         const cellEl = document.createElement('div');
         cellEl.className = 'cell';
+        
+        // Устанавливаем класс цвета ячейки, полученный от сервера
+        if (cellData.color) {
+            cellEl.classList.add(`color-${cellData.color}`);
+        }
+        
         if (cellData.user) {
             cellEl.classList.add('occupied');
         }
