@@ -33,7 +33,7 @@ function findNextEmptyCell(tree) {
         }
     }
 
-    // 2. Если очередь дошла до D, идем строго по твоему порядку: D1, D5, D2, D6, D3, D7, D4, D8
+    // 2. Для ряда D идем строго по твоему порядку: D1, D5, D2, D6, D3, D7, D4, D8
     const orderD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
     for (const key of orderD) {
         if (tree[key] && !tree[key].user) return key;
@@ -49,7 +49,7 @@ function findNextEmptyCell(tree) {
     return null;
 }
 
-// Функция-триггер: открывает ряды по твоим условиям
+// Функция-триггер: открывает ряды по твоим точным условиям
 function checkAndGenerateChildren(tree) {
     // ТРИГГЕР 1: Заполнилась ячейка C4 -> Появляется весь ряд D
     if (tree['C4'] && tree['C4'].user && !tree['D1']) {
@@ -60,7 +60,7 @@ function checkAndGenerateChildren(tree) {
         console.log("[LOG] C4 filled! Whole row D generated.");
     }
 
-    // ТРИГГЕР 2: Заполнилась ячейка D4 -> Появляются 8 пустых ячеек E1-E8
+    // ТРИГГЕР 2: Заполнилась ячейка D4 -> Появляются пустые ячейки E1-E8 под D1-D4
     if (tree['D4'] && tree['D4'].user && !tree['E1']) {
         for (let i = 1; i <= 8; i++) {
             const id = `E${i}`;
@@ -69,7 +69,7 @@ function checkAndGenerateChildren(tree) {
         console.log("[LOG] D4 filled! E1-E8 generated.");
     }
 
-    // ТРИГГЕР 3: Заполнилась ячейка D8 -> Появляются еще 8 ячеек E9-E16
+    // ТРИГГЕР 3: Заполнилась ячейка D8 -> Появляются пустые ячейки E9-E16 под D5-D8
     if (tree['D8'] && tree['D8'].user && !tree['E9']) {
         for (let i = 9; i <= 16; i++) {
             const id = `E${i}`;
@@ -90,6 +90,22 @@ app.post('/api/register', (req, res) => {
     const cellId = findNextEmptyCell(treeDB);
     if (!cellId) return res.status(400).json({ error: 'Предел уровней или нет свободных мест' });
 
+    treeDB[cellId].user = username;
+    
+    // Проверяем условия появления новых рядов сразу после записи юзера
+    checkAndGenerateChildren(treeDB);
+
+    res.json({ success: true, cellId, user: username });
+});
+
+app.post('/api/reset', (req, res) => {
+    treeDB = createInitialTree();
+    res.json({ success: true });
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
     treeDB[cellId].user = username;
     
     // Проверяем условия появления новых рядов сразу после записи юзера
