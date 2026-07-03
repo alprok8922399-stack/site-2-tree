@@ -106,19 +106,3 @@ app.post('/api/reset', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
-    treeDB[cellId].user = username;
-    
-    // Проверяем условия появления новых рядов сразу после записи юзера
-    checkAndGenerateChildren(treeDB);
-
-    res.json({ success: true, cellId, user: username });
-});
-
-app.post('/api/reset', (req, res) => {
-    treeDB = createInitialTree();
-    res.json({ success: true });
-});
-
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
