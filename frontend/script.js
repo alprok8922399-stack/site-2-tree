@@ -5,7 +5,7 @@ const resetBtn = document.getElementById('resetBtn');
 
 // Функция отрисовки дерева на экране телефона
 function renderTree(tree) {
-    // Карты строк уровней, включая левые и правые блоки для D и E
+    // Карты строк уровней, включая левые и правые блоки для D, E и F
     const levels = {
         A: document.getElementById('level-A'),
         B: document.getElementById('level-B'),
@@ -13,7 +13,9 @@ function renderTree(tree) {
         'D-left': document.getElementById('level-D-left'),
         'D-right': document.getElementById('level-D-right'),
         'E-left': document.getElementById('level-E-left'),
-        'E-right': document.getElementById('level-E-right')
+        'E-right': document.getElementById('level-E-right'),
+        'F-left': document.getElementById('level-F-left'),
+        'F-right': document.getElementById('level-F-right')
     };
     
     // Очищаем все блоки перед перерисовкой
@@ -62,6 +64,15 @@ function renderTree(tree) {
                 targetRow = levels['E-left'];
             } else {
                 targetRow = levels['E-right'];
+            }
+        }
+
+        // Если это уровень F, делим по номерам ячеек
+        if (level === 'F') {
+            if (num <= 16) {
+                targetRow = levels['F-left'];
+            } else {
+                targetRow = levels['F-right'];
             }
         }
 
