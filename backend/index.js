@@ -7,34 +7,110 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('../frontend'));
 
-function getCellColor(level) {
-    if (level === 'A') return 'gold';
-    if (level === 'B') return 'blue';
-    return 'gray';
-}
-
+// Стартовая статичная база данных (Шапка А и B всегда заполнены)
 function createInitialTree() {
     return {
-        'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT', color: 'gold' },
-        'B1': { id: 'B1', level: 'B', user: 'LEADER_1', color: 'blue' },
-        'B2': { id: 'B2', level: 'B', user: 'LEADER_2', color: 'blue' },
-        'C1': { id: 'C1', level: 'C', user: null, color: 'gray' },
-        'C2': { id: 'C2', level: 'C', user: null, color: 'gray' },
-        'C3': { id: 'C3', level: 'C', user: null, color: 'gray' },
-        'C4': { id: 'C4', level: 'C', user: null, color: 'gray' }
+        'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
+        'B1': { id: 'B1', level: 'B', user: 'LEADER_1' },
+        'B2': { id: 'B2', level: 'B', user: 'LEADER_2' },
+        'C1': { id: 'C1', level: 'C', user: null },
+        'C2': { id: 'C2', level: 'C', user: null },
+        'C3': { id: 'C3', level: 'C', user: null },
+        'C4': { id: 'C4', level: 'C', user: null }
     };
 }
 
 let treeDB = createInitialTree();
 
-// 1. Функция поиска ПЕРВОЙ свободной ячейки (идет строго по порядку)
-function findNextEmptyCell(tree) {
-    const levels = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-    for (const lvl of levels) {
-        // Получаем все ключи, которые начинаются на текущий уровень
-        const keys = Object.keys(tree).filter(k => k.startsWith(lvl));
-        // Сортируем их, чтобы идти по порядку (C1, C2...)
-        keys.sort((a, b) => parseInt(a.slice(1)) - parseInt(b.slice(1)));
+// Универсальная математическая функция бесконечного веерного заполнения
+function getNextEmptyCell(tree) {
+    let lvlIndex = 2; // Начинаем с уровня C (A=0, B=1, C=2)
+    
+    while (true) {
+        let levelChar = String.fromCharCode(65 + lvlIndex);
+        let totalCells = Math.pow(2, lvlIndex); // C=4, D=8, E=16, F=32...
+        let numGroups = totalCells / 4; // Количество секторов: C=1, D=2, E=4, F=8...
+        let groupSize = 4; // Размер сектора всегда 4
+
+        let levelHasAny = false;
+
+        // Циклический веер по секторам (сначала 1-е места, затем 2-е, 3-е, 4-е)
+        for (let pos = 1; pos <= groupSize; pos++) {
+            for (let g = 1; g <= numGroups; g++) {
+                let cellNum = (g - 1) * groupSize + pos;
+                let cellId = `${levelChar}${cellNum}`;
+
+                // Если ячейка существует в базе (значит триггер сверху её уже открыл)
+                if (tree[cellId]) {
+                    levelHasAny = true;
+
+                    // Защитный барьер: если это 4-я ячейка в секторе и она УЖЕ заполнена
+                    if (pos === 4 && tree[cellId].user) {
+                        let nextLevelChar = String.fromCharCode(65 + lvlIndex + 1);
+                        let startChild = (g - 1) * 8 + 1;
+                        let endChild = g * 8; // Рождается 8 ячеек под закрытой четверкой
+                        
+                        for (let c = startChild; c <= endChild; c++) {
+                            let childId = `${nextLevelChar}${c}`;
+                            if (!tree[childId]) {
+                                tree[childId] = { id: childId, level: nextLevelChar, user: null };
+                                console.log(`[TREE LOG] Event: Initialized ${childId} (Triggered by ${cellId})`);
+                            }
+                        }
+                    }
+
+                    // Если ячейка пустая — отдаем её роботу
+                    if (!tree[cellId].user) {
+                        return cellId;
+                    }
+                }
+            }
+        }
+
+        // Если на этом уровне вообще нет созданных ячеек, мы дошли до конца (дна) дерева
+        if (!levelHasAny) {
+            break;
+        }
+
+        lvlIndex++;
+        if (lvlIndex > 20) break; // Предохранитель от бесконечного цикла (уровень 20 = больше миллиона ячеек)
+    }
+    
+    return null; // Если всё дерево переполнено
+}
+
+// API: Передача дерева на фронтенд
+app.get('/api/tree', (req, res) => {
+    res.json(treeDB);
+});
+
+// API: Регистрация нового пользователя роботом с Сайта №1
+app.post('/api/register', (req, res) => {
+    const { username } = req.body;
+    if (!username) {
+        return res.status(400).json({ error: 'Имя пользователя обязательно' });
+    }
+
+    const nextCellId = getNextEmptyCell(treeDB);
+    if (!nextCellId) {
+        return res.status(400).json({ error: 'Достигнут предел уровней' });
+    }
+
+    treeDB[nextCellId].user = username;
+    getNextEmptyCell(treeDB); // Актуализируем триггеры барьеров сразу после записи
+
+    res.json({ success: true, cellId: nextCellId, user: username });
+});
+
+// API: Сброс базы данных к начальному статичному состоянию
+app.post('/api/reset', (req, res) => {
+    treeDB = createInitialTree();
+    res.json({ success: true, message: 'Дерево сброшено к начальному состоянию' });
+});
+
+app.listen(PORT, () => {
+    console.log(`Сервер Сайта №2 запущен на порту ${PORT}`);
+});        keys.sort((a, b) => parseInt(a.slice(1)) - parseInt(b.slice(1)));
         
         for (const key of keys) {
             if (!tree[key].user) return key;
