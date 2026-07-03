@@ -165,5 +165,6 @@ app.post('/api/reset', (req, res) => {
     res.json({ success: true });
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`);
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
