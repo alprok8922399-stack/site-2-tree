@@ -2,6 +2,13 @@
 const BACKEND_URL = 'https://site-2-tree.onrender.com';
 
 const resetBtn = document.getElementById('resetBtn');
+const zoomSlider = document.getElementById('zoomSlider');
+const treeContainer = document.querySelector('.tree-container');
+const scrollWrapper = document.querySelector('.scroll-wrapper');
+
+// Переменные для зума пальцами
+let currentScale = 0.6;
+let initialDistance = null;
 
 // Функция отрисовки дерева на экране телефона
 function renderTree(tree) {
@@ -27,7 +34,7 @@ function renderTree(tree) {
     Object.keys(tree).forEach(cellId => {
         const cellData = tree[cellId];
         const level = cellData.level;
-        const num = parseInt(cellId.slice(1)); // Получаем номер ячейки (например, 4 из D4)
+        const num = parseInt(cellId.slice(1));
 
         // Создаем графический блок ячейки
         const cellEl = document.createElement('div');
@@ -49,36 +56,80 @@ function renderTree(tree) {
         // Определяем, в какую именно строку отправлять ячейку
         let targetRow = levels[level];
 
-        // Если это уровень D, делим по номерам ячеек
         if (level === 'D') {
-            if (num <= 4) {
-                targetRow = levels['D-left'];
-            } else {
-                targetRow = levels['D-right'];
-            }
+            if (num <= 4) targetRow = levels['D-left'];
+            else targetRow = levels['D-right'];
         }
         
-        // Если это уровень E, делим по номерам ячеек
         if (level === 'E') {
-            if (num <= 8) {
-                targetRow = levels['E-left'];
-            } else {
-                targetRow = levels['E-right'];
-            }
+            if (num <= 8) targetRow = levels['E-left'];
+            else targetRow = levels['E-right'];
         }
 
-        // Если это уровень F, делим по номерам ячеек
         if (level === 'F') {
-            if (num <= 16) {
-                targetRow = levels['F-left'];
-            } else {
-                targetRow = levels['F-right'];
-            }
+            if (num <= 16) targetRow = levels['F-left'];
+            else targetRow = levels['F-right'];
         }
 
-        // Добавляем ячейку на экран, если строка существует
         if (targetRow) {
             targetRow.appendChild(cellEl);
+        }
+    });
+}
+
+// Функция применения зума к матрице
+function applyZoom(scale) {
+    currentScale = Math.max(0.1, Math.min(scale, 1.5)); // Ограничения от 0.1 (в точку) до 1.5
+    if (treeContainer) {
+        treeContainer.style.transform = `scale(${currentScale})`;
+        treeContainer.style.transformOrigin = 'top center';
+    }
+    if (zoomSlider) {
+        zoomSlider.value = currentScale;
+    }
+}
+
+// Слушатель ползунка (изменение вручную)
+if (zoomSlider) {
+    zoomSlider.addEventListener('input', (e) => {
+        applyZoom(parseFloat(e.target.value));
+    });
+}
+
+// --- УПРАВЛЕНИЕ ЖЕСТАМИ ДЛЯ ТЕЛЕФОНА (ЗУМ ПАЛЬЦАМИ) ---
+if (scrollWrapper) {
+    scrollWrapper.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            // Запоминаем начальное расстояние между двумя пальцами
+            initialDistance = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+        }
+    });
+
+    scrollWrapper.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && initialDistance) {
+            e.preventDefault(); // Запрещаем стандартный зум браузера
+            
+            // Считаем текущее расстояние между пальцами
+            const currentDistance = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+            
+            // Вычисляем коэффициент изменения
+            const factor = currentDistance / initialDistance;
+            applyZoom(currentScale * factor);
+            
+            // Обновляем начальную точку для плавности
+            initialDistance = currentDistance;
+        }
+    }, { passive: false });
+
+    scrollWrapper.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+            initialDistance = null;
         }
     });
 }
@@ -111,6 +162,8 @@ resetBtn.addEventListener('click', async () => {
     }
 });
 
-// Автоматически обновляем дерево каждые 2 секунды, чтобы видеть регистрации на лету
+// Инициализация при старте сайта
 fetchTree();
 setInterval(fetchTree, 2000);
+// Применяем начальный зум из ползунка
+applyZoom(parseFloat(zoomSlider.value));
