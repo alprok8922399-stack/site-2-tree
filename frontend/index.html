@@ -68,17 +68,18 @@
             cursor: pointer;
         }
 
-        /* Экран матриц */
+        /* Экран матриц - теперь разрешает свободный скролл влево-вправо */
         .screen-container {
             width: 100%;
             overflow-x: auto;
             padding: 10px 0;
             display: flex;
-            justify-content: center;
+            justify-content: flex-start; /* Убрали жесткий центр для свободного движения */
+            box-sizing: border-box;
         }
         #mainTreeDisplay {
-            transform-origin: top center;
-            transition: transform 0.2s ease;
+            transform-origin: top left; /* Изменили точку масштаба для корректного скролла */
+            transition: transform 0.1s ease;
         }
         .matrices-row {
             display: flex;
@@ -123,9 +124,9 @@
         .cell-user { font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; }
         
         /* Цвета ролей */
-        .level-1 { border: 2px solid #ffd700; background: #3a3000; } /* Золотая вершина */
-        .level-2 { border: 2px solid #00fff0; background: #002b36; } /* Синие плечи */
-        .level-3 { border: 1px dashed #ffffff; background: #2b2b2b; } /* Серый низ выплат */
+        .level-1 { border: 2px solid #ffd700; background: #3a3000; } 
+        .level-2 { border: 2px solid #00fff0; background: #002b36; } 
+        .level-3 { border: 1px dashed #ffffff; background: #2b2b2b; } 
         
         .occupied { background: #16a085 !important; border-color: #1abc9c !important; }
         .focused-cell { animation: pulse 1s infinite alternate; border-color: #ff3366 !important; box-shadow: 0 0 15px #ff3366 !important; background: #ff3366 !important; }
@@ -171,7 +172,7 @@
         </div>
         <div class="slider-zone">
             <span>Масштаб:</span>
-            <input type="range" id="zoomSlider" min="0.3" max="1" step="0.05" value="0.8">
+            <input type="range" id="zoomSlider" min="0.1" max="1" step="0.05" value="0.8">
             <button class="btn-reset" id="resetBtn">Сброс БД</button>
         </div>
     </div>
