@@ -1,73 +1,102 @@
 const API_URL = '/api';
-const treeContainer = document.querySelector('.tree-container');
+const mainTreeDisplay = document.getElementById('mainTreeDisplay');
 const zoomSlider = document.getElementById('zoomSlider');
 const resetBtn = document.getElementById('resetBtn');
 
 zoomSlider.addEventListener('input', (e) => {
-    treeContainer.style.transform = `scale(${e.target.value})`;
+    mainTreeDisplay.style.transform = `scale(${e.target.value})`;
 });
 
 async function fetchTree() {
     try {
         const res = await fetch(`${API_URL}/tree`);
         const data = await res.json();
-        renderTree(data);
+        renderDynamicMatrices(data);
     } catch (err) {
-        console.error('Ошибка загрузки данных дерева:', err);
+        console.error('Ошибка загрузки данных:', err);
     }
 }
 
-function createCellHTML(cell) {
-    if (!cell) return '';
+function getCellHTML(cell, roleClass) {
+    if (!cell) {
+        return `<div class="cell ${roleClass}"><div class="cell-id">-</div><div class="cell-user">-</div></div>`;
+    }
     const isOccupied = cell.user ? 'occupied' : '';
-    const colorClass = cell.color ? `color-${cell.color}` : '';
     const displayUser = cell.user ? cell.user : '-';
     return `
-        <div class="cell ${colorClass} ${isOccupied}" id="cell-${cell.id}">
+        <div class="cell ${roleClass} ${isOccupied}" id="cell-${cell.id}">
             <div class="cell-id">${cell.id}</div>
             <div class="cell-user">${displayUser}</div>
         </div>
     `;
 }
 
-function renderTree(tree) {
-    // 1. Рендерим самый верхний фундамент системы
-    document.getElementById('level-A').innerHTML = createCellHTML(tree['A1']);
-    document.getElementById('level-B').innerHTML = createCellHTML(tree['B1']) + createCellHTML(tree['B2']);
+// Построение одной идеальной независимой СЕМЕРКИ с правильной расцветкой: Золото -> Синий -> Серый
+function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4) {
+    return `
+        <div class="semerka-matrix">
+            <div class="matrix-row">${getCellHTML(topCell, 'level-1')}</div>
+            <div class="matrix-row">
+                ${getCellHTML(leftShoulder, 'level-2')}
+                ${getCellHTML(rightShoulder, 'level-2')}
+            </div>
+            <div class="matrix-row">
+                ${getCellHTML(bottom4[0], 'level-3')}
+                ${getCellHTML(bottom4[1], 'level-3')}
+                ${getCellHTML(bottom4[2], 'level-3')}
+                ${getCellHTML(bottom4[3], 'level-3')}
+            </div>
+        </div>
+    `;
+}
 
-    // 2. Распределяем элементы по 4 независимым домикам (Модулям)
-    
-    // --- МОДУЛЬ 1 (Под C1) ---
-    document.getElementById('mod-1-C').innerHTML = createCellHTML(tree['C1']);
-    document.getElementById('mod-1-D').innerHTML = createCellHTML(tree['D1']) + createCellHTML(tree['D2']);
-    document.getElementById('mod-1-E-left').innerHTML = createCellHTML(tree['E1']) + createCellHTML(tree['E2']);
-    document.getElementById('mod-1-E-right').innerHTML = createCellHTML(tree['E3']) + createCellHTML(tree['E4']);
-    document.getElementById('mod-1-F-left').innerHTML = [1,2,3,4].map(i => createCellHTML(tree[`F${i}`])).join('');
-    document.getElementById('mod-1-F-right').innerHTML = [5,6,7,8].map(i => createCellHTML(tree[`F${i}`])).join('');
+function renderDynamicMatrices(tree) {
+    // Определяем текущее состояние фокуса системы (Эру/Экран)
+    const isC4Filled = tree['C4'] && tree['C4'].user;
+    const isE16Filled = tree['E16'] && tree['E16'].user;
 
-    // --- МОДУЛЬ 2 (Под C2) ---
-    document.getElementById('mod-2-C').innerHTML = createCellHTML(tree['C2']);
-    document.getElementById('mod-2-D').innerHTML = createCellHTML(tree['D3']) + createCellHTML(tree['D4']);
-    document.getElementById('mod-2-E-left').innerHTML = createCellHTML(tree['E5']) + createCellHTML(tree['E6']);
-    document.getElementById('mod-2-E-right').innerHTML = createCellHTML(tree['E7']) + createCellHTML(tree['E8']);
-    document.getElementById('mod-2-F-left').innerHTML = [9,10,11,12].map(i => createCellHTML(tree[`F${i}`])).join('');
-    document.getElementById('mod-2-F-right').innerHTML = [13,14,15,16].map(i => createCellHTML(tree[`F${i}`])).join('');
+    let htmlContent = '';
 
-    // --- МОДУЛЬ 3 (Под C3) ---
-    document.getElementById('mod-3-C').innerHTML = createCellHTML(tree['C3']);
-    document.getElementById('mod-3-D').innerHTML = createCellHTML(tree['D5']) + createCellHTML(tree['D6']);
-    document.getElementById('mod-3-E-left').innerHTML = createCellHTML(tree['E9']) + createCellHTML(tree['E10']);
-    document.getElementById('mod-3-E-right').innerHTML = createCellHTML(tree['E11']) + createCellHTML(tree['E12']);
-    document.getElementById('mod-3-F-left').innerHTML = [17,18,19,20].map(i => createCellHTML(tree[`F${i}`])).join('');
-    document.getElementById('mod-3-F-right').innerHTML = [21,22,23,24].map(i => createCellHTML(tree[`F${i}`])).join('');
+    if (!isC4Filled) {
+        // ЭРА 1: Самая первая матрица во главе с А1
+        htmlContent = `
+            <div class="matrices-row">
+                ${buildSemerkaHTML(
+                    tree['A1'],
+                    tree['B1'], tree['B2'],
+                    [tree['C1'], tree['C2'], tree['C3'], tree['C4']]
+                )}
+            </div>
+        `;
+    } else if (isC4Filled && !isE16Filled) {
+        // ЭРА 2: Матрица А1 закрыта и скрылась! На экране 4 новые СЕМЕРКИ во главе с C1-C4.
+        // Каждая ячейка С стала ЗОЛОТОЙ вершиной, D - СИНИМИ плечами, E - СЕРЫМ низом.
+        htmlContent = `
+            <div class="matrices-row">
+                ${buildSemerkaHTML(tree['C1'], tree['D1'], tree['D2'], [tree['E1'], tree['E2'], tree['E3'], tree['E4']])}
+                ${buildSemerkaHTML(tree['C2'], tree['D3'], tree['D4'], [tree['E5'], tree['E6'], tree['E7'], tree['E8']])}
+                ${buildSemerkaHTML(tree['C3'], tree['D5'], tree['D6'], [tree['E9'], tree['E10'], tree['E11'], tree['E12']])}
+                ${buildSemerkaHTML(tree['C4'], tree['D7'], tree['D8'], [tree['E13'], tree['E14'], tree['E15'], tree['E16']])}
+            </div>
+        `;
+    } else {
+        // ЭРА 3: Ряд Е тоже закрылся! На экране 8 новых СЕМЕРОК во главе с D1-D8, смотрящих на ряд F.
+        // Каждая ячейка D стала ЗОЛОТОЙ вершиной, E - СИНИМИ плечами, F - СЕРЫМ низом.
+        htmlContent = `
+            <div class="matrices-row">
+                ${buildSemerkaHTML(tree['D1'], tree['E1']||null, tree['E2']||null, [tree['F1'], tree['F2'], tree['F3'], tree['F4']])}
+                ${buildSemerkaHTML(tree['D2'], tree['E3']||null, tree['E4']||null, [tree['F5'], tree['F6'], tree['F7'], tree['F8']])}
+                ${buildSemerkaHTML(tree['D3'], tree['E5']||null, tree['E6']||null, [tree['F9'], tree['F10'], tree['F11'], tree['F12']])}
+                ${buildSemerkaHTML(tree['D4'], tree['E7']||null, tree['E8']||null, [tree['F13'], tree['F14'], tree['F15'], tree['F16']])}
+                ${buildSemerkaHTML(tree['D5'], tree['E9']||null, tree['E10']||null, [tree['F17'], tree['F18'], tree['F19'], tree['F20']])}
+                ${buildSemerkaHTML(tree['D6'], tree['E11']||null, tree['E12']||null, [tree['F21'], tree['F22'], tree['F23'], tree['F24']])}
+                ${buildSemerkaHTML(tree['D7'], tree['E13']||null, tree['E14']||null, [tree['F25'], tree['F26'], tree['F27'], tree['F28']])}
+                ${buildSemerkaHTML(tree['D8'], tree['E15']||null, tree['E16']||null, [tree['F29'], tree['F30'], tree['F31'], tree['F32']])}
+            </div>
+        `;
+    }
 
-    // --- МОДУЛЬ 4 (Под C4) ---
-    document.getElementById('mod-4-C').innerHTML = createCellHTML(tree['C4']);
-    document.getElementById('mod-4-D').innerHTML = createCellHTML(tree['D7']) + createCellHTML(tree['D8']);
-    document.getElementById('mod-4-E-left').innerHTML = createCellHTML(tree['E13']) + createCellHTML(tree['E14']);
-    document.getElementById('mod-4-E-right').innerHTML = createCellHTML(tree['E15']) + createCellHTML(tree['E16']);
-    document.getElementById('mod-4-F-left').innerHTML = [25,26,27,28].map(i => createCellHTML(tree[`F${i}`])).join('');
-    document.getElementById('mod-4-F-right').innerHTML = [29,30,31,32].map(i => createCellHTML(tree[`F${i}`])).join('');
+    mainTreeDisplay.innerHTML = htmlContent;
 }
 
 resetBtn.addEventListener('click', async () => {
@@ -76,13 +105,13 @@ resetBtn.addEventListener('click', async () => {
         const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
         const data = await res.json();
         if (data.success) {
-            alert('База очищена!');
+            alert('База успешно сброшена!');
             fetchTree();
         }
     } catch (err) {
-        alert('Ошибка сброса');
+        alert('Ошибка при сбросе');
     }
 });
 
 fetchTree();
-setInterval(fetchTree, 2000);
+setInterval(fetchTree, 1500);
