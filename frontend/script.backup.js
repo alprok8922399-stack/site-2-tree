@@ -11,15 +11,15 @@ async function fetchTree() {
     try {
         const res = await fetch(`${API_URL}/tree`);
         const data = await res.json();
-        renderDynamicMatrices(data);
+        renderDynamicSplitting(data);
     } catch (err) {
         console.error('Ошибка загрузки данных:', err);
     }
 }
 
-function getCellHTML(cell, roleClass) {
+function getCellHTML(cell, roleClass, fallbackId = '-') {
     if (!cell) {
-        return `<div class="cell ${roleClass}"><div class="cell-id">-</div><div class="cell-user">-</div></div>`;
+        return `<div class="cell ${roleClass}"><div class="cell-id">${fallbackId}</div><div class="cell-user">-</div></div>`;
     }
     const isOccupied = cell.user ? 'occupied' : '';
     const displayUser = cell.user ? cell.user : '-';
@@ -31,79 +31,99 @@ function getCellHTML(cell, roleClass) {
     `;
 }
 
-// Построение одной идеальной независимой СЕМЕРКИ (Золото -> Синий -> Серый)
-function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4) {
+function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids) {
     return `
         <div class="semerka-matrix">
-            <div class="matrix-row">${getCellHTML(topCell, 'level-1')}</div>
+            <div class="matrix-row">${getCellHTML(topCell, 'level-1', ids.top)}</div>
             <div class="matrix-row">
-                ${getCellHTML(leftShoulder, 'level-2')}
-                ${getCellHTML(rightShoulder, 'level-2')}
+                ${getCellHTML(leftShoulder, 'level-2', ids.left)}
+                ${getCellHTML(rightShoulder, 'level-2', ids.right)}
             </div>
             <div class="matrix-row">
-                ${getCellHTML(bottom4[0], 'level-3')}
-                ${getCellHTML(bottom4[1], 'level-3')}
-                ${getCellHTML(bottom4[2], 'level-3')}
-                ${getCellHTML(bottom4[3], 'level-3')}
+                ${getCellHTML(bottom4[0], 'level-3', ids.b1)}
+                ${getCellHTML(bottom4[1], 'level-3', ids.b2)}
+                ${getCellHTML(bottom4[2], 'level-3', ids.b3)}
+                ${getCellHTML(bottom4[3], 'level-3', ids.b4)}
             </div>
         </div>
     `;
 }
 
-function renderDynamicMatrices(tree) {
-    // Триггеры для определения текущего экрана (Эры)
-    const isC4Filled = tree['C4'] && tree['C4'].user;
-    const isD8Filled = tree['D8'] && tree['D8'].user;
-    const isE16Filled = tree['E16'] && tree['E16'].user;
+function parseCell(id) {
+    const match = id.match(/^([A-Z]+)(\d+)$/);
+    if (!match) return null;
+    return { letter: match[1], num: parseInt(match[2], 10) };
+}
 
-    let htmlContent = '';
+// Универсальный генератор букв для бесконечной глубины (A -> B ... Z -> AA -> AB)
+function getNextLevelLetter(letter) {
+    let i = letter.length - 1;
+    while (i >= 0) {
+        if (letter[i] !== 'Z') {
+            return letter.substring(0, i) + String.fromCharCode(letter.charCodeAt(i) + 1) + 'A'.repeat(letter.length - 1 - i);
+        }
+        i--;
+    }
+    return 'A'.repeat(letter.length + 1);
+}
 
-    if (!isC4Filled) {
-        // ЭРА 1: Самая первая начальная матрица во главе с А1
-        htmlContent = `
-            <div class="matrices-row">
-                ${buildSemerkaHTML(
-                    tree['A1'],
-                    tree['B1'], tree['B2'],
-                    [tree['C1'], tree['C2'], tree['C3'], tree['C4']]
-                )}
-            </div>
-        `;
-    } else if (isC4Filled && !isD8Filled) {
-        // ЭРА 2: Матрица А1 закрылась. На экране 2 новые СЕМЕРКИ во главе с плечами B1 и B2!
-        htmlContent = `
-            <div class="matrices-row">
-                ${buildSemerkaHTML(tree['B1'], tree['C1'], tree['C2'], [tree['D1'], tree['D2'], tree['D3'], tree['D4']])}
-                ${buildSemerkaHTML(tree['B2'], tree['C3'], tree['C4'], [tree['D5'], tree['D6'], tree['D7'], tree['D8']])}
-            </div>
-        `;
-    } else if (isD8Filled && !isE16Filled) {
-        // ЭРА 3: Ряд D закрылся. Теперь на экране 4 новые СЕМЕРКИ во главе с C1-C4, смотрящие на ряд E!
-        htmlContent = `
-            <div class="matrices-row">
-                ${buildSemerkaHTML(tree['C1'], tree['D1'], tree['D2'], [tree['E1'], tree['E2'], tree['E3'], tree['E4']])}
-                ${buildSemerkaHTML(tree['C2'], tree['D3'], tree['D4'], [tree['E5'], tree['E6'], tree['E7'], tree['E8']])}
-                ${buildSemerkaHTML(tree['C3'], tree['D5'], tree['D6'], [tree['E9'], tree['E10'], tree['E11'], tree['E12']])}
-                ${buildSemerkaHTML(tree['C4'], tree['D7'], tree['D8'], [tree['E13'], tree['E14'], tree['E15'], tree['E16']])}
-            </div>
-        `;
-    } else {
-        // ЭРА 4: Ряд E закрылся. На экране 8 новых СЕМЕРОК во главе с D1-D8, смотрящие на ряд F!
-        htmlContent = `
-            <div class="matrices-row">
-                ${buildSemerkaHTML(tree['D1'], tree['E1']||null, tree['E2']||null, [tree['F1'], tree['F2'], tree['F3'], tree['F4']])}
-                ${buildSemerkaHTML(tree['D2'], tree['E3']||null, tree['E4']||null, [tree['F5'], tree['F6'], tree['F7'], tree['F8']])}
-                ${buildSemerkaHTML(tree['D3'], tree['E5']||null, tree['E6']||null, [tree['F9'], tree['F10'], tree['F11'], tree['F12']])}
-                ${buildSemerkaHTML(tree['D4'], tree['E7']||null, tree['E8']||null, [tree['F13'], tree['F14'], tree['F15'], tree['F16']])}
-                ${buildSemerkaHTML(tree['D5'], tree['E9']||null, tree['E10']||null, [tree['F17'], tree['F18'], tree['F19'], tree['F20']])}
-                ${buildSemerkaHTML(tree['D6'], tree['E11']||null, tree['E12']||null, [tree['F21'], tree['F22'], tree['F23'], tree['F24']])}
-                ${buildSemerkaHTML(tree['D7'], tree['E13']||null, tree['E14']||null, [tree['F25'], tree['F26'], tree['F27'], tree['F28']])}
-                ${buildSemerkaHTML(tree['D8'], tree['E15']||null, tree['E16']||null, [tree['F29'], tree['F30'], tree['F31'], tree['F32']])}
-            </div>
-        `;
+function renderDynamicSplitting(tree) {
+    let activeMatricesHTML = [];
+    let queue = ['A1']; 
+    let processedNodes = new Set();
+
+    while (queue.length > 0) {
+        const currentId = queue.shift();
+        if (processedNodes.has(currentId)) continue;
+        processedNodes.add(currentId);
+
+        const topCell = tree[currentId] || null;
+
+        const parsed = parseCell(currentId);
+        if (!parsed) continue;
+
+        const nextLetter = getNextLevelLetter(parsed.letter);       
+        const bottomLetter = getNextLevelLetter(nextLetter);        
+
+        const leftLNum = parsed.num * 2 - 1;
+        const rightLNum = parsed.num * 2;
+
+        const leftShoulderId = `${nextLetter}${leftLNum}`;
+        const rightShoulderId = `${nextLetter}${rightLNum}`;
+
+        const b1 = `${bottomLetter}${leftLNum * 2 - 1}`;
+        const b2 = `${bottomLetter}${leftLNum * 2}`;
+        const b3 = `${bottomLetter}${rightLNum * 2 - 1}`;
+        const b4 = `${bottomLetter}${rightLNum * 2}`;
+
+        const leftShoulder = tree[leftShoulderId] || null;
+        const rightShoulder = tree[rightShoulderId] || null;
+        const bottom4 = [
+            tree[b1] || null,
+            tree[b2] || null,
+            tree[b3] || null,
+            tree[b4] || null
+        ];
+
+        // Ключевое правило: закрыта ли четверка низа
+        const isMatrixClosed = bottom4.every(cell => cell && cell.user);
+
+        if (isMatrixClosed) {
+            // Матрица полностью закрыта — пускаем деление дальше по дереву к потомкам
+            queue.push(leftShoulderId);
+            queue.push(rightShoulderId);
+        } else {
+            // Матрица АКТИВНА (низ еще не забит). Рендерим каркас домика!
+            const ids = { top: currentId, left: leftShoulderId, right: rightShoulderId, b1, b2, b3, b4 };
+            activeMatricesHTML.push(buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids));
+        }
     }
 
-    mainTreeDisplay.innerHTML = htmlContent;
+    mainTreeDisplay.innerHTML = `
+        <div class="matrices-row">
+            ${activeMatricesHTML.join('')}
+        </div>
+    `;
 }
 
 resetBtn.addEventListener('click', async () => {
@@ -121,4 +141,4 @@ resetBtn.addEventListener('click', async () => {
 });
 
 fetchTree();
-setInterval(fetchTree, 3000);
+setInterval(fetchTree, 1000);
