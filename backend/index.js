@@ -7,7 +7,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('../frontend'));
 
-// Список уровней по буквам
 const LEVELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 function createInitialTree() {
@@ -24,12 +23,10 @@ function createInitialTree() {
 
 let treeDB = createInitialTree();
 
-// Динамическая генерация порядка заполнения для любого ряда
 function getOrderForLevel(levelName) {
     const levelIdx = LEVELS.indexOf(levelName);
     if (levelIdx === -1) return [];
     
-    // Количество ячеек в этом ряду (2 в степени уровня)
     const count = Math.pow(2, levelIdx);
     
     if (levelName === 'A' || levelName === 'B' || levelName === 'C') {
@@ -37,11 +34,10 @@ function getOrderForLevel(levelName) {
     }
     
     if (levelName === 'D') {
-        // Шахматный порядок для D
         return ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
     }
     
-    // Для всех рядов от E до Z — автоматический круговой обход (1-е места в четверках, 2-е...)
+    // Круговой порядок (по 4) для всех уровней от E до Z
     const order = [];
     for (let step = 0; step < 4; step++) {
         for (let i = 1; i <= count; i += 4) {
@@ -54,21 +50,21 @@ function getOrderForLevel(levelName) {
 }
 
 function findNextEmptyCell(tree) {
-    // Бежим по всем буквам алфавита по очереди
     for (const lvl of LEVELS) {
         const order = getOrderForLevel(lvl);
         
-        // Проверяем, сгенерирован ли этот ряд в базе
+        // Если этого уровня вообще нет в дереве, значит это край, берём его начало
         const hasAnyCell = order.some(key => tree[key]);
         if (!hasAnyCell) {
-            // Если этого ряда еще нет в базе, значит мы дошли до текущего края дерева
-            // Возвращаем первую ячейку этого нового ряда
             return order[0] || null;
         }
         
-        // Если ряд существует, ищем в нем свободное место по правильному порядку
         for (const key of order) {
-            if (tree[key] && !tree[key].user) {
+            // Жёсткая защита: если ячейка прописана в порядке, но её забыли создать — создаём на лету
+            if (tree[key] === undefined) {
+                tree[key] = { id: key, level: lvl, user: null };
+            }
+            if (!tree[key].user) {
                 return key;
             }
         }
@@ -76,19 +72,13 @@ function findNextEmptyCell(tree) {
     return null;
 }
 
-// Автоматическое открытие следующего ряда, если в текущем заняли хотя бы одну ячейку
-function checkAndGenerateChildren(tree, lastCellId) {
-    if (!lastCellId) return;
-    const currentLvl = lastCellId.charAt(0);
+// Убойная превентивная генерация на 1 уровень вперёд
+function generateNextLevelPreemptively(tree, currentLvl) {
     const currentIdx = LEVELS.indexOf(currentLvl);
-    
-    // Определяем следующую букву
     const nextLvl = LEVELS[currentIdx + 1];
-    if (!nextLvl) return; // Конец алфавита
+    if (!nextLvl) return;
     
     const nextCount = Math.pow(2, currentIdx + 1);
-    
-    // Превентивно создаем следующий ряд целиком, чтобы робот никогда не спотыкался об undefined
     for (let i = 1; i <= nextCount; i++) {
         const id = `${nextLvl}${i}`;
         if (!tree[id]) {
@@ -104,18 +94,18 @@ app.post('/api/register', (req, res) => {
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
     
     let cellId = findNextEmptyCell(treeDB);
+    if (!cellId) return res.status(400).json({ error: 'Достигнут лимит структуры' });
     
-    if (!cellId) return res.status(400).json({ error: 'Достигнут лимит структуры Z' });
-    
-    // На случай, если ячейка нашлась, но ее физически забыли создать в базе
+    // Перед записью гарантируем, что узел существует
+    const lvl = cellId.replace(/[0-9]/g, '');
     if (!treeDB[cellId]) {
-        treeDB[cellId] = { id: cellId, level: cellId.charAt(0), user: null };
+        treeDB[cellId] = { id: cellId, level: lvl, user: null };
     }
     
     treeDB[cellId].user = username;
     
-    // Передаем заполненную ячейку, чтобы бэкенд наперед открыл следующий уровень
-    checkAndGenerateChildren(treeDB, cellId);
+    // Генерируем ячейки СЛЕДУЮЩЕГО уровня наперёд, чтобы при круговом обходе робот не поймал undefined
+    generateNextLevelPreemptively(treeDB, lvl);
     
     res.json({ success: true, cellId, user: username });
 });
