@@ -28,33 +28,29 @@ function findNextEmptyCell(tree) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 2. Ряд D строго шахматами (работает на выплаты ряду B)
+    // 2. Ряд D строго шахматами
     const orderD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
     for (const key of orderD) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 3. Ряд E строго веером (работает на выплаты четырем лидерам ряда C)
+    // 3. Ряд E (16 ячеек = 4 четверки). Заполнение по кругу: 1-е места, 2-е места...
     const orderE = [
-        'E1', 'E5', 'E9', 'E13', // 1-й круг выплат для C1, C2, C3, C4
-        'E2', 'E6', 'E10', 'E14', // 2-й круг
-        'E3', 'E7', 'E11', 'E15', // 3-й круг
-        'E4', 'E8', 'E12', 'E16'  // 4-й круг
+        'E1', 'E5', 'E9', 'E13',  // 1-й круг (Первые ячейки в четырех четверках)
+        'E2', 'E6', 'E10', 'E14', // 2-й круг (Вторые ячейки в четырех четверках)
+        'E3', 'E7', 'E11', 'E15', // 3-й круг (Третьи ячейки)
+        'E4', 'E8', 'E12', 'E16'  // 4-й круг (Четвертые ячейки)
     ];
     for (const key of orderE) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 4. Ряд F строго веером по 8 лидерам ряда D (работает на выплаты ряду D)
+    // 4. Ряд F (32 ячейки = 8 четверок). Заполнение по кругу: 1-е места, 2-е места...
     const orderF = [
-        // 1-й круг выплат: берем по 1-й ячейке у каждого из 8 лидеров D
-        'F1', 'F5', 'F9', 'F13', 'F17', 'F21', 'F25', 'F29',
-        // 2-й круг выплат: берем по 2-й ячейке у каждого из 8 лидеров D
-        'F2', 'F6', 'F10', 'F14', 'F18', 'F22', 'F26', 'F30',
-        // 3-й круг выплат: берем по 3-й ячейке у каждого из 8 лидеров D
-        'F3', 'F7', 'F11', 'F15', 'F19', 'F23', 'F27', 'F31',
-        // 4-й круг выплат: замыкающие ячейки для полного закрытия
-        'F4', 'F8', 'F12', 'F16', 'F20', 'F24', 'F28', 'F32'
+        'F1', 'F5', 'F9', 'F13', 'F17', 'F21', 'F25', 'F29',  // 1-й круг по 8 четверкам
+        'F2', 'F6', 'F10', 'F14', 'F18', 'F22', 'F26', 'F30', // 2-й круг по 8 четверкам
+        'F3', 'F7', 'F11', 'F15', 'F19', 'F22', 'F27', 'F31', // 3-й круг по 8 четверкам
+        'F4', 'F8', 'F12', 'F16', 'F20', 'F24', 'F28', 'F32'  // 4-й круг (замыкающие)
     ];
     for (const key of orderF) {
         if (tree[key] && !tree[key].user) return key;
@@ -83,7 +79,7 @@ function checkAndGenerateChildren(tree) {
         }
     }
 
-    // Открытие ячеек ряда F порциями по 8 штук вслед за закрытием ключевых позиций в E
+    // Триггеры открытия ряда F четверками/восьмерками
     if (tree['E4'] && tree['E4'].user && !tree['F1']) {
         for (let i = 1; i <= 8; i++) {
             const id = `F${i}`;
@@ -110,28 +106,19 @@ function checkAndGenerateChildren(tree) {
     }
 }
 
-app.get('/api/tree', (req, res) => {
-    res.json(treeDB);
-});
-
+app.get('/api/tree', (req, res) => res.json(treeDB));
 app.post('/api/register', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
-
     const cellId = findNextEmptyCell(treeDB);
-    if (!cellId) return res.status(400).json({ error: 'Все текущие уровни структуры заполнены' });
-
+    if (!cellId) return res.status(400).json({ error: 'Все текущие уровни заполнены' });
     treeDB[cellId].user = username;
     checkAndGenerateChildren(treeDB);
-
     res.json({ success: true, cellId, user: username });
 });
-
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
     res.json({ success: true });
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
