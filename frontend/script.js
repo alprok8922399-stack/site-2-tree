@@ -17,9 +17,9 @@ async function fetchTree() {
     }
 }
 
-function getCellHTML(cell, roleClass) {
+function getCellHTML(cell, roleClass, fallbackId = '-') {
     if (!cell) {
-        return `<div class="cell ${roleClass}"><div class="cell-id">-</div><div class="cell-user">-</div></div>`;
+        return `<div class="cell ${roleClass}"><div class="cell-id">${fallbackId}</div><div class="cell-user">-</div></div>`;
     }
     const isOccupied = cell.user ? 'occupied' : '';
     const displayUser = cell.user ? cell.user : '-';
@@ -31,40 +31,45 @@ function getCellHTML(cell, roleClass) {
     `;
 }
 
-function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4) {
+function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids) {
     return `
         <div class="semerka-matrix">
-            <div class="matrix-row">${getCellHTML(topCell, 'level-1')}</div>
+            <div class="matrix-row">${getCellHTML(topCell, 'level-1', ids.top)}</div>
             <div class="matrix-row">
-                ${getCellHTML(leftShoulder, 'level-2')}
-                ${getCellHTML(rightShoulder, 'level-2')}
+                ${getCellHTML(leftShoulder, 'level-2', ids.left)}
+                ${getCellHTML(rightShoulder, 'level-2', ids.right)}
             </div>
             <div class="matrix-row">
-                ${getCellHTML(bottom4[0], 'level-3')}
-                ${getCellHTML(bottom4[1], 'level-3')}
-                ${getCellHTML(bottom4[2], 'level-3')}
-                ${getCellHTML(bottom4[3], 'level-3')}
+                ${getCellHTML(bottom4[0], 'level-3', ids.b1)}
+                ${getCellHTML(bottom4[1], 'level-3', ids.b2)}
+                ${getCellHTML(bottom4[2], 'level-3', ids.b3)}
+                ${getCellHTML(bottom4[3], 'level-3', ids.b4)}
             </div>
         </div>
     `;
 }
 
-// Вспомогательная функция, чтобы узнать букву и номер следующего уровня для поиска потомков
 function parseCell(id) {
-    const match = id.match(/^([A-Z])(\d+)$/);
+    const match = id.match(/^([A-Z]+)(\d+)$/);
     if (!match) return null;
     return { letter: match[1], num: parseInt(match[2], 10) };
 }
 
+// Универсальный генератор букв для бесконечной глубины (A -> B ... Z -> AA -> AB)
 function getNextLevelLetter(letter) {
-    return String.fromCharCode(letter.charCodeAt(0) + 1);
+    let i = letter.length - 1;
+    while (i >= 0) {
+        if (letter[i] !== 'Z') {
+            return letter.substring(0, i) + String.fromCharCode(letter.charCodeAt(i) + 1) + 'A'.repeat(letter.length - 1 - i);
+        }
+        i--;
+    }
+    return 'A'.repeat(letter.length + 1);
 }
 
-// Главная функция бесконечного динамического поиска активных домиков
 function renderDynamicSplitting(tree) {
-    // Стек для обхода дерева в поиске активных (незакрытых) матриц
     let activeMatricesHTML = [];
-    let queue = ['A1']; // Начинаем жизнь с самой первой матрицы A1
+    let queue = ['A1']; 
     let processedNodes = new Set();
 
     while (queue.length > 0) {
@@ -73,14 +78,18 @@ function renderDynamicSplitting(tree) {
         processedNodes.add(currentId);
 
         const topCell = tree[currentId];
-        if (!topCell) continue;
+        // Если даже в базе нет этой вершины, но мы до нее дошли по структуре (пустая матрица на будущее)
+        // Мы все равно даем ей шанс провериться, если ее родитель был закрыт. Но для A1 проверяем наличие.
+        if (currentId === 'A1' && !topCell) {
+            mainTreeDisplay.innerHTML = '<div style="color:white; padding:20px;">Дерево пустое. Ожидание регистраций...</div>';
+            return;
+        }
 
-        // Вычисляем соотвествующие плечи и низ для ТЕКУЩЕЙ вершины по закону бинарного дерева
         const parsed = parseCell(currentId);
         if (!parsed) continue;
 
-        const nextLetter = getNextLevelLetter(parsed.letter);       // Уровень плеч (например, B)
-        const bottomLetter = getNextLevelLetter(nextLetter);        // Уровень низа (например, C)
+        const nextLetter = getNextLevelLetter(parsed.letter);       
+        const bottomLetter = getNextLevelLetter(nextLetter);        
 
         const leftLNum = parsed.num * 2 - 1;
         const rightLNum = parsed.num * 2;
@@ -102,21 +111,20 @@ function renderDynamicSplitting(tree) {
             tree[b4] || null
         ];
 
-        // ПРОВЕРКА: Закрыта ли полностью четверка низа у ЭТОГО конкретного домика?
+        // Ключевое правило: закрыта ли четверка низа
         const isMatrixClosed = bottom4.every(cell => cell && cell.user);
 
         if (isMatrixClosed) {
-            // Если ЕГО четверка закрылась - этот домик дробится! 
-            // Сам он больше не выводится, но его плечи становятся новыми вершинами для проверки в цикле!
-            if (leftShoulder) queue.push(leftShoulderId);
-            if (rightShoulder) queue.push(rightShoulderId);
+            // Матрица закрыта — отправляем её плечи в очередь, они станут новыми вершинами Х-уровня ниже!
+            queue.push(leftShoulderId);
+            queue.push(rightShoulderId);
         } else {
-            // Если четверка еще НЕ закрылась — этот домик прямо сейчас АКТИВЕН. Отрисовываем его на экран!
-            activeMatricesHTML.push(buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4));
+            // Матрица АКТИВНА (четверка не закрыта). Рендерим её!
+            const ids = { top: currentId, left: leftShoulderId, right: rightShoulderId, b1, b2, b3, b4 };
+            activeMatricesHTML.push(buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids));
         }
     }
 
-    // Выводим все активные на данный момент домики в один ряд с ровными отступами
     mainTreeDisplay.innerHTML = `
         <div class="matrices-row">
             ${activeMatricesHTML.join('')}
@@ -139,4 +147,4 @@ resetBtn.addEventListener('click', async () => {
 });
 
 fetchTree();
-setInterval(fetchTree, 2000);
+setInterval(fetchTree, 1500);
