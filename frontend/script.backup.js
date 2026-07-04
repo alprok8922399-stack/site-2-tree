@@ -2,9 +2,27 @@ const API_URL = '/api';
 const mainTreeDisplay = document.getElementById('mainTreeDisplay');
 const zoomSlider = document.getElementById('zoomSlider');
 const resetBtn = document.getElementById('resetBtn');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const refTableBody = document.getElementById('refTableBody');
+
+let currentRootId = 'A1'; 
+let searchTargetUser = ''; 
 
 zoomSlider.addEventListener('input', (e) => {
     mainTreeDisplay.style.transform = `scale(${e.target.value})`;
+});
+
+searchBtn.addEventListener('click', () => {
+    const val = searchInput.value.trim();
+    if (val) {
+        searchTargetUser = val;
+        findUserAndFocus(val);
+    } else {
+        currentRootId = 'A1';
+        searchTargetUser = '';
+        fetchTree();
+    }
 });
 
 async function fetchTree() {
@@ -12,9 +30,62 @@ async function fetchTree() {
         const res = await fetch(`${API_URL}/tree`);
         const data = await res.json();
         renderDynamicSplitting(data);
+        renderTableList(data);
     } catch (err) {
         console.error('Ошибка загрузки данных:', err);
     }
+}
+
+function findUserAndFocus(username) {
+    fetch(`${API_URL}/tree`)
+        .then(res => res.json())
+        .then(tree => {
+            let foundCellId = null;
+            for (const [id, cell] of Object.entries(tree)) {
+                if (cell && cell.user && cell.user.toLowerCase() === username.toLowerCase()) {
+                    foundCellId = id;
+                    break;
+                }
+            }
+            
+            if (foundCellId) {
+                const parsed = parseCell(foundCellId);
+                let rootId = foundCellId; 
+                
+                function getPrevLevelLetter(letter) {
+                    if (letter.length > 1) return letter.substring(0, letter.length - 1);
+                    if (letter === 'A') return 'A';
+                    return String.fromCharCode(letter.charCodeAt(0) - 1);
+                }
+                
+                let currentLetter = parsed.letter;
+                let currentNum = parsed.num;
+                
+                let step1Letter = getPrevLevelLetter(currentLetter);
+                let step1Num = Math.floor((currentNum + 1) / 2);
+                
+                let step2Letter = getPrevLevelLetter(step1Letter);
+                let step2Num = Math.floor((step1Num + 1) / 2);
+                
+                let candidateRoot = `${step2Letter}${step2Num}`;
+                
+                if (step2Letter === 'A' || tree[candidateRoot]) {
+                    rootId = candidateRoot;
+                } else {
+                    let candidateRoot2 = `${step1Letter}${step1Num}`;
+                    rootId = candidateRoot2;
+                }
+                
+                if (parsed.letter === 'A') rootId = 'A1';
+
+                currentRootId = rootId;
+                searchTargetUser = username; 
+                renderDynamicSplitting(tree);
+                renderTableList(tree);
+            } else {
+                alert(`Пользователь ${username} не найден в текущей структуре`);
+            }
+        });
 }
 
 function getCellHTML(cell, roleClass, fallbackId = '-') {
@@ -23,13 +94,20 @@ function getCellHTML(cell, roleClass, fallbackId = '-') {
     }
     const isOccupied = cell.user ? 'occupied' : '';
     const displayUser = cell.user ? cell.user : '-';
+    const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
+
     return `
-        <div class="cell ${roleClass} ${isOccupied}" id="cell-${cell.id}">
+        <div class="cell ${roleClass} ${isOccupied} ${isFocused}" onclick="switchFocus('${cell.id}')">
             <div class="cell-id">${cell.id}</div>
             <div class="cell-user">${displayUser}</div>
         </div>
     `;
 }
+
+window.switchFocus = function(cellId) {
+    currentRootId = cellId;
+    fetchTree();
+};
 
 function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids) {
     return `
@@ -55,7 +133,6 @@ function parseCell(id) {
     return { letter: match[1], num: parseInt(match[2], 10) };
 }
 
-// Универсальный генератор букв для бесконечной глубины (A -> B ... Z -> AA -> AB)
 function getNextLevelLetter(letter) {
     let i = letter.length - 1;
     while (i >= 0) {
@@ -69,7 +146,7 @@ function getNextLevelLetter(letter) {
 
 function renderDynamicSplitting(tree) {
     let activeMatricesHTML = [];
-    let queue = ['A1']; 
+    let queue = [currentRootId]; 
     let processedNodes = new Set();
 
     while (queue.length > 0) {
@@ -78,7 +155,6 @@ function renderDynamicSplitting(tree) {
         processedNodes.add(currentId);
 
         const topCell = tree[currentId] || null;
-
         const parsed = parseCell(currentId);
         if (!parsed) continue;
 
@@ -105,15 +181,12 @@ function renderDynamicSplitting(tree) {
             tree[b4] || null
         ];
 
-        // Ключевое правило: закрыта ли четверка низа
         const isMatrixClosed = bottom4.every(cell => cell && cell.user);
 
         if (isMatrixClosed) {
-            // Матрица полностью закрыта — пускаем деление дальше по дереву к потомкам
             queue.push(leftShoulderId);
             queue.push(rightShoulderId);
         } else {
-            // Матрица АКТИВНА (низ еще не забит). Рендерим каркас домика!
             const ids = { top: currentId, left: leftShoulderId, right: rightShoulderId, b1, b2, b3, b4 };
             activeMatricesHTML.push(buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids));
         }
@@ -126,6 +199,30 @@ function renderDynamicSplitting(tree) {
     `;
 }
 
+function renderTableList(tree) {
+    let html = '';
+    let list = [];
+    for (const [id, cell] of Object.entries(tree)) {
+        if (cell && cell.user) {
+            list.push({ id: id, user: cell.user });
+        }
+    }
+    
+    list.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true, sensitivity: 'base'}));
+
+    list.forEach(item => {
+        const isCurrentSearch = (item.user === searchTargetUser) ? 'style="background: #ff3366; color: white; font-weight:bold;"' : '';
+        html += `
+            <tr ${isCurrentSearch} onclick="switchFocus('${item.id}')">
+                <td><strong>${item.user}</strong></td>
+                <td>${item.id}</td>
+            </tr>
+        `;
+    });
+
+    refTableBody.innerHTML = html || '<tr><td colspan="2" style="text-align:center;">База пуста</td></tr>';
+}
+
 resetBtn.addEventListener('click', async () => {
     if (!confirm('Очистить базу данных дерева?')) return;
     try {
@@ -133,6 +230,8 @@ resetBtn.addEventListener('click', async () => {
         const data = await res.json();
         if (data.success) {
             alert('База успешно сброшена!');
+            currentRootId = 'A1';
+            searchTargetUser = '';
             fetchTree();
         }
     } catch (err) {
@@ -141,4 +240,4 @@ resetBtn.addEventListener('click', async () => {
 });
 
 fetchTree();
-setInterval(fetchTree, 1000);
+setInterval(fetchTree, 2000);
