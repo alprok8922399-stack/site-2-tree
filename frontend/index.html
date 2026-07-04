@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=0.4, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes">
-    <title>Панель Admina — Структура Дерева (Сайт №2)</title>
+    <title>Панель Admina — Модель 1-2-4 (Сайт №2)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -55,7 +55,6 @@
             width: max-content;
             margin: 0 auto;
             padding: 20px;
-            transition: transform 0.1s ease-out;
         }
         .level-row {
             display: flex;
@@ -63,30 +62,28 @@
             gap: 10px;
             width: max-content;
         }
-        /* Главный контейнер разделения низа */
+        
+        /* Главный контейнер для разветвления */
         .split-container {
             display: flex;
             justify-content: center;
             width: 100%;
         }
-        /* ЛЕВАЯ СТОРОНА: жестко сдвигается влево, оставляя зазор справа */
-        .split-block-left {
+
+        /* 4 независимые вертикальные ветки матрицы */
+        .branch {
             display: flex;
             flex-direction: column;
             gap: 20px;
             align-items: center;
             min-width: max-content;
-            margin-right: 170px; /* Отступ справа в 2 ячейки, толкает блок влево */
         }
-        /* ПРАВАЯ СТОРОНА: жестко сдвигается вправо, оставляя зазор слева */
-        .split-block-right {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            align-items: center;
-            min-width: max-content;
-            margin-left: 170px; /* Отступ слева в 2 ячейки, толкает блок вправо */
-        }
+
+        /* ТВОИ ЖЕСТКИЕ ОТСТУПЫ ПО КРАСНЫМ МЕТКАМ (РАЗЪЕЗД НА 2 ЯЧЕЙКИ ~ 170px) */
+        .b-1 { margin-right: 85px; }  /* Разрыв внутри левой стороны */
+        .b-2 { margin-right: 250px; } /* Огромный центральный разрыв между Лево и Право */
+        .b-3 { margin-right: 85px; }  /* Разрыв внутри правой стороны */
+
         .cell {
             background: #2c2c3e;
             border: 2px solid #3e3e56;
@@ -137,7 +134,7 @@
 </head>
 <body>
 
-    <h1>📊 Визуальная structure дерева</h1>
+    <h1>📊 Визуальная структура (До ряда F включительно)</h1>
     
     <div class="controls">
         <button class="btn-reset" id="resetBtn">Сбросить дерево (Очистить БД)</button>
@@ -151,16 +148,28 @@
             <div class="level-row" id="level-C"></div>
             
             <div class="split-container">
-                <div class="split-block-left">
-                    <div class="level-row" id="level-D-left"></div>
-                    <div class="level-row" id="level-E-left"></div>
-                    <div class="level-row" id="level-F-left"></div>
+                <div class="branch b-1">
+                    <div class="level-row" id="level-D-1"></div>
+                    <div class="level-row" id="level-E-1"></div>
+                    <div class="level-row" id="level-F-1"></div>
                 </div>
                 
-                <div class="split-block-right">
-                    <div class="level-row" id="level-D-right"></div>
-                    <div class="level-row" id="level-E-right"></div>
-                    <div class="level-row" id="level-F-right"></div>
+                <div class="branch b-2">
+                    <div class="level-row" id="level-D-2"></div>
+                    <div class="level-row" id="level-E-2"></div>
+                    <div class="level-row" id="level-F-2"></div>
+                </div>
+                
+                <div class="branch b-3">
+                    <div class="level-row" id="level-D-3"></div>
+                    <div class="level-row" id="level-E-3"></div>
+                    <div class="level-row" id="level-F-3"></div>
+                </div>
+                
+                <div class="branch">
+                    <div class="level-row" id="level-D-4"></div>
+                    <div class="level-row" id="level-E-4"></div>
+                    <div class="level-row" id="level-F-4"></div>
                 </div>
             </div>
         </div>
