@@ -39,7 +39,6 @@
             width: 100%;
             font-weight: bold;
         }
-        /* Обертка для прокрутки: разрешает скролл во все стороны на телефоне */
         .scroll-wrapper {
             width: 100%;
             overflow: auto;
@@ -48,7 +47,6 @@
             touch-action: pan-x pan-y;
             -webkit-overflow-scrolling: touch;
         }
-        /* Контейнер матрицы: теперь он имеет запас ширины и высоты, чтобы при масштабировании ничего не скрывалось */
         .tree-container {
             display: flex;
             flex-direction: column;
@@ -63,20 +61,22 @@
             display: flex;
             justify-content: center;
             gap: 10px;
-            width: 100%;
+            width: max-content;
         }
-        /* Обертка для разделения нижних блоков на левый и правый */
+        /* Главный контейнер разделения низа */
         .split-container {
             display: flex;
             justify-content: center;
-            gap: 40px; 
+            gap: 60px; /* Запас расстояния между левым и правым блоком */
             width: 100%;
         }
+        /* Блоки сторон: flex-значения позволяют им динамически расширяться влево и вправо */
         .split-block {
             display: flex;
             flex-direction: column;
             gap: 20px;
             align-items: center;
+            min-width: max-content;
         }
         .cell {
             background: #2c2c3e;
