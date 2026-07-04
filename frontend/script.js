@@ -77,13 +77,7 @@ function renderDynamicSplitting(tree) {
         if (processedNodes.has(currentId)) continue;
         processedNodes.add(currentId);
 
-        const topCell = tree[currentId];
-        // Если даже в базе нет этой вершины, но мы до нее дошли по структуре (пустая матрица на будущее)
-        // Мы все равно даем ей шанс провериться, если ее родитель был закрыт. Но для A1 проверяем наличие.
-        if (currentId === 'A1' && !topCell) {
-            mainTreeDisplay.innerHTML = '<div style="color:white; padding:20px;">Дерево пустое. Ожидание регистраций...</div>';
-            return;
-        }
+        const topCell = tree[currentId] || null;
 
         const parsed = parseCell(currentId);
         if (!parsed) continue;
@@ -115,11 +109,11 @@ function renderDynamicSplitting(tree) {
         const isMatrixClosed = bottom4.every(cell => cell && cell.user);
 
         if (isMatrixClosed) {
-            // Матрица закрыта — отправляем её плечи в очередь, они станут новыми вершинами Х-уровня ниже!
+            // Матрица полностью закрыта — пускаем деление дальше по дереву к потомкам
             queue.push(leftShoulderId);
             queue.push(rightShoulderId);
         } else {
-            // Матрица АКТИВНА (четверка не закрыта). Рендерим её!
+            // Матрица АКТИВНА (низ еще не забит). Рендерим каркас домика!
             const ids = { top: currentId, left: leftShoulderId, right: rightShoulderId, b1, b2, b3, b4 };
             activeMatricesHTML.push(buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids));
         }
@@ -147,4 +141,4 @@ resetBtn.addEventListener('click', async () => {
 });
 
 fetchTree();
-setInterval(fetchTree, 1500);
+setInterval(fetchTree, 1000);
