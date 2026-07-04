@@ -1,169 +1,105 @@
-// Указываем реальный адрес бэкенда на Render вместо localhost
-const BACKEND_URL = 'https://site-2-tree.onrender.com';
-
-const resetBtn = document.getElementById('resetBtn');
-const zoomSlider = document.getElementById('zoomSlider');
+const API_URL = '/api';
 const treeContainer = document.querySelector('.tree-container');
-const scrollWrapper = document.querySelector('.scroll-wrapper');
+const zoomSlider = document.getElementById('zoomSlider');
+const resetBtn = document.getElementById('resetBtn');
 
-// Переменные для зума пальцами
-let currentScale = 0.6;
-let initialDistance = null;
+// Инициализация зума
+zoomSlider.addEventListener('input', (e) => {
+    const scale = e.target.value;
+    treeContainer.style.transform = `scale(${scale})`;
+});
 
-// Функция отрисовки дерева на экране телефона
-function renderTree(tree) {
-    // Карты строк уровней, включая левые и правые блоки для D, E и F
-    const levels = {
-        A: document.getElementById('level-A'),
-        B: document.getElementById('level-B'),
-        C: document.getElementById('level-C'),
-        'D-left': document.getElementById('level-D-left'),
-        'D-right': document.getElementById('level-D-right'),
-        'E-left': document.getElementById('level-E-left'),
-        'E-right': document.getElementById('level-E-right'),
-        'F-left': document.getElementById('level-F-left'),
-        'F-right': document.getElementById('level-F-right')
-    };
-    
-    // Очищаем все блоки перед перерисовкой
-    Object.values(levels).forEach(el => {
-        if (el) el.innerHTML = '';
-    });
-
-    // Пробегаемся по всем ячейкам из базы данных
-    Object.keys(tree).forEach(cellId => {
-        const cellData = tree[cellId];
-        const level = cellData.level;
-        const num = parseInt(cellId.slice(1));
-
-        // Создаем графический блок ячейки
-        const cellEl = document.createElement('div');
-        cellEl.className = 'cell';
-        
-        if (cellData.color) {
-            cellEl.classList.add(`color-${cellData.color}`);
-        }
-        
-        if (cellData.user) {
-            cellEl.classList.add('occupied');
-        }
-
-        cellEl.innerHTML = `
-            <div class="cell-id">${cellData.id}</div>
-            <div class="cell-user">${cellData.user || 'Пусто'}</div>
-        `;
-
-        // Определяем, в какую именно строку отправлять ячейку
-        let targetRow = levels[level];
-
-        if (level === 'D') {
-            if (num <= 4) targetRow = levels['D-left'];
-            else targetRow = levels['D-right'];
-        }
-        
-        if (level === 'E') {
-            if (num <= 8) targetRow = levels['E-left'];
-            else targetRow = levels['E-right'];
-        }
-
-        if (level === 'F') {
-            if (num <= 16) targetRow = levels['F-left'];
-            else targetRow = levels['F-right'];
-        }
-
-        if (targetRow) {
-            targetRow.appendChild(cellEl);
-        }
-    });
-}
-
-// Функция применения зума к матрице
-function applyZoom(scale) {
-    currentScale = Math.max(0.1, Math.min(scale, 1.5)); // Ограничения от 0.1 (в точку) до 1.5
-    if (treeContainer) {
-        treeContainer.style.transform = `scale(${currentScale})`;
-        treeContainer.style.transformOrigin = 'top center';
-    }
-    if (zoomSlider) {
-        zoomSlider.value = currentScale;
-    }
-}
-
-// Слушатель ползунка (изменение вручную)
-if (zoomSlider) {
-    zoomSlider.addEventListener('input', (e) => {
-        applyZoom(parseFloat(e.target.value));
-    });
-}
-
-// --- УПРАВЛЕНИЕ ЖЕСТАМИ ДЛЯ ТЕЛЕФОНА (ЗУМ ПАЛЬЦАМИ) ---
-if (scrollWrapper) {
-    scrollWrapper.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 2) {
-            // Запоминаем начальное расстояние между двумя пальцами
-            initialDistance = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-        }
-    });
-
-    scrollWrapper.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 2 && initialDistance) {
-            e.preventDefault(); // Запрещаем стандартный зум браузера
-            
-            // Считаем текущее расстояние между пальцами
-            const currentDistance = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-            
-            // Вычисляем коэффициент изменения
-            const factor = currentDistance / initialDistance;
-            applyZoom(currentScale * factor);
-            
-            // Обновляем начальную точку для плавности
-            initialDistance = currentDistance;
-        }
-    }, { passive: false });
-
-    scrollWrapper.addEventListener('touchend', (e) => {
-        if (e.touches.length < 2) {
-            initialDistance = null;
-        }
-    });
-}
-
-// Функция запроса свежих данных от бэкенда
 async function fetchTree() {
     try {
-        const response = await fetch(`${BACKEND_URL}/api/tree`);
-        if (response.ok) {
-            const tree = await response.json();
-            renderTree(tree);
-        }
-    } catch (error) {
-        console.error('Ошибка сети при получении дерева:', error);
+        const res = await fetch(`${API_URL}/tree`);
+        const data = await res.json();
+        renderTree(data);
+    } catch (err) {
+        console.error('Ошибка загрузки дерева:', err);
     }
 }
 
-// Кнопка сброса структуры (Очистить БД)
+function createCellHTML(cell) {
+    if (!cell) return '';
+    const isOccupied = cell.user ? 'occupied' : '';
+    const colorClass = cell.color ? `color-${cell.color}` : '';
+    const displayUser = cell.user ? cell.user : '-';
+    
+    return `
+        <div class="cell ${colorClass} ${isOccupied}" id="cell-${cell.id}">
+            <div class="cell-id">${cell.id}</div>
+            <div class="cell-user">${displayUser}</div>
+        </div>
+    `;
+}
+
+function renderTree(tree) {
+    // Очищаем стандартные верхние уровни
+    document.getElementById('level-A').innerHTML = createCellHTML(tree['A1']);
+    document.getElementById('level-B').innerHTML = createCellHTML(tree['B1']) + createCellHTML(tree['B2']);
+    document.getElementById('level-C').innerHTML = [1,2,3,4].map(i => createCellHTML(tree[`C${i}`])).join('');
+
+    // Распределяем ряды D, E, F по 4 независимым изолированным веткам
+    
+    // Ветка 1 (Лидер D1 -> под ним E1, E2 -> под ними F1..F4)
+    document.getElementById('level-D-1').innerHTML = createCellHTML(tree['D1']);
+    document.getElementById('level-E-1').innerHTML = [1,2].map(i => createCellHTML(tree[`E${i}`])).join('');
+    document.getElementById('level-F-1').innerHTML = [1,2,3,4].map(i => createCellHTML(tree[`F${i}`])).join('');
+
+    // Ветка 2 (Лидер D2 -> под ним E3, E4 -> под ними F5..F8)
+    document.getElementById('level-D-2').innerHTML = createCellHTML(tree['D2']);
+    document.getElementById('level-E-2').innerHTML = [3,4].map(i => createCellHTML(tree[`E${i}`])).join('');
+    document.getElementById('level-F-2').innerHTML = [5,6,7,8].map(i => createCellHTML(tree[`F${i}`])).join('');
+
+    // Ветка 3 (Лидер D3 -> под ним E5, E6 -> под ними F9..F12)
+    document.getElementById('level-D-3').innerHTML = createCellHTML(tree['D3']);
+    document.getElementById('level-E-3').innerHTML = [5,6].map(i => createCellHTML(tree[`E${i}`])).join('');
+    document.getElementById('level-F-3').innerHTML = [9,10,11,12].map(i => createCellHTML(tree[`F${i}`])).join('');
+
+    // Ветка 4 (Лидер D4 -> под ним E7, E8 -> под ними F13..F16)
+    document.getElementById('level-D-4').innerHTML = createCellHTML(tree['D4']);
+    document.getElementById('level-E-4').innerHTML = [7,8].map(i => createCellHTML(tree[`E${i}`])).join('');
+    document.getElementById('level-F-4').innerHTML = [13,14,15,16].map(i => createCellHTML(tree[`F${i}`])).join('');
+
+    // В бэкенде D5..D8 и соответствующие E/F генерируются для правой половины. 
+    // Добавим отображение правого крыла в наши ветки, если ячейки существуют:
+    if (tree['D5']) {
+        document.getElementById('level-D-3').innerHTML += createCellHTML(tree['D5']);
+        document.getElementById('level-E-3').innerHTML += [9,10].map(i => createCellHTML(tree[`E${i}`])).join('');
+        document.getElementById('level-F-3').innerHTML += [17,18,19,20].map(i => createCellHTML(tree[`F${i}`])).join('');
+    }
+    if (tree['D6']) {
+        document.getElementById('level-D-4').innerHTML += createCellHTML(tree['D6']);
+        document.getElementById('level-E-4').innerHTML += [11,12].map(i => createCellHTML(tree[`E${i}`])).join('');
+        document.getElementById('level-F-4').innerHTML += [21,22,23,24].map(i => createCellHTML(tree[`F${i}`])).join('');
+    }
+    if (tree['D7']) {
+        // Дополняем крайние ветки
+        document.getElementById('level-D-1').innerHTML += createCellHTML(tree['D7']);
+        document.getElementById('level-E-1').innerHTML += [13,14].map(i => createCellHTML(tree[`E${i}`])).join('');
+        document.getElementById('level-F-1').innerHTML += [25,26,27,28].map(i => createCellHTML(tree[`F${i}`])).join('');
+    }
+    if (tree['D8']) {
+        document.getElementById('level-D-2').innerHTML += createCellHTML(tree['D8']);
+        document.getElementById('level-E-2').innerHTML += [15,16].map(i => createCellHTML(tree[`E${i}`])).join('');
+        document.getElementById('level-F-2').innerHTML += [29,30,31,32].map(i => createCellHTML(tree[`F${i}`])).join('');
+    }
+}
+
 resetBtn.addEventListener('click', async () => {
-    if (confirm('Вы уверены, что хотите полностью очистить дерево?')) {
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/reset`, { method: 'POST' });
-            if (response.ok) {
-                alert('Дерево успешно сброшено!');
-                fetchTree();
-            }
-        } catch (error) {
-            alert('Ошибка сети при сбросе дерева');
+    if (!confirm('Вы уверены, что хотите полностью очистить базу данных дерева?')) return;
+    try {
+        const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            alert('База данных успешно очищена!');
+            fetchTree();
         }
+    } catch (err) {
+        alert('Ошибка при сбросе базы');
     }
 });
 
-// Инициализация при старте сайта
+// Запуск при старте
 fetchTree();
-setInterval(fetchTree, 2000);
-// Применяем начальный зум из ползунка
-applyZoom(parseFloat(zoomSlider.value));
+setInterval(fetchTree, 3000);
