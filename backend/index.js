@@ -45,7 +45,7 @@ function findNextEmptyCell(tree) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 4. Ряд F (8 четверок). Опечатка с F22 полностью ИСПРАВЛЕНА
+    // 4. Ряд F (8 четверок)
     const orderF = [
         'F1', 'F5', 'F9', 'F13', 'F17', 'F21', 'F25', 'F29',  // 1-й круг
         'F2', 'F6', 'F10', 'F14', 'F18', 'F22', 'F26', 'F30', // 2-й круг
@@ -56,66 +56,50 @@ function findNextEmptyCell(tree) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    return null; // Жёсткий СТОП на F32
+    return null; 
 }
 
+// ИСПРАВЛЕННАЯ ЛОГИКА: Генерируем уровни ЦЕЛИКОМ, чтобы не было сбоев из-за шахматного порядка
 function checkAndGenerateChildren(tree) {
+    // Как только заполнена С4 — открываем ВЕСЬ ряд D (все 8 мест)
     if (tree['C4'] && tree['C4'].user && !tree['D1']) {
         for (let i = 1; i <= 8; i++) {
             const id = `D${i}`;
-            tree[id] = { id, level: 'D', user: null };
+            if (!tree[id]) tree[id] = { id, level: 'D', user: null };
         }
     }
-    if (tree['D4'] && tree['D4'].user && !tree['E1']) {
-        for (let i = 1; i <= 8; i++) {
+    
+    // Как только заполнена ПОСЛЕДНЯЯ ячейка ряда D (это D8 в шахматном порядке) — открываем ВЕСЬ ряд E (все 16 мест)
+    if (tree['D8'] && tree['D8'].user && !tree['E1']) {
+        for (let i = 1; i <= 16; i++) {
             const id = `E${i}`;
-            tree[id] = { id, level: 'E', user: null };
-        }
-    }
-    if (tree['D8'] && tree['D8'].user && !tree['E9']) {
-        for (let i = 9; i <= 16; i++) {
-            const id = `E${i}`;
-            tree[id] = { id, level: 'E', user: null };
+            if (!tree[id]) tree[id] = { id, level: 'E', user: null };
         }
     }
 
-    // Открытие ряда F
-    if (tree['E4'] && tree['E4'].user && !tree['F1']) {
-        for (let i = 1; i <= 8; i++) {
+    // Как только заполнена ПОСЛЕДНЯЯ ячейка ряда E (это E16 по кругу) — открываем ВЕСЬ ряд F (все 32 места)
+    if (tree['E16'] && tree['E16'].user && !tree['F1']) {
+        for (let i = 1; i <= 32; i++) {
             const id = `F${i}`;
-            tree[id] = { id, level: 'F', user: null };
-        }
-    }
-    if (tree['E8'] && tree['E8'].user && !tree['F9']) {
-        for (let i = 9; i <= 16; i++) {
-            const id = `F${i}`;
-            tree[id] = { id, level: 'F', user: null };
-        }
-    }
-    if (tree['E12'] && tree['E12'].user && !tree['F17']) {
-        for (let i = 17; i <= 24; i++) {
-            const id = `F${i}`;
-            tree[id] = { id, level: 'F', user: null };
-        }
-    }
-    if (tree['E16'] && tree['E16'].user && !tree['F25']) {
-        for (let i = 25; i <= 32; i++) {
-            const id = `F${i}`;
-            tree[id] = { id, level: 'F', user: null };
+            if (!tree[id]) tree[id] = { id, level: 'F', user: null };
         }
     }
 }
 
 app.get('/api/tree', (req, res) => res.json(treeDB));
+
 app.post('/api/register', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
+    
     const cellId = findNextEmptyCell(treeDB);
     if (!cellId) return res.status(400).json({ error: 'Все текущие уровни заполнены' });
+    
     treeDB[cellId].user = username;
     checkAndGenerateChildren(treeDB);
     res.json({ success: true, cellId, user: username });
 });
+
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
     res.json({ success: true });
