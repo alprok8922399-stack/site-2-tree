@@ -2,152 +2,198 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.4, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes">
-    <title>Панель Admina — Динамические Матрицы 1-2-4</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мониторинг Матриц 7-К</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #1a1a24;
-            color: #fff;
+            background-color: #1a1a2e;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh;
-            box-sizing: border-box;
         }
-        h1 {
-            font-size: 22px;
-            color: #00cbc6;
-            margin-bottom: 10px;
-        }
-        .controls {
-            margin-bottom: 25px;
+        h1 { margin: 5px 0; font-size: 20px; text-shadow: 0 0 10px #00fff0; }
+        
+        /* Панель управления для мобильного */
+        .control-panel {
+            background: #162447;
+            padding: 10px;
+            border-radius: 8px;
             width: 100%;
             max-width: 500px;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
-        .btn-reset {
-            background-color: #ff5e57;
-            color: white;
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #0f4c81;
+            background: #1f4068;
+            color: #fff;
+            font-size: 16px;
+        }
+        .search-box button {
+            padding: 8px 15px;
+            background: #e43f5a;
             border: none;
-            padding: 10px 15px;
-            font-size: 14px;
-            border-radius: 6px;
+            color: white;
+            border-radius: 5px;
             cursor: pointer;
-            width: 100%;
             font-weight: bold;
         }
-        .scroll-wrapper {
-            width: 100%;
-            overflow: auto;
-            display: block;
-            padding: 20px 0;
-        }
-        .tree-container {
+        .slider-zone {
             display: flex;
-            flex-direction: column;
-            gap: 30px;
             align-items: center;
-            width: max-content;
-            margin: 0 auto;
-            padding: 20px;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 14px;
         }
-        
-        /* Контейнер для выстраивания СЕМЕРОК в один ряд */
-        .matrices-row {
+        .slider-zone input { flex: 1; }
+        .btn-reset {
+            background: #438a5e;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* Экран матриц */
+        .screen-container {
+            width: 100%;
+            overflow-x: auto;
+            padding: 10px 0;
             display: flex;
             justify-content: center;
-            gap: 50px; /* Большой зазор МЕЖДУ отдельными домиками */
+        }
+        #mainTreeDisplay {
+            transform-origin: top center;
+            transition: transform 0.2s ease;
+        }
+        .matrices-row {
+            display: flex;
+            gap: 30px;
+            padding: 10px;
         }
 
-        /* ЕДИНЫЙ ДОМИК - СЕМЕРКА (Абсолютная копия стиля первоначальной матрицы А1) */
+        /* Стили Домика (Семерки) */
         .semerka-matrix {
+            background: rgba(22, 36, 71, 0.8);
+            border: 2px solid #0f4c81;
+            border-radius: 12px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
             align-items: center;
-            background: rgba(255, 255, 255, 0.01);
-            border: 1px solid #2c2c3e;
-            border-radius: 12px;
-            padding: 20px;
+            min-width: 260px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
-
-        /* Строки внутри семерки */
         .matrix-row {
             display: flex;
             justify-content: center;
-            gap: 12px; /* Идеально ОДИНАКОВЫЕ и ровные интервалы во всех рядах семерки */
-        }
-
-        /* СТИЛИ ЯЧЕЕК - СТРОГО КАК У А1 */
-        .cell {
-            background: #2c2c3e;
-            border: 2px solid #3e3e56;
-            border-radius: 8px;
-            padding: 10px;
-            width: 75px;
-            text-align: center;
-            font-size: 11px;
-            box-sizing: border-box;
-            flex-shrink: 0;
-            transition: all 0.3s ease;
+            gap: 12px;
+            width: 100%;
         }
         
-        /* Цвета уровней внутри ЛЮБОЙ матрицы (копии А1) */
-        .cell.level-1 {
-            background: #ffd700; /* Золотая вершина */
-            border-color: #b8860b;
-            color: #000;
+        /* Ячейки */
+        .cell {
+            background: #1f4068;
+            border: 1px solid #0f4c81;
+            border-radius: 6px;
+            padding: 6px;
+            text-align: center;
+            min-width: 55px;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+            cursor: pointer;
         }
-        .cell.level-1 .cell-id { color: #000; }
-        .cell.level-1 .cell-user { color: #111; }
+        .cell:active { transform: scale(0.95); }
+        .cell-id { font-size: 10px; color: #888; font-weight: bold; }
+        .cell-user { font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; }
+        
+        /* Цвета ролей */
+        .level-1 { border: 2px solid #ffd700; background: #3a3000; } /* Золотая вершина */
+        .level-2 { border: 2px solid #00fff0; background: #002b36; } /* Синие плечи */
+        .level-3 { border: 1px dashed #ffffff; background: #2b2b2b; } /* Серый низ выплат */
+        
+        .occupied { background: #16a085 !important; border-color: #1abc9c !important; }
+        .focused-cell { animation: pulse 1s infinite alternate; border-color: #ff3366 !important; box-shadow: 0 0 15px #ff3366; }
 
-        .cell.level-2 {
-            background: #1e90ff; /* Синие плечи */
-            border-color: #0000ff;
-            color: #fff;
-        }
-        .cell.level-2 .cell-id { color: #fff; }
-        .cell.level-2 .cell-user { color: #f0f0f0; }
-
-        .cell.level-3 {
-            background: #2c2c3e; /* Серый низ по умолчанию */
-            border-color: #3e3e56;
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
         }
 
-        /* Когда ячейка занимается пользователем */
-        .cell.occupied.level-3 {
-            border-color: #05c46b; /* Зеленый контур заполнения */
+        /* Таблица структур */
+        .table-container {
+            width: 100%;
+            max-width: 500px;
+            margin-top: 20px;
+            background: #162447;
+            border-radius: 8px;
+            padding: 10px;
+            box-sizing: border-box;
         }
-
-        .cell-id {
-            font-weight: bold;
-            color: #00cbc6;
-            margin-bottom: 4px;
-            font-size: 12px;
+        .table-container h2 { font-size: 16px; margin: 0 0 10px 0; color: #00fff0; text-align: center; }
+        .ref-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
         }
-        .cell-user {
-            color: #d2dae2;
-            word-break: break-all;
-            min-height: 14px;
+        .ref-table th, .ref-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #1f4068;
         }
+        .ref-table th { background: #0f4c81; color: white; }
+        .ref-table tr:hover { background: rgba(255,255,255,0.05); cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <h1>📊 Мониторинг Активных Матриц 1-2-4</h1>
-    
-    <div class="controls">
-        <button class="btn-reset" id="resetBtn">Сбросить дерево (Очистить БД)</button>
-        <input type="range" id="zoomSlider" min="0.1" max="1.5" step="0.05" value="0.7" style="width: 100%; margin-top: 15px;">
+    <h1>Панель Управления Админа</h1>
+
+    <div class="control-panel">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Введите логин пользователя...">
+            <button id="searchBtn">Найти</button>
+        </div>
+        <div class="slider-zone">
+            <span>Масштаб:</span>
+            <input type="range" id="zoomSlider" min="0.3" max="1" step="0.05" value="0.8">
+            <button class="btn-reset" id="resetBtn">Сброс БД</button>
+        </div>
     </div>
 
-    <div class="scroll-wrapper">
-        <div class="tree-container" id="mainTreeDisplay">
-            </div>
+    <div class="screen-container">
+        <div id="mainTreeDisplay"></div>
     </div>
 
-<script src="script.js"></script>
+    <div class="table-container">
+        <h2>Реестр участников В СТОЛБИК («Кто-за-кем»)</h2>
+        <table class="ref-table">
+            <thead>
+                <tr>
+                    <th>Логин партнера</th>
+                    <th>ID Ячейки</th>
+                </tr>
+            </thead>
+            <tbody id="refTableBody">
+                </tbody>
+        </table>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
