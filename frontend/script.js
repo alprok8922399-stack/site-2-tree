@@ -31,7 +31,7 @@ function getCellHTML(cell, roleClass) {
     `;
 }
 
-// Построение одной идеальной независимой СЕМЕРКИ с правильной расцветкой: Золото -> Синий -> Серый
+// Построение одной идеальной независимой СЕМЕРКИ (Золото -> Синий -> Серый)
 function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4) {
     return `
         <div class="semerka-matrix">
@@ -51,14 +51,15 @@ function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4) {
 }
 
 function renderDynamicMatrices(tree) {
-    // Определяем текущее состояние фокуса системы (Эру/Экран)
+    // Триггеры для определения текущего экрана (Эры)
     const isC4Filled = tree['C4'] && tree['C4'].user;
+    const isD8Filled = tree['D8'] && tree['D8'].user;
     const isE16Filled = tree['E16'] && tree['E16'].user;
 
     let htmlContent = '';
 
     if (!isC4Filled) {
-        // ЭРА 1: Самая первая матрица во главе с А1
+        // ЭРА 1: Самая первая начальная матрица во главе с А1
         htmlContent = `
             <div class="matrices-row">
                 ${buildSemerkaHTML(
@@ -68,9 +69,16 @@ function renderDynamicMatrices(tree) {
                 )}
             </div>
         `;
-    } else if (isC4Filled && !isE16Filled) {
-        // ЭРА 2: Матрица А1 закрыта и скрылась! На экране 4 новые СЕМЕРКИ во главе с C1-C4.
-        // Каждая ячейка С стала ЗОЛОТОЙ вершиной, D - СИНИМИ плечами, E - СЕРЫМ низом.
+    } else if (isC4Filled && !isD8Filled) {
+        // ЭРА 2: Матрица А1 закрылась. На экране 2 новые СЕМЕРКИ во главе с плечами B1 и B2!
+        htmlContent = `
+            <div class="matrices-row">
+                ${buildSemerkaHTML(tree['B1'], tree['C1'], tree['C2'], [tree['D1'], tree['D2'], tree['D3'], tree['D4']])}
+                ${buildSemerkaHTML(tree['B2'], tree['C3'], tree['C4'], [tree['D5'], tree['D6'], tree['D7'], tree['D8']])}
+            </div>
+        `;
+    } else if (isD8Filled && !isE16Filled) {
+        // ЭРА 3: Ряд D закрылся. Теперь на экране 4 новые СЕМЕРКИ во главе с C1-C4, смотрящие на ряд E!
         htmlContent = `
             <div class="matrices-row">
                 ${buildSemerkaHTML(tree['C1'], tree['D1'], tree['D2'], [tree['E1'], tree['E2'], tree['E3'], tree['E4']])}
@@ -80,8 +88,7 @@ function renderDynamicMatrices(tree) {
             </div>
         `;
     } else {
-        // ЭРА 3: Ряд Е тоже закрылся! На экране 8 новых СЕМЕРОК во главе с D1-D8, смотрящих на ряд F.
-        // Каждая ячейка D стала ЗОЛОТОЙ вершиной, E - СИНИМИ плечами, F - СЕРЫМ низом.
+        // ЭРА 4: Ряд E закрылся. На экране 8 новых СЕМЕРОК во главе с D1-D8, смотрящие на ряд F!
         htmlContent = `
             <div class="matrices-row">
                 ${buildSemerkaHTML(tree['D1'], tree['E1']||null, tree['E2']||null, [tree['F1'], tree['F2'], tree['F3'], tree['F4']])}
@@ -114,4 +121,4 @@ resetBtn.addEventListener('click', async () => {
 });
 
 fetchTree();
-setInterval(fetchTree, 1500);
+setInterval(fetchTree, 3000);
