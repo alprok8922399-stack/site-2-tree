@@ -1,169 +1,124 @@
-// Указываем реальный адрес бэкенда на Render вместо localhost
-const BACKEND_URL = 'https://site-2-tree.onrender.com';
-
-const resetBtn = document.getElementById('resetBtn');
+const API_URL = '/api';
+const mainTreeDisplay = document.getElementById('mainTreeDisplay');
 const zoomSlider = document.getElementById('zoomSlider');
-const treeContainer = document.querySelector('.tree-container');
-const scrollWrapper = document.querySelector('.scroll-wrapper');
+const resetBtn = document.getElementById('resetBtn');
 
-// Переменные для зума пальцами
-let currentScale = 0.6;
-let initialDistance = null;
+zoomSlider.addEventListener('input', (e) => {
+    mainTreeDisplay.style.transform = `scale(${e.target.value})`;
+});
 
-// Функция отрисовки дерева на экране телефона
-function renderTree(tree) {
-    // Карты строк уровней, включая левые и правые блоки для D, E и F
-    const levels = {
-        A: document.getElementById('level-A'),
-        B: document.getElementById('level-B'),
-        C: document.getElementById('level-C'),
-        'D-left': document.getElementById('level-D-left'),
-        'D-right': document.getElementById('level-D-right'),
-        'E-left': document.getElementById('level-E-left'),
-        'E-right': document.getElementById('level-E-right'),
-        'F-left': document.getElementById('level-F-left'),
-        'F-right': document.getElementById('level-F-right')
-    };
-    
-    // Очищаем все блоки перед перерисовкой
-    Object.values(levels).forEach(el => {
-        if (el) el.innerHTML = '';
-    });
-
-    // Пробегаемся по всем ячейкам из базы данных
-    Object.keys(tree).forEach(cellId => {
-        const cellData = tree[cellId];
-        const level = cellData.level;
-        const num = parseInt(cellId.slice(1));
-
-        // Создаем графический блок ячейки
-        const cellEl = document.createElement('div');
-        cellEl.className = 'cell';
-        
-        if (cellData.color) {
-            cellEl.classList.add(`color-${cellData.color}`);
-        }
-        
-        if (cellData.user) {
-            cellEl.classList.add('occupied');
-        }
-
-        cellEl.innerHTML = `
-            <div class="cell-id">${cellData.id}</div>
-            <div class="cell-user">${cellData.user || 'Пусто'}</div>
-        `;
-
-        // Определяем, в какую именно строку отправлять ячейку
-        let targetRow = levels[level];
-
-        if (level === 'D') {
-            if (num <= 4) targetRow = levels['D-left'];
-            else targetRow = levels['D-right'];
-        }
-        
-        if (level === 'E') {
-            if (num <= 8) targetRow = levels['E-left'];
-            else targetRow = levels['E-right'];
-        }
-
-        if (level === 'F') {
-            if (num <= 16) targetRow = levels['F-left'];
-            else targetRow = levels['F-right'];
-        }
-
-        if (targetRow) {
-            targetRow.appendChild(cellEl);
-        }
-    });
-}
-
-// Функция применения зума к матрице
-function applyZoom(scale) {
-    currentScale = Math.max(0.1, Math.min(scale, 1.5)); // Ограничения от 0.1 (в точку) до 1.5
-    if (treeContainer) {
-        treeContainer.style.transform = `scale(${currentScale})`;
-        treeContainer.style.transformOrigin = 'top center';
-    }
-    if (zoomSlider) {
-        zoomSlider.value = currentScale;
-    }
-}
-
-// Слушатель ползунка (изменение вручную)
-if (zoomSlider) {
-    zoomSlider.addEventListener('input', (e) => {
-        applyZoom(parseFloat(e.target.value));
-    });
-}
-
-// --- УПРАВЛЕНИЕ ЖЕСТАМИ ДЛЯ ТЕЛЕФОНА (ЗУМ ПАЛЬЦАМИ) ---
-if (scrollWrapper) {
-    scrollWrapper.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 2) {
-            // Запоминаем начальное расстояние между двумя пальцами
-            initialDistance = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-        }
-    });
-
-    scrollWrapper.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 2 && initialDistance) {
-            e.preventDefault(); // Запрещаем стандартный зум браузера
-            
-            // Считаем текущее расстояние между пальцами
-            const currentDistance = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-            
-            // Вычисляем коэффициент изменения
-            const factor = currentDistance / initialDistance;
-            applyZoom(currentScale * factor);
-            
-            // Обновляем начальную точку для плавности
-            initialDistance = currentDistance;
-        }
-    }, { passive: false });
-
-    scrollWrapper.addEventListener('touchend', (e) => {
-        if (e.touches.length < 2) {
-            initialDistance = null;
-        }
-    });
-}
-
-// Функция запроса свежих данных от бэкенда
 async function fetchTree() {
     try {
-        const response = await fetch(`${BACKEND_URL}/api/tree`);
-        if (response.ok) {
-            const tree = await response.json();
-            renderTree(tree);
-        }
-    } catch (error) {
-        console.error('Ошибка сети при получении дерева:', error);
+        const res = await fetch(`${API_URL}/tree`);
+        const data = await res.json();
+        renderDynamicMatrices(data);
+    } catch (err) {
+        console.error('Ошибка загрузки данных:', err);
     }
 }
 
-// Кнопка сброса структуры (Очистить БД)
+function getCellHTML(cell, roleClass) {
+    if (!cell) {
+        return `<div class="cell ${roleClass}"><div class="cell-id">-</div><div class="cell-user">-</div></div>`;
+    }
+    const isOccupied = cell.user ? 'occupied' : '';
+    const displayUser = cell.user ? cell.user : '-';
+    return `
+        <div class="cell ${roleClass} ${isOccupied}" id="cell-${cell.id}">
+            <div class="cell-id">${cell.id}</div>
+            <div class="cell-user">${displayUser}</div>
+        </div>
+    `;
+}
+
+// Построение одной идеальной независимой СЕМЕРКИ (Золото -> Синий -> Серый)
+function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4) {
+    return `
+        <div class="semerka-matrix">
+            <div class="matrix-row">${getCellHTML(topCell, 'level-1')}</div>
+            <div class="matrix-row">
+                ${getCellHTML(leftShoulder, 'level-2')}
+                ${getCellHTML(rightShoulder, 'level-2')}
+            </div>
+            <div class="matrix-row">
+                ${getCellHTML(bottom4[0], 'level-3')}
+                ${getCellHTML(bottom4[1], 'level-3')}
+                ${getCellHTML(bottom4[2], 'level-3')}
+                ${getCellHTML(bottom4[3], 'level-3')}
+            </div>
+        </div>
+    `;
+}
+
+function renderDynamicMatrices(tree) {
+    // Триггеры для определения текущего экрана (Эры)
+    const isC4Filled = tree['C4'] && tree['C4'].user;
+    const isD8Filled = tree['D8'] && tree['D8'].user;
+    const isE16Filled = tree['E16'] && tree['E16'].user;
+
+    let htmlContent = '';
+
+    if (!isC4Filled) {
+        // ЭРА 1: Самая первая начальная матрица во главе с А1
+        htmlContent = `
+            <div class="matrices-row">
+                ${buildSemerkaHTML(
+                    tree['A1'],
+                    tree['B1'], tree['B2'],
+                    [tree['C1'], tree['C2'], tree['C3'], tree['C4']]
+                )}
+            </div>
+        `;
+    } else if (isC4Filled && !isD8Filled) {
+        // ЭРА 2: Матрица А1 закрылась. На экране 2 новые СЕМЕРКИ во главе с плечами B1 и B2!
+        htmlContent = `
+            <div class="matrices-row">
+                ${buildSemerkaHTML(tree['B1'], tree['C1'], tree['C2'], [tree['D1'], tree['D2'], tree['D3'], tree['D4']])}
+                ${buildSemerkaHTML(tree['B2'], tree['C3'], tree['C4'], [tree['D5'], tree['D6'], tree['D7'], tree['D8']])}
+            </div>
+        `;
+    } else if (isD8Filled && !isE16Filled) {
+        // ЭРА 3: Ряд D закрылся. Теперь на экране 4 новые СЕМЕРКИ во главе с C1-C4, смотрящие на ряд E!
+        htmlContent = `
+            <div class="matrices-row">
+                ${buildSemerkaHTML(tree['C1'], tree['D1'], tree['D2'], [tree['E1'], tree['E2'], tree['E3'], tree['E4']])}
+                ${buildSemerkaHTML(tree['C2'], tree['D3'], tree['D4'], [tree['E5'], tree['E6'], tree['E7'], tree['E8']])}
+                ${buildSemerkaHTML(tree['C3'], tree['D5'], tree['D6'], [tree['E9'], tree['E10'], tree['E11'], tree['E12']])}
+                ${buildSemerkaHTML(tree['C4'], tree['D7'], tree['D8'], [tree['E13'], tree['E14'], tree['E15'], tree['E16']])}
+            </div>
+        `;
+    } else {
+        // ЭРА 4: Ряд E закрылся. На экране 8 новых СЕМЕРОК во главе с D1-D8, смотрящие на ряд F!
+        htmlContent = `
+            <div class="matrices-row">
+                ${buildSemerkaHTML(tree['D1'], tree['E1']||null, tree['E2']||null, [tree['F1'], tree['F2'], tree['F3'], tree['F4']])}
+                ${buildSemerkaHTML(tree['D2'], tree['E3']||null, tree['E4']||null, [tree['F5'], tree['F6'], tree['F7'], tree['F8']])}
+                ${buildSemerkaHTML(tree['D3'], tree['E5']||null, tree['E6']||null, [tree['F9'], tree['F10'], tree['F11'], tree['F12']])}
+                ${buildSemerkaHTML(tree['D4'], tree['E7']||null, tree['E8']||null, [tree['F13'], tree['F14'], tree['F15'], tree['F16']])}
+                ${buildSemerkaHTML(tree['D5'], tree['E9']||null, tree['E10']||null, [tree['F17'], tree['F18'], tree['F19'], tree['F20']])}
+                ${buildSemerkaHTML(tree['D6'], tree['E11']||null, tree['E12']||null, [tree['F21'], tree['F22'], tree['F23'], tree['F24']])}
+                ${buildSemerkaHTML(tree['D7'], tree['E13']||null, tree['E14']||null, [tree['F25'], tree['F26'], tree['F27'], tree['F28']])}
+                ${buildSemerkaHTML(tree['D8'], tree['E15']||null, tree['E16']||null, [tree['F29'], tree['F30'], tree['F31'], tree['F32']])}
+            </div>
+        `;
+    }
+
+    mainTreeDisplay.innerHTML = htmlContent;
+}
+
 resetBtn.addEventListener('click', async () => {
-    if (confirm('Вы уверены, что хотите полностью очистить дерево?')) {
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/reset`, { method: 'POST' });
-            if (response.ok) {
-                alert('Дерево успешно сброшено!');
-                fetchTree();
-            }
-        } catch (error) {
-            alert('Ошибка сети при сбросе дерева');
+    if (!confirm('Очистить базу данных дерева?')) return;
+    try {
+        const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            alert('База успешно сброшена!');
+            fetchTree();
         }
+    } catch (err) {
+        alert('Ошибка при сбросе');
     }
 });
 
-// Инициализация при старте сайта
 fetchTree();
-setInterval(fetchTree, 2000);
-// Применяем начальный зум из ползунка
-applyZoom(parseFloat(zoomSlider.value));
+setInterval(fetchTree, 3000);
