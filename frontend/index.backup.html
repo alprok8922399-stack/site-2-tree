@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=0.4, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes">
-    <title>Панель Admina — Структура Дерева (Сайт №2)</title>
+    <title>Панель Admina — Динамические Матрицы 1-2-4</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -14,14 +14,13 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            box-sizing: border-box;
             min-height: 100vh;
+            box-sizing: border-box;
         }
         h1 {
             font-size: 22px;
             color: #00cbc6;
             margin-bottom: 10px;
-            text-align: center;
         }
         .controls {
             margin-bottom: 25px;
@@ -39,45 +38,49 @@
             width: 100%;
             font-weight: bold;
         }
-        /* Обертка для прокрутки: разрешает скролл во все стороны на телефоне */
         .scroll-wrapper {
             width: 100%;
             overflow: auto;
             display: block;
             padding: 20px 0;
-            touch-action: pan-x pan-y;
-            -webkit-overflow-scrolling: touch;
         }
-        /* Контейнер матрицы: теперь он имеет запас ширины и высоты, чтобы при масштабировании ничего не скрывалось */
         .tree-container {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 30px;
             align-items: center;
             width: max-content;
             margin: 0 auto;
             padding: 20px;
-            transition: transform 0.1s ease-out;
         }
-        .level-row {
+        
+        /* Контейнер для выстраивания СЕМЕРОК в один ряд */
+        .matrices-row {
             display: flex;
             justify-content: center;
-            gap: 10px;
-            width: 100%;
+            gap: 50px; /* Большой зазор МЕЖДУ отдельными домиками */
         }
-        /* Обертка для разделения нижних блоков на левый и правый */
-        .split-container {
-            display: flex;
-            justify-content: center;
-            gap: 40px; 
-            width: 100%;
-        }
-        .split-block {
+
+        /* ЕДИНЫЙ ДОМИК - СЕМЕРКА (Абсолютная копия стиля первоначальной матрицы А1) */
+        .semerka-matrix {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 15px;
             align-items: center;
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid #2c2c3e;
+            border-radius: 12px;
+            padding: 20px;
         }
+
+        /* Строки внутри семерки */
+        .matrix-row {
+            display: flex;
+            justify-content: center;
+            gap: 12px; /* Идеально ОДИНАКОВЫЕ и ровные интервалы во всех рядах семерки */
+        }
+
+        /* СТИЛИ ЯЧЕЕК - СТРОГО КАК У А1 */
         .cell {
             background: #2c2c3e;
             border: 2px solid #3e3e56;
@@ -88,73 +91,61 @@
             font-size: 11px;
             box-sizing: border-box;
             flex-shrink: 0;
+            transition: all 0.3s ease;
         }
-        .cell.color-gold {
-            background: #ffd700;
+        
+        /* Цвета уровней внутри ЛЮБОЙ матрицы (копии А1) */
+        .cell.level-1 {
+            background: #ffd700; /* Золотая вершина */
             border-color: #b8860b;
             color: #000;
         }
-        .cell.color-gold .cell-id { color: #000; }
-        .cell.color-gold .cell-user { color: #111; }
+        .cell.level-1 .cell-id { color: #000; }
+        .cell.level-1 .cell-user { color: #111; }
 
-        .cell.color-blue {
-            background: #1e90ff;
+        .cell.level-2 {
+            background: #1e90ff; /* Синие плечи */
             border-color: #0000ff;
             color: #fff;
         }
-        .cell.color-blue .cell-id { color: #fff; }
-        .cell.color-blue .cell-user { color: #f0f0f0; }
+        .cell.level-2 .cell-id { color: #fff; }
+        .cell.level-2 .cell-user { color: #f0f0f0; }
 
-        .cell.color-gray {
-            background: #2c2c3e;
-            border: 2px solid #3e3e56;
+        .cell.level-3 {
+            background: #2c2c3e; /* Серый низ по умолчанию */
+            border-color: #3e3e56;
         }
-        .cell.occupied {
-            border-color: #05c46b;
+
+        /* Когда ячейка занимается пользователем */
+        .cell.occupied.level-3 {
+            border-color: #05c46b; /* Зеленый контур заполнения */
         }
+
         .cell-id {
             font-weight: bold;
             color: #00cbc6;
             margin-bottom: 4px;
-            font-size: 13px;
+            font-size: 12px;
         }
         .cell-user {
             color: #d2dae2;
             word-break: break-all;
             min-height: 14px;
-            line-height: 1.2;
         }
     </style>
 </head>
 <body>
 
-    <h1>📊 Визуальная структура дерева</h1>
+    <h1>📊 Мониторинг Активных Матриц 1-2-4</h1>
     
     <div class="controls">
         <button class="btn-reset" id="resetBtn">Сбросить дерево (Очистить БД)</button>
-        <input type="range" id="zoomSlider" min="0.1" max="1.5" step="0.05" value="0.6" style="width: 100%; margin-top: 15px;">
+        <input type="range" id="zoomSlider" min="0.1" max="1.5" step="0.05" value="0.7" style="width: 100%; margin-top: 15px;">
     </div>
 
     <div class="scroll-wrapper">
-        <div class="tree-container">
-            <div class="level-row" id="level-A"></div>
-            <div class="level-row" id="level-B"></div>
-            <div class="level-row" id="level-C"></div>
-            
-            <div class="split-container">
-                <div class="split-block">
-                    <div class="level-row" id="level-D-left"></div>
-                    <div class="level-row" id="level-E-left"></div>
-                    <div class="level-row" id="level-F-left"></div>
-                </div>
-                
-                <div class="split-block">
-                    <div class="level-row" id="level-D-right"></div>
-                    <div class="level-row" id="level-E-right"></div>
-                    <div class="level-row" id="level-F-right"></div>
-                </div>
+        <div class="tree-container" id="mainTreeDisplay">
             </div>
-        </div>
     </div>
 
 <script src="script.js"></script>
