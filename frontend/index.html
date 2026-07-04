@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=0.4, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes">
-    <title>Панель Admina — Модель 1-2-4 (Сайт №2)</title>
+    <title>Панель Admina — Автономные Модули 1-2-4</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -14,14 +14,13 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            box-sizing: border-box;
             min-height: 100vh;
+            box-sizing: border-box;
         }
         h1 {
             font-size: 22px;
             color: #00cbc6;
             margin-bottom: 10px;
-            text-align: center;
         }
         .controls {
             margin-bottom: 25px;
@@ -44,13 +43,11 @@
             overflow: auto;
             display: block;
             padding: 20px 0;
-            touch-action: pan-x pan-y;
-            -webkit-overflow-scrolling: touch;
         }
         .tree-container {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 25px;
             align-items: center;
             width: max-content;
             margin: 0 auto;
@@ -63,113 +60,134 @@
             width: max-content;
         }
         
-        /* Главный контейнер для разветвления */
-        .split-container {
+        /* Контейнер глобального разделения на блоки */
+        .modules-container {
             display: flex;
             justify-content: center;
-            width: 100%;
+            gap: 40px; /* Расстояние между глобальными блоками уровня C */
         }
 
-        /* 4 независимые вертикальные ветки матрицы */
-        .branch {
+        /* Автономный модуль 1-2-4 (Семерка) */
+        .matrix-module {
             display: flex;
             flex-direction: column;
             gap: 20px;
             align-items: center;
-            min-width: max-content;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed #3e3e56;
+            border-radius: 12px;
+            padding: 15px;
         }
 
-        /* ТВОИ ЖЕСТКИЕ ОТСТУПЫ ПО КРАСНЫМ МЕТКАМ (РАЗЪЕЗД НА 2 ЯЧЕЙКИ ~ 170px) */
-        .b-1 { margin-right: 85px; }  /* Разрыв внутри левой стороны */
-        .b-2 { margin-right: 250px; } /* Огромный центральный разрыв между Лево и Право */
-        .b-3 { margin-right: 85px; }  /* Разрыв внутри правой стороны */
+        /* Контейнер для разделения низа модуля на 2 под-четверки (когда открывается ряд F) */
+        .sub-modules-row {
+            display: flex;
+            justify-content: center;
+            gap: 30px; /* Увеличенное расстояние между четверками ряда F */
+        }
+
+        .quad-block {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
 
         .cell {
             background: #2c2c3e;
             border: 2px solid #3e3e56;
             border-radius: 8px;
             padding: 10px;
-            width: 75px;
+            width: 72px;
             text-align: center;
             font-size: 11px;
             box-sizing: border-box;
             flex-shrink: 0;
         }
-        .cell.color-gold {
-            background: #ffd700;
-            border-color: #b8860b;
-            color: #000;
-        }
+        .cell.color-gold { background: #ffd700; border-color: #b8860b; color: #000; }
         .cell.color-gold .cell-id { color: #000; }
         .cell.color-gold .cell-user { color: #111; }
-
-        .cell.color-blue {
-            background: #1e90ff;
-            border-color: #0000ff;
-            color: #fff;
-        }
+        .cell.color-blue { background: #1e90ff; border-color: #0000ff; color: #fff; }
         .cell.color-blue .cell-id { color: #fff; }
         .cell.color-blue .cell-user { color: #f0f0f0; }
-
-        .cell.color-gray {
-            background: #2c2c3e;
-            border: 2px solid #3e3e56;
-        }
-        .cell.occupied {
-            border-color: #05c46b;
-        }
-        .cell-id {
-            font-weight: bold;
-            color: #00cbc6;
-            margin-bottom: 4px;
-            font-size: 13px;
-        }
-        .cell-user {
-            color: #d2dae2;
-            word-break: break-all;
-            min-height: 14px;
-            line-height: 1.2;
-        }
+        .cell.occupied { border-color: #05c46b; }
+        .cell-id { font-weight: bold; color: #00cbc6; margin-bottom: 4px; font-size: 12px; }
+        .cell-user { color: #d2dae2; word-break: break-all; min-height: 14px; }
     </style>
 </head>
 <body>
 
-    <h1>📊 Визуальная структура (До ряда F включительно)</h1>
+    <h1>📊 Визуализация модулей 1-2-4</h1>
     
     <div class="controls">
         <button class="btn-reset" id="resetBtn">Сбросить дерево (Очистить БД)</button>
-        <input type="range" id="zoomSlider" min="0.1" max="1.5" step="0.05" value="0.6" style="width: 100%; margin-top: 15px;">
+        <input type="range" id="zoomSlider" min="0.1" max="1.5" step="0.05" value="0.7" style="width: 100%; margin-top: 15px;">
     </div>
 
     <div class="scroll-wrapper">
         <div class="tree-container">
             <div class="level-row" id="level-A"></div>
             <div class="level-row" id="level-B"></div>
-            <div class="level-row" id="level-C"></div>
             
-            <div class="split-container">
-                <div class="branch b-1">
-                    <div class="level-row" id="level-D-1"></div>
-                    <div class="level-row" id="level-E-1"></div>
-                    <div class="level-row" id="level-F-1"></div>
+            <div class="modules-container">
+                <div class="matrix-module" id="mod-1">
+                    <div class="level-row" id="mod-1-C"></div>
+                    <div class="level-row" id="mod-1-D"></div>
+                    <div class="sub-modules-row">
+                        <div class="quad-block">
+                            <div class="level-row" id="mod-1-E-left"></div>
+                            <div class="level-row" id="mod-1-F-left"></div>
+                        </div>
+                        <div class="quad-block">
+                            <div class="level-row" id="mod-1-E-right"></div>
+                            <div class="level-row" id="mod-1-F-right"></div>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="branch b-2">
-                    <div class="level-row" id="level-D-2"></div>
-                    <div class="level-row" id="level-E-2"></div>
-                    <div class="level-row" id="level-F-2"></div>
+
+                <div class="matrix-module" id="mod-2">
+                    <div class="level-row" id="mod-2-C"></div>
+                    <div class="level-row" id="mod-2-D"></div>
+                    <div class="sub-modules-row">
+                        <div class="quad-block">
+                            <div class="level-row" id="mod-2-E-left"></div>
+                            <div class="level-row" id="mod-2-F-left"></div>
+                        </div>
+                        <div class="quad-block">
+                            <div class="level-row" id="mod-2-E-right"></div>
+                            <div class="level-row" id="mod-2-F-right"></div>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="branch b-3">
-                    <div class="level-row" id="level-D-3"></div>
-                    <div class="level-row" id="level-E-3"></div>
-                    <div class="level-row" id="level-F-3"></div>
+
+                <div class="matrix-module" id="mod-3">
+                    <div class="level-row" id="mod-3-C"></div>
+                    <div class="level-row" id="mod-3-D"></div>
+                    <div class="sub-modules-row">
+                        <div class="quad-block">
+                            <div class="level-row" id="mod-3-E-left"></div>
+                            <div class="level-row" id="mod-3-F-left"></div>
+                        </div>
+                        <div class="quad-block">
+                            <div class="level-row" id="mod-3-E-right"></div>
+                            <div class="level-row" id="mod-3-F-right"></div>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="branch">
-                    <div class="level-row" id="level-D-4"></div>
-                    <div class="level-row" id="level-E-4"></div>
-                    <div class="level-row" id="level-F-4"></div>
+
+                <div class="matrix-module" id="mod-4">
+                    <div class="level-row" id="mod-4-C"></div>
+                    <div class="level-row" id="mod-4-D"></div>
+                    <div class="sub-modules-row">
+                        <div class="quad-block">
+                            <div class="level-row" id="mod-4-E-left"></div>
+                            <div class="level-row" id="mod-4-F-left"></div>
+                        </div>
+                        <div class="quad-block">
+                            <div class="level-row" id="mod-4-E-right"></div>
+                            <div class="level-row" id="mod-4-F-right"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -177,4 +195,4 @@
 
 <script src="script.js"></script>
 </body>
-</html>
+    </html>
