@@ -7,6 +7,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('../frontend'));
 
+// Список уровней по буквам
+const LEVELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
 function createInitialTree() {
     return {
         'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
@@ -21,68 +24,75 @@ function createInitialTree() {
 
 let treeDB = createInitialTree();
 
-function findNextEmptyCell(tree) {
-    // 1. Уровни A, B, C строго по порядку
-    const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
-    for (const key of orderABC) {
-        if (tree[key] && !tree[key].user) return key;
-    }
-
-    // 2. Ряд D строго шахматами
-    const orderD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
-    for (const key of orderD) {
-        if (tree[key] && !tree[key].user) return key;
-    }
-
-    // 3. Ряд E (4 четверки). Заполнение по кругу: 1-е места, 2-е места...
-    const orderE = [
-        'E1', 'E5', 'E9', 'E13',  // 1-й круг
-        'E2', 'E6', 'E10', 'E14', // 2-й круг
-        'E3', 'E7', 'E11', 'E15', // 3-й круг
-        'E4', 'E8', 'E12', 'E16'  // 4-й круг
-    ];
-    for (const key of orderE) {
-        if (tree[key] && !tree[key].user) return key;
-    }
-
-    // 4. Ряд F (8 четверок)
-    const orderF = [
-        'F1', 'F5', 'F9', 'F13', 'F17', 'F21', 'F25', 'F29',  // 1-й круг
-        'F2', 'F6', 'F10', 'F14', 'F18', 'F22', 'F26', 'F30', // 2-й круг
-        'F3', 'F7', 'F11', 'F15', 'F19', 'F23', 'F27', 'F31', // 3-й круг
-        'F4', 'F8', 'F12', 'F16', 'F20', 'F24', 'F28', 'F32'  // 4-й круг
-    ];
-    for (const key of orderF) {
-        if (tree[key] && !tree[key].user) return key;
-    }
-
-    return null; 
-}
-
-// ИСПРАВЛЕННАЯ ГЕНЕРАЦИЯ: Ряды открываются ЦЕЛИКОМ, чтобы у робота всегда были созданы ячейки для ходов
-function checkAndGenerateChildren(tree) {
-    // Как только занята C4 — генерируем ВЕСЬ ряд D (все 8 мест)
-    if (tree['C4'] && tree['C4'].user) {
-        for (let i = 1; i <= 8; i++) {
-            const id = `D${i}`;
-            if (!tree[id]) tree[id] = { id, level: 'D', user: null };
-        }
+// Динамическая генерация порядка заполнения для любого ряда
+function getOrderForLevel(levelName) {
+    const levelIdx = LEVELS.indexOf(levelName);
+    if (levelIdx === -1) return [];
+    
+    // Количество ячеек в этом ряду (2 в степени уровня)
+    const count = Math.pow(2, levelIdx);
+    
+    if (levelName === 'A' || levelName === 'B' || levelName === 'C') {
+        return Array.from({ length: count }, (_, i) => `${levelName}${i + 1}`);
     }
     
-    // Как только занята ЛЮБАЯ ячейка из ряда D (например D1), мы на всякий случай сразу готовим весь ряд E (16 мест). 
-    // Это на 100% страхует от пустых ячеек при шахматном или круговом заполнении!
-    if (tree['D1'] && tree['D1'].user) {
-        for (let i = 1; i <= 16; i++) {
-            const id = `E${i}`;
-            if (!tree[id]) tree[id] = { id, level: 'E', user: null };
+    if (levelName === 'D') {
+        // Шахматный порядок для D
+        return ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
+    }
+    
+    // Для всех рядов от E до Z — автоматический круговой обход (1-е места в четверках, 2-е...)
+    const order = [];
+    for (let step = 0; step < 4; step++) {
+        for (let i = 1; i <= count; i += 4) {
+            if (i + step <= count) {
+                order.push(`${levelName}${i + step}`);
+            }
         }
     }
+    return order;
+}
 
-    // Как только занята первая ячейка ряда E (E1) — превентивно открываем ВЕСЬ ряд F (все 32 места)
-    if (tree['E1'] && tree['E1'].user) {
-        for (let i = 1; i <= 32; i++) {
-            const id = `F${i}`;
-            if (!tree[id]) tree[id] = { id, level: 'F', user: null };
+function findNextEmptyCell(tree) {
+    // Бежим по всем буквам алфавита по очереди
+    for (const lvl of LEVELS) {
+        const order = getOrderForLevel(lvl);
+        
+        // Проверяем, сгенерирован ли этот ряд в базе
+        const hasAnyCell = order.some(key => tree[key]);
+        if (!hasAnyCell) {
+            // Если этого ряда еще нет в базе, значит мы дошли до текущего края дерева
+            // Возвращаем первую ячейку этого нового ряда
+            return order[0] || null;
+        }
+        
+        // Если ряд существует, ищем в нем свободное место по правильному порядку
+        for (const key of order) {
+            if (tree[key] && !tree[key].user) {
+                return key;
+            }
+        }
+    }
+    return null;
+}
+
+// Автоматическое открытие следующего ряда, если в текущем заняли хотя бы одну ячейку
+function checkAndGenerateChildren(tree, lastCellId) {
+    if (!lastCellId) return;
+    const currentLvl = lastCellId.charAt(0);
+    const currentIdx = LEVELS.indexOf(currentLvl);
+    
+    // Определяем следующую букву
+    const nextLvl = LEVELS[currentIdx + 1];
+    if (!nextLvl) return; // Конец алфавита
+    
+    const nextCount = Math.pow(2, currentIdx + 1);
+    
+    // Превентивно создаем следующий ряд целиком, чтобы робот никогда не спотыкался об undefined
+    for (let i = 1; i <= nextCount; i++) {
+        const id = `${nextLvl}${i}`;
+        if (!tree[id]) {
+            tree[id] = { id, level: nextLvl, user: null };
         }
     }
 }
@@ -93,11 +103,20 @@ app.post('/api/register', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
     
-    const cellId = findNextEmptyCell(treeDB);
-    if (!cellId) return res.status(400).json({ error: 'Все текущие уровни заполнены' });
+    let cellId = findNextEmptyCell(treeDB);
+    
+    if (!cellId) return res.status(400).json({ error: 'Достигнут лимит структуры Z' });
+    
+    // На случай, если ячейка нашлась, но ее физически забыли создать в базе
+    if (!treeDB[cellId]) {
+        treeDB[cellId] = { id: cellId, level: cellId.charAt(0), user: null };
+    }
     
     treeDB[cellId].user = username;
-    checkAndGenerateChildren(treeDB);
+    
+    // Передаем заполненную ячейку, чтобы бэкенд наперед открыл следующий уровень
+    checkAndGenerateChildren(treeDB, cellId);
+    
     res.json({ success: true, cellId, user: username });
 });
 
