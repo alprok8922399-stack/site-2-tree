@@ -28,45 +28,39 @@ function findNextEmptyCell(tree) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 2. Ряд D строго шахматами
+    // 2. Ряд D строго шахматами (работает на выплаты ряду B)
     const orderD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
     for (const key of orderD) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 3. Ряд E строго веером
+    // 3. Ряд E строго веером (работает на выплаты четырем лидерам ряда C)
     const orderE = [
-        'E1', 'E5', 'E9', 'E13',
-        'E2', 'E6', 'E10', 'E14',
-        'E3', 'E7', 'E11', 'E15',
-        'E4', 'E8', 'E12', 'E16'
+        'E1', 'E5', 'E9', 'E13', // 1-й круг выплат для C1, C2, C3, C4
+        'E2', 'E6', 'E10', 'E14', // 2-й круг
+        'E3', 'E7', 'E11', 'E15', // 3-й круг
+        'E4', 'E8', 'E12', 'E16'  // 4-й круг
     ];
     for (const key of orderE) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 4. Ряд F — СТРОГО ТВОЙ ВЕЕРНЫЙ ПОРЯДОК ПО 4 ЯЧЕЙКИ ЗА КРУГ
+    // 4. Ряд F строго веером по 8 лидерам ряда D (работает на выплаты ряду D)
     const orderF = [
-        // 1-й круг (Первые ячейки блоков)
-        'F1', 'F9', 'F17', 'F25',
-        // 2-й круг (Вторые ячейки блоков)
-        'F2', 'F10', 'F18', 'F26',
-        // 3-й круг (Третьи ячейки блоков)
-        'F3', 'F11', 'F19', 'F27',
-        // 4-й круг (Четвертые ячейки блоков)
-        'F4', 'F12', 'F20', 'F28',
-        
-        // Оставшиеся "хвосты" блоков
-        'F5', 'F13', 'F21', 'F29',
-        'F6', 'F14', 'F22', 'F30',
-        'F7', 'F15', 'F23', 'F31',
-        'F8', 'F16', 'F24', 'F32'
+        // 1-й круг выплат: берем по 1-й ячейке у каждого из 8 лидеров D
+        'F1', 'F5', 'F9', 'F13', 'F17', 'F21', 'F25', 'F29',
+        // 2-й круг выплат: берем по 2-й ячейке у каждого из 8 лидеров D
+        'F2', 'F6', 'F10', 'F14', 'F18', 'F22', 'F26', 'F30',
+        // 3-й круг выплат: берем по 3-й ячейке у каждого из 8 лидеров D
+        'F3', 'F7', 'F11', 'F15', 'F19', 'F23', 'F27', 'F31',
+        // 4-й круг выплат: замыкающие ячейки для полного закрытия
+        'F4', 'F8', 'F12', 'F16', 'F20', 'F24', 'F28', 'F32'
     ];
     for (const key of orderF) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    return null;
+    return null; // Жёсткий СТОП на F32
 }
 
 function checkAndGenerateChildren(tree) {
@@ -89,7 +83,7 @@ function checkAndGenerateChildren(tree) {
         }
     }
 
-    // Триггеры ряда F
+    // Открытие ячеек ряда F порциями по 8 штук вслед за закрытием ключевых позиций в E
     if (tree['E4'] && tree['E4'].user && !tree['F1']) {
         for (let i = 1; i <= 8; i++) {
             const id = `F${i}`;
@@ -125,7 +119,7 @@ app.post('/api/register', (req, res) => {
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
 
     const cellId = findNextEmptyCell(treeDB);
-    if (!cellId) return res.status(400).json({ error: 'Нет свободных мест' });
+    if (!cellId) return res.status(400).json({ error: 'Все текущие уровни структуры заполнены' });
 
     treeDB[cellId].user = username;
     checkAndGenerateChildren(treeDB);
