@@ -3,287 +3,268 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Админ-Панель Матрицы</title>
+    <title>Секретная Матрица (Сайт №2)</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        }
-
         body {
-            background-color: #0f172a;
-            color: #f8fafc;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #1a252f;
+            color: #ecf0f1;
+            margin: 0;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-
-        /* Шапка с кнопками управления (бывшая левая панель) */
-        header {
-            background-color: #1e293b;
-            padding: 15px 20px;
-            border-bottom: 1px solid #334155;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
             align-items: center;
-            justify-content: space-between;
+            box-sizing: border-box;
         }
-
-        .header-title {
-            font-size: 18px;
-            font-weight: bold;
-            color: #38bdf8;
+        h1 {
+            color: #3498db;
+            margin-bottom: 5px;
+            font-size: 24px;
         }
-
-        .controls-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
-        }
-
-        input[type="text"] {
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid #475569;
-            background-color: #0f172a;
-            color: #fff;
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 25px;
             font-size: 14px;
-            outline: none;
-            width: 180px;
         }
-
-        button {
-            padding: 8px 16px;
+        .controls {
+            margin-bottom: 30px;
+        }
+        .btn-reset {
+            background-color: #e74c3c;
+            color: white;
             border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
+            padding: 10px 20px;
             font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
             transition: background 0.2s;
         }
-
-        .btn-search {
-            background-color: #38bdf8;
-            color: #0f172a;
-        }
-
-        .btn-search:hover {
-            background-color: #0ea5e9;
-        }
-
-        .btn-reset {
-            background-color: #ef4444;
-            color: white;
-        }
-
         .btn-reset:hover {
-            background-color: #dc2626;
+            background-color: #c0392b;
         }
-
-        .zoom-container {
+        /* Сетка для отображения 3-уровневых домиков на одном горизонте */
+        .matrix-horizon {
             display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            color: #94a3b8;
-        }
-
-        /* Главная рабочая зона матрицы с прокруткой вбок */
-        main {
-            flex: 1;
-            padding: 20px;
-            overflow-x: auto;
-            overflow-y: auto;
-            display: flex;
-            justify-content: flex-start;
-            align-items: flex-start;
-            min-height: 450px;
-            background: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
-        }
-
-        #mainTreeDisplay {
-            display: flex;
-            transform-origin: left top;
-            transition: transform 0.1s ease-out;
-            padding-bottom: 40px;
-        }
-
-        /* Стили контейнера матриц-семерок */
-        .matrices-row {
-            display: flex;
-            flex-direction: row;
+            flex-wrap: wrap;
             gap: 40px;
-            align-items: flex-start;
+            justify-content: center;
+            width: 100%;
+            max-width: 1200px;
         }
-
-        .semerka-matrix {
+        /* Стилизация одного независимого домика семерки 1-2-4 */
+        .house {
+            background: #2c3e50;
+            border: 2px solid #34495e;
+            border-radius: 12px;
+            padding: 20px;
+            width: 280px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 20px;
-            background: rgba(30, 41, 59, 0.5);
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid rgba(51, 65, 85, 0.5);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
         }
-
-        .matrix-row {
+        .house-title {
+            font-size: 12px;
+            color: #f1c40f;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        .level-row {
             display: flex;
             justify-content: center;
-            gap: 15px;
             width: 100%;
+            margin-bottom: 12px;
+            gap: 15px;
         }
-
-        /* Ячейки */
-        .cell {
-            background-color: #334155;
-            border: 2px solid #475569;
+        .level-row:last-child {
+            margin-bottom: 0;
+            background: rgba(46, 204, 113, 0.1);
+            padding: 8px;
             border-radius: 8px;
-            width: 85px;
-            text-align: center;
-            padding: 8px 4px;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+            border: 1px dashed #2ecc71;
         }
-
-        .cell:hover {
-            transform: translateY(-2px);
-            border-color: #38bdf8;
-        }
-
-        .cell.occupied {
-            background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
-            border-color: #2563eb;
-        }
-
-        .cell.focused-cell {
-            background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%) !important;
-            border-color: #f43f5e !important;
-            animation: pulse 1.5s infinite alternate;
-        }
-
-        .cell-id {
+        .cell {
+            background: #34495e;
+            border: 2px solid #7f8c8d;
+            border-radius: 8px;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             font-size: 11px;
-            font-weight: 800;
-            color: #94a3b8;
-            margin-bottom: 2px;
-            text-transform: uppercase;
+            font-weight: bold;
+            position: relative;
+            transition: all 0.3s ease;
         }
-
+        .cell.occupied {
+            background: #2980b9;
+            border-color: #3498db;
+        }
+        .cell.payout-row.occupied {
+            background: #27ae60;
+            border-color: #2ecc71;
+            animation: pulse 0.5s ease-in-out;
+        }
+        .cell-label {
+            color: #bdc3c7;
+            font-size: 9px;
+            margin-bottom: 2px;
+        }
         .cell-user {
-            font-size: 12px;
-            font-weight: 600;
-            white-space: nowrap;
+            color: white;
+            max-width: 46px;
             overflow: hidden;
             text-overflow: ellipsis;
-            color: #fff;
+            white-space: nowrap;
         }
-
-        /* Нижняя секция со списками пользователей */
-        footer {
-            background-color: #1e293b;
-            border-top: 1px solid #334155;
-            padding: 20px;
+        .cell.empty {
+            border-style: dashed;
+            background: #2c3e50;
+            opacity: 0.4;
         }
-
-        .table-container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: #0f172a;
-            border-radius: 8px;
-            border: 1px solid #334155;
-            max-height: 300px;
-            overflow-y: auto;
+        .cell.empty .cell-user {
+            color: #7f8c8d;
         }
-
-        .table-title {
-            font-size: 15px;
-            font-weight: bold;
-            color: #94a3b8;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-            font-size: 14px;
-        }
-
-        th, td {
-            padding: 10px 15px;
-            border-bottom: 1px solid #334155;
-        }
-
-        th {
-            background-color: #1e293b;
-            color: #38bdf8;
-            position: sticky;
-            top: 0;
-            font-weight: 600;
-        }
-
-        tr:hover td {
-            background-color: rgba(56, 189, 248, 0.05);
-            cursor: pointer;
-        }
-
         @keyframes pulse {
-            from { box-shadow: 0 0 4px #f43f5e; }
-            to { box-shadow: 0 0 14px #f43f5e; }
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
         }
     </style>
 </head>
 <body>
 
-    <header>
-        <div class="header-title">M-Matrix Admin</div>
+    <h1>🔒 Приватная Панель Бухгалтерии</h1>
+    <div class="subtitle">Модель 1-2-4 • Динамический горизонт активных матриц</div>
+
+    <div class="controls">
+        <button class="btn-reset" id="resetBtn">Очистить всю систему</button>
+    </div>
+
+    <div class="matrix-horizon" id="horizon">
+        <div style="color: #7f8c8d;">Загрузка структуры матриц...</div>
+    </div>
+
+<script>
+    // Автоматически берем домен бэкенда, на котором запущен фронт
+    const API_URL = window.location.origin;
+
+    async function updateMatrixView() {
+        try {
+            const response = await fetch(`${API_URL}/api/tree`);
+            if (!response.ok) throw new Error('Ошибка сети');
+            const treeDB = await response.json();
+            
+            renderHorizon(treeDB);
+        } catch (err) {
+            console.error(err);
+            document.getElementById('horizon').innerHTML = `<div style="color: #e74c3c;">Ошибка обновления данных: ${err.message}</div>`;
+        }
+    }
+
+    // Логика нарезки глобального бинарного дерева на локальные домики 1-2-4
+    function renderHorizon(tree) {
+        const horizon = document.getElementById('horizon');
+        horizon.innerHTML = '';
+
+        // Список индексов вершин домиков, которые мы хотим выводить на экран.
+        // Изначально на выплате стоит ячейка 1 (A1).
+        let activeVertices = [1];
+
+        // Если ячейка 1 закрыла свой низ (ряд C: индексы 4,5,6,7), то по ТЗ этот домик уходит в архив.
+        // Вершинами новых домиков на экране становятся участники из ряда C (индексы 4, 5, 6, 7).
+        const isRootClosed = [4, 5, 6, 7].every(idx => tree[idx] && tree[idx].user);
+        if (isRootClosed) {
+            activeVertices = [4, 5, 6, 7];
+            
+            // Если все вершины 4,5,6,7 тоже закрыли свои выплатные ряды (индексы 16-31, ряд E),
+            // сдвигаем горизонт еще ниже — вершинами становятся индексы 8-15 (ряд D) и так далее.
+            const isRowCClosed = Array.from({length: 8}, (_, i) => 8 + i).every(idx => tree[idx] && tree[idx].user);
+            if (isRowCClosed) {
+                activeVertices = Array.from({length: 8}, (_, i) => 8 + i);
+            }
+        }
+
+        // Отрисовываем каждый активный домик на экране
+        activeVertices.forEach(vIdx => {
+            // Рассчитываем индексы элементов локальной семерки 1-2-4 на основе индекса вершины бинара
+            const leftChild = vIdx * 2;
+            const rightChild = vIdx * 2 + 1;
+            
+            const payout1 = leftChild * 2;
+            const payout2 = leftChild * 2 + 1;
+            const payout3 = rightChild * 2;
+            const payout4 = rightChild * 2 + 1;
+
+            const houseHtml = `
+                <div class="house">
+                    <div class="house-title">Домик #${tree[vIdx]?.label || vIdx}</div>
+                    
+                    <div class="level-row">
+                        ${createCellHtml(tree, vIdx, 'top')}
+                    </div>
+                    
+                    <div class="level-row">
+                        ${createCellHtml(tree, leftChild, 'shoulder')}
+                        ${createCellHtml(tree, rightChild, 'shoulder')}
+                    </div>
+                    
+                    <div class="level-row">
+                        ${createCellHtml(tree, payout1, 'payout')}
+                        ${createCellHtml(tree, payout2, 'payout')}
+                        ${createCellHtml(tree, payout3, 'payout')}
+                        ${createCellHtml(tree, payout4, 'payout')}
+                    </div>
+                </div>
+            `;
+            horizon.insertAdjacentHTML('beforeend', houseHtml);
+        });
+    }
+
+    // Вспомогательная функция генерации HTML одной ячейки
+    function createCellHtml(tree, idx, type) {
+        const node = tree[idx];
+        const isOccupied = node && node.user;
+        const userDisplay = isOccupied ? node.user : 'пусто';
         
-        <div class="controls-group">
-            <input type="text" id="searchInput" placeholder="Поиск логина...">
-            <button id="searchBtn" class="btn-search">Найти</button>
-        </div>
+        // Автоматически генерируем красивую текстовую метку (A1, B1, C1...), если ячейки еще нет в базе
+        let label = node?.label;
+        if (!label) {
+            const row = Math.floor(Math.log2(idx));
+            const letter = String.fromCharCode(65 + row);
+            const startIdx = Math.pow(2, row);
+            label = `${letter}${idx - startIdx + 1}`;
+        }
 
-        <div class="controls-group">
-            <div class="zoom-container">
-                <span>Масштаб:</span>
-                <input type="range" id="zoomSlider" min="0.1" max="1.5" step="0.05" value="1">
+        let classes = 'cell';
+        if (isOccupied) classes += ' occupied';
+        if (!isOccupied) classes += ' empty';
+        if (type === 'payout') classes += ' payout-row';
+        if (type === 'payout' && isOccupied) classes += ' occupied';
+
+        return `
+            <div class="${classes}">
+                <div class="cell-label">${label}</div>
+                <div class="cell-user">${userDisplay}</div>
             </div>
-            <button id="resetBtn" class="btn-reset">Сбросить дерево</button>
-        </div>
-    </header>
+        `;
+    }
 
-    <main>
-        <div id="mainTreeDisplay">
-            </div>
-    </main>
+    // Логика кнопки сброса системы
+    document.getElementById('resetBtn').addEventListener('click', async () => {
+        if (confirm('Вы уверены, что хотите полностью очистить матрицы и балансы?')) {
+            await fetch(`${API_URL}/api/reset`, { method: 'POST' });
+            updateMatrixView();
+        }
+    });
 
-    <footer>
-        <div class="table-title">Список зарегистрированных и оплативших участников (по ячейкам)</div>
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Логин</th>
-                        <th>Ячейка</th>
-                    </tr>
-                </thead>
-                <tbody id="refTableBody">
-                    <tr>
-                        <td colspan="2" style="text-align: center; color: #64748b;">Загрузка данных...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </footer>
-
-    <script src="script.js"></script>
+    // Запуск автообновления экрана каждые 2 секунды, чтобы видеть работу робота
+    updateMatrixView();
+    setInterval(updateMatrixView, 2000);
+</script>
 </body>
 </html>
