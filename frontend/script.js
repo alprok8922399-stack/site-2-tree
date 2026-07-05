@@ -1,5 +1,4 @@
 const API_URL = 'https://site-1-registrar.onrender.com';
-
 const mainTreeDisplay = document.getElementById('mainTreeDisplay');
 const zoomSlider = document.getElementById('zoomSlider');
 const resetBtn = document.getElementById('resetBtn');
@@ -10,19 +9,15 @@ const refTableBody = document.getElementById('refTableBody');
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
 
-const LEVELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-
-// Управление масштабом (зум)
-if (zoomSlider) {
+if (zoomSlider && mainTreeDisplay) {
     zoomSlider.addEventListener('input', (e) => {
-        if (mainTreeDisplay) mainTreeDisplay.style.transform = `scale(${e.target.value})`;
+        mainTreeDisplay.style.transform = `scale(${e.target.value})`;
     });
 }
 
-// Поиск логина
-if (searchBtn && searchInput) {
+if (searchBtn) {
     searchBtn.addEventListener('click', () => {
-        const val = searchInput.value.trim();
+        const val = searchInput ? searchInput.value.trim() : '';
         if (val) {
             searchTargetUser = val;
             findUserAndFocus(val);
@@ -34,7 +29,6 @@ if (searchBtn && searchInput) {
     });
 }
 
-// Функция запроса данных матрицы с Сайта №1
 async function fetchTree() {
     try {
         const res = await fetch(`${API_URL}/api/tree`);
@@ -42,7 +36,7 @@ async function fetchTree() {
         renderDynamicSplitting(data);
         renderTableList(data);
     } catch (err) {
-        console.error('Ошибка загрузки данных матрицы:', err);
+        console.error('Ошибка загрузки данных:', err);
     }
 }
 
@@ -63,9 +57,9 @@ function findUserAndFocus(username) {
                 let rootId = foundCellId; 
                 
                 function getPrevLevelLetter(letter) {
-                    const idx = LEVELS.indexOf(letter);
-                    if (idx <= 0) return 'A';
-                    return LEVELS[idx - 1];
+                    if (letter.length > 1) return letter.substring(0, letter.length - 1);
+                    if (letter === 'A') return 'A';
+                    return String.fromCharCode(letter.charCodeAt(0) - 1);
                 }
                 
                 let currentLetter = parsed.letter;
@@ -93,7 +87,7 @@ function findUserAndFocus(username) {
                 renderDynamicSplitting(tree);
                 renderTableList(tree);
             } else {
-                alert(`Пользователь ${username} не найден`);
+                alert(`Пользователь ${username} не найден в текущей структуре`);
             }
         });
 }
@@ -143,6 +137,17 @@ function parseCell(id) {
     return { letter: match[1], num: parseInt(match[2], 10) };
 }
 
+function getNextLevelLetter(letter) {
+    let i = letter.length - 1;
+    while (i >= 0) {
+        if (letter[i] !== 'Z') {
+            return letter.substring(0, i) + String.fromCharCode(letter.charCodeAt(i) + 1) + 'A'.repeat(letter.length - 1 - i);
+        }
+        i--;
+    }
+    return 'A'.repeat(letter.length + 1);
+}
+
 function renderDynamicSplitting(tree) {
     if (!mainTreeDisplay) return;
     let activeMatricesHTML = [];
@@ -181,10 +186,7 @@ function renderDynamicSplitting(tree) {
             tree[b4] || null
         ];
 
-        const isMatrixClosed = (topCell && topCell.user) && 
-                               (leftShoulder && leftShoulder.user) && 
-                               (rightShoulder && rightShoulder.user) && 
-                               bottom4.every(cell => cell && cell.user);
+        const isMatrixClosed = bottom4.every(cell => cell && cell.user);
 
         if (isMatrixClosed) {
             queue.push(leftShoulderId);
@@ -234,16 +236,16 @@ if (resetBtn) {
             const res = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
             const data = await res.json();
             if (data.success) {
+                alert('База успешно сброшена!');
                 currentRootId = 'A1';
                 searchTargetUser = '';
-                await fetchTree();
+                fetchTree();
             }
         } catch (err) {
-            console.error('Ошибка сброса:', err);
+            alert('Ошибка при сбросе');
         }
     });
 }
 
-// Первичная загрузка и автообновление экрана каждые 2 секунды
 fetchTree();
 setInterval(fetchTree, 2000);
