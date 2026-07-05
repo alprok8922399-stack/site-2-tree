@@ -1,4 +1,4 @@
-const API_URL = window.location.origin + '/api';
+const API_URL = window.location.origin;
 
 const mainTreeDisplay = document.getElementById('mainTreeDisplay');
 const zoomSlider = document.getElementById('zoomSlider');
@@ -56,7 +56,7 @@ async function runNextCycle() {
 
     try {
         // 1. Имитируем регистрацию на Маркетплейсе (Сайт №1)
-        const regRes = await fetch(`${API_URL}/shop/register`, {
+        const regRes = await fetch(`${API_URL}/api/shop/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username })
@@ -71,7 +71,7 @@ async function runNextCycle() {
         }
 
         // 2. Имитируем оплату 10 000 руб. в магазине, чтобы юзер улетел в матрицу
-        const payRes = await fetch(`${API_URL}/shop/pay`, {
+        const payRes = await fetch(`${API_URL}/api/shop/pay`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, amount: 10000 })
@@ -118,7 +118,7 @@ if (searchBtn && searchInput) {
 
 async function fetchTree() {
     try {
-        const res = await fetch(`${API_URL}/tree`);
+        const res = await fetch(`${API_URL}/api/tree`);
         const data = await res.json();
         renderDynamicSplitting(data);
         renderTableList(data);
@@ -128,7 +128,7 @@ async function fetchTree() {
 }
 
 function findUserAndFocus(username) {
-    fetch(`${API_URL}/tree`)
+    fetch(`${API_URL}/api/tree`)
         .then(res => res.json())
         .then(tree => {
             let foundCellId = null;
@@ -318,7 +318,7 @@ if (resetBtn) {
     resetBtn.addEventListener('click', async () => {
         if (!confirm('Очистить базу данных дерева?')) return;
         try {
-            const res = await fetch(`${window.location.origin}/api/reset`, { method: 'POST' });
+            const res = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
             const data = await res.json();
             if (data.success) {
                 userIndex = 1;
