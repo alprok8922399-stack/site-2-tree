@@ -9,6 +9,8 @@ const refTableBody = document.getElementById('refTableBody');
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
 
+const LEVELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
 zoomSlider.addEventListener('input', (e) => {
     mainTreeDisplay.style.transform = `scale(${e.target.value})`;
 });
@@ -53,9 +55,9 @@ function findUserAndFocus(username) {
                 let rootId = foundCellId; 
                 
                 function getPrevLevelLetter(letter) {
-                    if (letter.length > 1) return letter.substring(0, letter.length - 1);
-                    if (letter === 'A') return 'A';
-                    return String.fromCharCode(letter.charCodeAt(0) - 1);
+                    const idx = LEVELS.indexOf(letter);
+                    if (idx <= 0) return 'A';
+                    return LEVELS[idx - 1];
                 }
                 
                 let currentLetter = parsed.letter;
@@ -134,14 +136,9 @@ function parseCell(id) {
 }
 
 function getNextLevelLetter(letter) {
-    let i = letter.length - 1;
-    while (i >= 0) {
-        if (letter[i] !== 'Z') {
-            return letter.substring(0, i) + String.fromCharCode(letter.charCodeAt(i) + 1) + 'A'.repeat(letter.length - 1 - i);
-        }
-        i--;
-    }
-    return 'A'.repeat(letter.length + 1);
+    const idx = LEVELS.indexOf(letter);
+    if (idx === -1 || idx === LEVELS.length - 1) return letter;
+    return LEVELS[idx + 1];
 }
 
 function renderDynamicSplitting(tree) {
@@ -181,7 +178,12 @@ function renderDynamicSplitting(tree) {
             tree[b4] || null
         ];
 
-        const isMatrixClosed = bottom4.every(cell => cell && cell.user);
+        // ИСПРАВЛЕННАЯ ПРОВЕРКА: Матрица считается закрытой, ТОЛЬКО если все её ячейки
+        // РЕАЛЬНО существуют в базе данных И у каждой из них есть заполненный юзер.
+        const isMatrixClosed = (topCell && topCell.user) && 
+                               (leftShoulder && leftShoulder.user) && 
+                               (rightShoulder && rightShoulder.user) && 
+                               bottom4.every(cell => cell && cell.user);
 
         if (isMatrixClosed) {
             queue.push(leftShoulderId);
