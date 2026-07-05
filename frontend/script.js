@@ -1,4 +1,4 @@
-const API_URL = 'https://site-2-tree.onrender.com/api';
+const API_URL = '/api';
 const mainTreeDisplay = document.getElementById('mainTreeDisplay');
 const zoomSlider = document.getElementById('zoomSlider');
 const resetBtn = document.getElementById('resetBtn');
@@ -108,6 +108,7 @@ window.switchFocus = function(cellId) {
     currentRootId = cellId;
     fetchTree();
 };
+
 function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids) {
     return `
         <div class="semerka-matrix">
@@ -206,7 +207,7 @@ function renderTableList(tree) {
             list.push({ id: id, user: cell.user });
         }
     }
-
+    
     list.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true, sensitivity: 'base'}));
 
     list.forEach(item => {
