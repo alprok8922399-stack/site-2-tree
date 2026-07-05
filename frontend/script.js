@@ -1,4 +1,12 @@
-const API_URL = window.location.origin;
+// Автоматически определяем адрес бэкенда. 
+// Если админка открыта на Render на отдельном домене, 
+// запросы всё равно пойдут на правильный адрес сервера.
+let API_URL = window.location.origin;
+if (window.location.hostname.includes('registrar') || !window.location.hostname.includes('stack')) {
+    // Если домен админки отличается от основного бэкенда, 
+    // скрипт автоматически переключится на правильный URL магазина
+    API_URL = window.location.origin.replace('-registrar', ''); 
+}
 
 const mainTreeDisplay = document.getElementById('mainTreeDisplay');
 const zoomSlider = document.getElementById('zoomSlider');
