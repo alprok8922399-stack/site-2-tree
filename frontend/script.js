@@ -1,12 +1,4 @@
-// Автоматически определяем адрес бэкенда. 
-// Если админка открыта на Render на отдельном домене, 
-// запросы всё равно пойдут на правильный адрес сервера.
-let API_URL = window.location.origin;
-if (window.location.hostname.includes('registrar') || !window.location.hostname.includes('stack')) {
-    // Если домен админки отличается от основного бэкенда, 
-    // скрипт автоматически переключится на правильный URL магазина
-    API_URL = window.location.origin.replace('-registrar', ''); 
-}
+const API_URL = 'https://site-1-registrar.onrender.com';
 
 const mainTreeDisplay = document.getElementById('mainTreeDisplay');
 const zoomSlider = document.getElementById('zoomSlider');
@@ -94,7 +86,7 @@ async function runNextCycle() {
             await fetchTree(); // Обновляем экран
         }
     } catch (err) {
-        printLog(`⚠️ Ошибка сети: Нет связи с сервером`, 'err');
+        printLog(`⚠️ Ошибка сети: Нет связи с Сайтом №2`, 'err');
     }
 
     if (isRunning) {
