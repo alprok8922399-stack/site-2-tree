@@ -7,92 +7,10 @@ const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const refTableBody = document.getElementById('refTableBody');
 
-// Кнопки управления роботом
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const logDiv = document.getElementById('log');
-
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
-let isRunning = false;
-let userIndex = 1;
-let timerId = null;
 
 const LEVELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-
-function printLog(text, type = '') {
-    if (!logDiv) return;
-    const span = document.createElement('span');
-    span.className = type;
-    span.innerText = `\n> ${text}`;
-    logDiv.appendChild(span);
-    logDiv.scrollTop = logDiv.scrollHeight;
-}
-
-// Логика управления роботом-тестировщиком
-if (startBtn && stopBtn) {
-    startBtn.addEventListener('click', () => {
-        isRunning = true;
-        startBtn.style.display = 'none';
-        stopBtn.style.display = 'block';
-        printLog('Робот запущен. Имитация покупок на маркетплейсе.', 'info');
-        runNextCycle();
-    });
-
-    stopBtn.addEventListener('click', () => {
-        isRunning = false;
-        startBtn.style.display = 'block';
-        stopBtn.style.display = 'none';
-        printLog('Автомат остановлен.', 'err');
-        if (timerId) clearTimeout(timerId);
-    });
-}
-
-async function runNextCycle() {
-    if (!isRunning) return;
-
-    const username = `AutoUser_${userIndex}`;
-    printLog(`Генерация: ${username}...`);
-
-    try {
-        // 1. Имитируем регистрацию на Маркетплейсе (Сайт №1)
-        const regRes = await fetch(`${API_URL}/api/shop/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username })
-        });
-        const regData = await regRes.json();
-
-        if (regData.error) {
-            printLog(`⚠️ Отклонено: ${regData.error}`, 'err');
-            userIndex++;
-            timerId = setTimeout(runNextCycle, 1000);
-            return;
-        }
-
-        // 2. Имитируем оплату 10 000 руб. в магазине, чтобы юзер улетел в матрицу
-        const payRes = await fetch(`${API_URL}/api/shop/pay`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, amount: 10000 })
-        });
-        const payData = await payRes.json();
-
-        if (payData.error) {
-            printLog(`⚠️ Ошибка оплаты: ${payData.error}`, 'err');
-        } else {
-            printLog(`Вставка: ${username} оплатил товар и встал в матрицу.`, 'succ');
-            userIndex++;
-            await fetchTree(); // Обновляем экран
-        }
-    } catch (err) {
-        printLog(`⚠️ Ошибка сети: Нет связи с Сайтом №2`, 'err');
-    }
-
-    if (isRunning) {
-        timerId = setTimeout(runNextCycle, 2000);
-    }
-}
 
 // Управление масштабом (зум)
 if (zoomSlider) {
@@ -101,7 +19,7 @@ if (zoomSlider) {
     });
 }
 
-// Поиск
+// Поиск логина
 if (searchBtn && searchInput) {
     searchBtn.addEventListener('click', () => {
         const val = searchInput.value.trim();
@@ -116,6 +34,7 @@ if (searchBtn && searchInput) {
     });
 }
 
+// Функция запроса данных матрицы с Сайта №1
 async function fetchTree() {
     try {
         const res = await fetch(`${API_URL}/api/tree`);
@@ -123,7 +42,7 @@ async function fetchTree() {
         renderDynamicSplitting(data);
         renderTableList(data);
     } catch (err) {
-        console.error('Ошибка загрузки данных:', err);
+        console.error('Ошибка загрузки данных матрицы:', err);
     }
 }
 
@@ -224,12 +143,6 @@ function parseCell(id) {
     return { letter: match[1], num: parseInt(match[2], 10) };
 }
 
-function getNextLevelLetter(letter) {
-    const idx = LEVELS.indexOf(letter);
-    if (idx === -1 || idx === LEVELS.length - 1) return letter;
-    return LEVELS[idx + 1];
-}
-
 function renderDynamicSplitting(tree) {
     if (!mainTreeDisplay) return;
     let activeMatricesHTML = [];
@@ -321,19 +234,16 @@ if (resetBtn) {
             const res = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
             const data = await res.json();
             if (data.success) {
-                userIndex = 1;
                 currentRootId = 'A1';
                 searchTargetUser = '';
-                printLog('База сброшена.', 'info');
                 await fetchTree();
             }
         } catch (err) {
-            printLog('Ошибка при сбросе', 'err');
+            console.error('Ошибка сброса:', err);
         }
     });
 }
 
-// Запуск инициализации при открытии страницы
+// Первичная загрузка и автообновление экрана каждые 2 секунды
 fetchTree();
-// Автообновление экрана каждые 2 секунды
 setInterval(fetchTree, 2000);
