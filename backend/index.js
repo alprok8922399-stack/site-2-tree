@@ -20,6 +20,7 @@ function createInitialTree() {
 }
 
 let treeDB = createInitialTree();
+let isRobotActive = false;
 
 function findNextEmptyCell(tree) {
     // 1. Уровни A, B, C строго по порядку
@@ -106,6 +107,22 @@ function checkAndGenerateChildren(tree) {
     }
 }
 
+app.get('/api/robot/status', (req, res) => {
+    res.json({ active: isRobotActive });
+});
+
+app.post('/api/robot/start', (req, res) => {
+    isRobotActive = true;
+    console.log("Робот ЗАПУЩЕН");
+    res.json({ success: true });
+});
+
+app.post('/api/robot/stop', (req, res) => {
+    isRobotActive = false;
+    console.log("Робот ОСТАНОВЛЕН");
+    res.json({ success: true });
+});
+
 app.get('/api/tree', (req, res) => res.json(treeDB));
 app.post('/api/register', (req, res) => {
     const { username } = req.body;
@@ -118,6 +135,7 @@ app.post('/api/register', (req, res) => {
 });
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
+    isRobotActive = false;
     res.json({ success: true });
 });
 
