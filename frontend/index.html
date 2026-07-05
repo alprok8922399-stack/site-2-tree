@@ -3,276 +3,197 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Секретная Матрица (Сайт №2)</title>
+    <title>Мониторинг Матриц 7-К</title>
     <style>
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background-color: #1a252f;
-            color: #ecf0f1;
+            background-color: #1a1a2e;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            box-sizing: border-box;
         }
-        h1 {
-            color: #3498db;
-            margin-bottom: 5px;
-            font-size: 24px;
-        }
-        .subtitle {
-            color: #7f8c8d;
-            margin-bottom: 25px;
-            font-size: 14px;
-        }
-        .controls {
-            margin-bottom: 30px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            background: #2c3e50;
-            padding: 15px;
+        h1 { margin: 5px 0; font-size: 20px; text-shadow: 0 0 10px #00fff0; }
+        
+        /* Панель управления для мобильного */
+        .control-panel {
+            background: #162447;
+            padding: 10px;
             border-radius: 8px;
-            border: 1px solid #34495e;
+            width: 100%;
+            max-width: 500px;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
-        .zoom-container {
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #0f4c81;
+            background: #1f4068;
+            color: #fff;
+            font-size: 16px;
+        }
+        .search-box button {
+            padding: 8px 15px;
+            background: #e43f5a;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .slider-zone {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 10px;
             font-size: 14px;
         }
+        .slider-zone input { flex: 1; }
         .btn-reset {
-            background-color: #e74c3c;
+            background: #438a5e;
             color: white;
             border: none;
-            padding: 10px 20px;
-            font-size: 14px;
+            padding: 5px 10px;
             border-radius: 4px;
             cursor: pointer;
-            transition: background 0.2s;
         }
-        .btn-reset:hover {
-            background-color: #c0392b;
-        }
-        /* Контейнер трансформации масштаба */
-        .matrix-wrapper {
+
+        /* Экран матриц */
+        .screen-container {
             width: 100%;
+            overflow-x: auto;
+            padding: 10px 0;
             display: flex;
             justify-content: center;
+        }
+        #mainTreeDisplay {
             transform-origin: top center;
-            transition: transform 0.1s ease-out;
+            transition: transform 0.2s ease;
         }
-        .matrix-horizon {
+        .matrices-row {
             display: flex;
-            flex-wrap: wrap;
-            gap: 40px;
-            justify-content: center;
-            width: 100%;
-            max-width: 1200px;
+            gap: 30px;
+            padding: 10px;
         }
-        .house {
-            background: #2c3e50;
-            border: 2px solid #34495e;
+
+        /* Стили Домика (Семерки) */
+        .semerka-matrix {
+            background: rgba(22, 36, 71, 0.8);
+            border: 2px solid #0f4c81;
             border-radius: 12px;
-            padding: 20px;
-            width: 280px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
+            gap: 12px;
             align-items: center;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            min-width: 260px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
-        .house-title {
-            font-size: 12px;
-            color: #f1c40f;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 15px;
-            font-weight: bold;
-        }
-        .level-row {
+        .matrix-row {
             display: flex;
             justify-content: center;
+            gap: 12px;
             width: 100%;
-            margin-bottom: 12px;
-            gap: 15px;
         }
-        .level-row:last-child {
-            margin-bottom: 0;
-            background: rgba(46, 204, 113, 0.1);
-            padding: 8px;
-            border-radius: 8px;
-            border: 1px dashed #2ecc71;
-        }
+        
+        /* Ячейки */
         .cell {
-            background: #34495e;
-            border: 2px solid #7f8c8d;
-            border-radius: 8px;
-            width: 50px;
-            height: 50px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            font-weight: bold;
+            background: #1f4068;
+            border: 1px solid #0f4c81;
+            border-radius: 6px;
+            padding: 6px;
+            text-align: center;
+            min-width: 55px;
+            box-sizing: border-box;
             transition: all 0.3s ease;
+            cursor: pointer;
         }
-        .cell.occupied {
-            background: #2980b9;
-            border-color: #3498db;
+        .cell:active { transform: scale(0.95); }
+        .cell-id { font-size: 10px; color: #888; font-weight: bold; }
+        .cell-user { font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; }
+        
+        /* Цвета ролей */
+        .level-1 { border: 2px solid #ffd700; background: #3a3000; } /* Золотая вершина */
+        .level-2 { border: 2px solid #00fff0; background: #002b36; } /* Синие плечи */
+        .level-3 { border: 1px dashed #ffffff; background: #2b2b2b; } /* Серый низ выплат */
+        
+        .occupied { background: #16a085 !important; border-color: #1abc9c !important; }
+        .focused-cell { animation: pulse 1s infinite alternate; border-color: #ff3366 !important; box-shadow: 0 0 15px #ff3366 !important; background: #ff3366 !important; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
         }
-        .cell.payout-row.occupied {
-            background: #27ae60;
-            border-color: #2ecc71;
+
+        /* Таблица структур */
+        .table-container {
+            width: 100%;
+            max-width: 500px;
+            margin-top: 20px;
+            background: #162447;
+            border-radius: 8px;
+            padding: 10px;
+            box-sizing: border-box;
         }
-        .cell-label {
-            color: #bdc3c7;
-            font-size: 9px;
-            margin-bottom: 2px;
+        .table-container h2 { font-size: 16px; margin: 0 0 10px 0; color: #00fff0; text-align: center; }
+        .ref-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
         }
-        .cell-user {
-            color: white;
-            max-width: 46px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+        .ref-table th, .ref-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #1f4068;
         }
-        .cell.empty {
-            border-style: dashed;
-            background: #2c3e50;
-            opacity: 0.4;
-        }
+        .ref-table th { background: #0f4c81; color: white; }
+        .ref-table tr:hover { background: rgba(255,255,255,0.05); cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <h1>🔒 Приватная Панель Бухгалтерии</h1>
-    <div class="subtitle">Модель 1-2-4 • Динамический горизонт активных матриц</div>
+    <h1>Панель Управления Админа</h1>
 
-    <div class="controls">
-        <div class="zoom-container">
-            <label for="zoomRange">Масштаб (в точку):</label>
-            <input type="range" id="zoomRange" min="0.1" max="1.5" step="0.05" value="1">
-            <span id="zoomVal">1.0x</span>
+    <div class="control-panel">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Введите логин пользователя...">
+            <button id="searchBtn">Найти</button>
         </div>
-        <button class="btn-reset" id="resetBtn">Очистить всю систему</button>
-    </div>
-
-    <div class="matrix-wrapper" id="wrapper">
-        <div class="matrix-horizon" id="horizon">
-            <div style="color: #7f8c8d;">Загрузка структуры матриц...</div>
+        <div class="slider-zone">
+            <span>Масштаб:</span>
+            <input type="range" id="zoomSlider" min="0.3" max="1" step="0.05" value="0.8">
+            <button class="btn-reset" id="resetBtn">Сброс БД</button>
         </div>
     </div>
 
-<script>
-    const API_URL = window.location.origin;
+    <div class="screen-container">
+        <div id="mainTreeDisplay"></div>
+    </div>
 
-    // Управление ползунком масштаба
-    const zoomRange = document.getElementById('zoomRange');
-    const zoomVal = document.getElementById('zoomVal');
-    const wrapper = document.getElementById('wrapper');
+    <div class="table-container">
+        <h2>Реестр участников В СТОЛБИК («Кто-за-кем»)</h2>
+        <table class="ref-table">
+            <thead>
+                <tr>
+                    <th>Логин партнера</th>
+                    <th>ID Ячейки</th>
+                </tr>
+            </thead>
+            <tbody id="refTableBody">
+                </tbody>
+        </table>
+    </div>
 
-    zoomRange.addEventListener('input', (e) => {
-        const val = e.target.value;
-        zoomVal.innerText = `${val}x`;
-        wrapper.style.transform = `scale(${val})`;
-    });
-
-    async function updateMatrixView() {
-        try {
-            const response = await fetch(`${API_URL}/api/tree`);
-            if (!response.ok) throw new Error('Ошибка сети');
-            const treeDB = await response.json();
-            renderHorizon(treeDB);
-        } catch (err) {
-            console.error(err);
-            document.getElementById('horizon').innerHTML = `<div style="color: #e74c3c;">Ошибка обновления: ${err.message}</div>`;
-        }
-    }
-
-    function renderHorizon(tree) {
-        const horizon = document.getElementById('horizon');
-        horizon.innerHTML = '';
-
-        let activeVertices = [1];
-        const isRootClosed = [4, 5, 6, 7].every(idx => tree[idx] && tree[idx].user);
-        
-        if (isRootClosed) {
-            activeVertices = [4, 5, 6, 7];
-            const isRowCClosed = Array.from({length: 8}, (_, i) => 8 + i).every(idx => tree[idx] && tree[idx].user);
-            if (isRowCClosed) {
-                activeVertices = Array.from({length: 8}, (_, i) => 8 + i);
-            }
-        }
-
-        activeVertices.forEach(vIdx => {
-            const leftChild = vIdx * 2;
-            const rightChild = vIdx * 2 + 1;
-            
-            const payout1 = leftChild * 2;
-            const payout2 = leftChild * 2 + 1;
-            const payout3 = rightChild * 2;
-            const payout4 = rightChild * 2 + 1;
-
-            const houseHtml = `
-                <div class="house">
-                    <div class="house-title">Домик #${tree[vIdx]?.label || vIdx}</div>
-                    <div class="level-row">
-                        ${createCellHtml(tree, vIdx, 'top')}
-                    </div>
-                    <div class="level-row">
-                        ${createCellHtml(tree, leftChild, 'shoulder')}
-                        ${createCellHtml(tree, rightChild, 'shoulder')}
-                    </div>
-                    <div class="level-row">
-                        ${createCellHtml(tree, payout1, 'payout')}
-                        ${createCellHtml(tree, payout2, 'payout')}
-                        ${createCellHtml(tree, payout3, 'payout')}
-                        ${createCellHtml(tree, payout4, 'payout')}
-                    </div>
-                </div>
-            `;
-            horizon.insertAdjacentHTML('beforeend', houseHtml);
-        });
-    }
-
-    function createCellHtml(tree, idx, type) {
-        const node = tree[idx];
-        const isOccupied = node && node.user;
-        const userDisplay = isOccupied ? node.user : 'пусто';
-        
-        let label = node?.label;
-        if (!label) {
-            const row = Math.floor(Math.log2(idx));
-            const letter = String.fromCharCode(65 + row);
-            const startIdx = Math.pow(2, row);
-            label = `${letter}${idx - startIdx + 1}`;
-        }
-
-        let classes = 'cell';
-        if (isOccupied) classes += ' occupied';
-        if (!isOccupied) classes += ' empty';
-        if (type === 'payout') classes += ' payout-row';
-
-        return `
-            <div class="${classes}">
-                <div class="cell-label">${label}</div>
-                <div class="cell-user">${userDisplay}</div>
-            </div>
-        `;
-    }
-
-    document.getElementById('resetBtn').addEventListener('click', async () => {
-        if (confirm('Очистить всю систему?')) {
-            await fetch(`${API_URL}/api/reset`, { method: 'POST' });
-            updateMatrixView();
-        }
-    });
-
-    updateMatrixView();
-    setInterval(updateMatrixView, 2000);
-</script>
+    <script src="script.js"></script>
 </body>
 </html>
