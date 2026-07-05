@@ -28,6 +28,20 @@
         }
         .controls {
             margin-bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            background: #2c3e50;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #34495e;
+        }
+        .zoom-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
         }
         .btn-reset {
             background-color: #e74c3c;
@@ -42,7 +56,14 @@
         .btn-reset:hover {
             background-color: #c0392b;
         }
-        /* Сетка для отображения 3-уровневых домиков на одном горизонте */
+        /* Контейнер трансформации масштаба */
+        .matrix-wrapper {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            transform-origin: top center;
+            transition: transform 0.1s ease-out;
+        }
         .matrix-horizon {
             display: flex;
             flex-wrap: wrap;
@@ -51,7 +72,6 @@
             width: 100%;
             max-width: 1200px;
         }
-        /* Стилизация одного независимого домика семерки 1-2-4 */
         .house {
             background: #2c3e50;
             border: 2px solid #34495e;
@@ -97,7 +117,6 @@
             justify-content: center;
             font-size: 11px;
             font-weight: bold;
-            position: relative;
             transition: all 0.3s ease;
         }
         .cell.occupied {
@@ -107,7 +126,6 @@
         .cell.payout-row.occupied {
             background: #27ae60;
             border-color: #2ecc71;
-            animation: pulse 0.5s ease-in-out;
         }
         .cell-label {
             color: #bdc3c7;
@@ -126,14 +144,6 @@
             background: #2c3e50;
             opacity: 0.4;
         }
-        .cell.empty .cell-user {
-            color: #7f8c8d;
-        }
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
     </style>
 </head>
 <body>
@@ -142,56 +152,62 @@
     <div class="subtitle">Модель 1-2-4 • Динамический горизонт активных матриц</div>
 
     <div class="controls">
+        <div class="zoom-container">
+            <label for="zoomRange">Масштаб (в точку):</label>
+            <input type="range" id="zoomRange" min="0.1" max="1.5" step="0.05" value="1">
+            <span id="zoomVal">1.0x</span>
+        </div>
         <button class="btn-reset" id="resetBtn">Очистить всю систему</button>
     </div>
 
-    <div class="matrix-horizon" id="horizon">
-        <div style="color: #7f8c8d;">Загрузка структуры матриц...</div>
+    <div class="matrix-wrapper" id="wrapper">
+        <div class="matrix-horizon" id="horizon">
+            <div style="color: #7f8c8d;">Загрузка структуры матриц...</div>
+        </div>
     </div>
 
 <script>
-    // Автоматически берем домен бэкенда, на котором запущен фронт
     const API_URL = window.location.origin;
+
+    // Управление ползунком масштаба
+    const zoomRange = document.getElementById('zoomRange');
+    const zoomVal = document.getElementById('zoomVal');
+    const wrapper = document.getElementById('wrapper');
+
+    zoomRange.addEventListener('input', (e) => {
+        const val = e.target.value;
+        zoomVal.innerText = `${val}x`;
+        wrapper.style.transform = `scale(${val})`;
+    });
 
     async function updateMatrixView() {
         try {
             const response = await fetch(`${API_URL}/api/tree`);
             if (!response.ok) throw new Error('Ошибка сети');
             const treeDB = await response.json();
-            
             renderHorizon(treeDB);
         } catch (err) {
             console.error(err);
-            document.getElementById('horizon').innerHTML = `<div style="color: #e74c3c;">Ошибка обновления данных: ${err.message}</div>`;
+            document.getElementById('horizon').innerHTML = `<div style="color: #e74c3c;">Ошибка обновления: ${err.message}</div>`;
         }
     }
 
-    // Логика нарезки глобального бинарного дерева на локальные домики 1-2-4
     function renderHorizon(tree) {
         const horizon = document.getElementById('horizon');
         horizon.innerHTML = '';
 
-        // Список индексов вершин домиков, которые мы хотим выводить на экран.
-        // Изначально на выплате стоит ячейка 1 (A1).
         let activeVertices = [1];
-
-        // Если ячейка 1 закрыла свой низ (ряд C: индексы 4,5,6,7), то по ТЗ этот домик уходит в архив.
-        // Вершинами новых домиков на экране становятся участники из ряда C (индексы 4, 5, 6, 7).
         const isRootClosed = [4, 5, 6, 7].every(idx => tree[idx] && tree[idx].user);
+        
         if (isRootClosed) {
             activeVertices = [4, 5, 6, 7];
-            
-            // Если все вершины 4,5,6,7 тоже закрыли свои выплатные ряды (индексы 16-31, ряд E),
-            // сдвигаем горизонт еще ниже — вершинами становятся индексы 8-15 (ряд D) и так далее.
             const isRowCClosed = Array.from({length: 8}, (_, i) => 8 + i).every(idx => tree[idx] && tree[idx].user);
             if (isRowCClosed) {
                 activeVertices = Array.from({length: 8}, (_, i) => 8 + i);
             }
         }
 
-        // Отрисовываем каждый активный домик на экране
         activeVertices.forEach(vIdx => {
-            // Рассчитываем индексы элементов локальной семерки 1-2-4 на основе индекса вершины бинара
             const leftChild = vIdx * 2;
             const rightChild = vIdx * 2 + 1;
             
@@ -203,16 +219,13 @@
             const houseHtml = `
                 <div class="house">
                     <div class="house-title">Домик #${tree[vIdx]?.label || vIdx}</div>
-                    
                     <div class="level-row">
                         ${createCellHtml(tree, vIdx, 'top')}
                     </div>
-                    
                     <div class="level-row">
                         ${createCellHtml(tree, leftChild, 'shoulder')}
                         ${createCellHtml(tree, rightChild, 'shoulder')}
                     </div>
-                    
                     <div class="level-row">
                         ${createCellHtml(tree, payout1, 'payout')}
                         ${createCellHtml(tree, payout2, 'payout')}
@@ -225,13 +238,11 @@
         });
     }
 
-    // Вспомогательная функция генерации HTML одной ячейки
     function createCellHtml(tree, idx, type) {
         const node = tree[idx];
         const isOccupied = node && node.user;
         const userDisplay = isOccupied ? node.user : 'пусто';
         
-        // Автоматически генерируем красивую текстовую метку (A1, B1, C1...), если ячейки еще нет в базе
         let label = node?.label;
         if (!label) {
             const row = Math.floor(Math.log2(idx));
@@ -244,7 +255,6 @@
         if (isOccupied) classes += ' occupied';
         if (!isOccupied) classes += ' empty';
         if (type === 'payout') classes += ' payout-row';
-        if (type === 'payout' && isOccupied) classes += ' occupied';
 
         return `
             <div class="${classes}">
@@ -254,15 +264,13 @@
         `;
     }
 
-    // Логика кнопки сброса системы
     document.getElementById('resetBtn').addEventListener('click', async () => {
-        if (confirm('Вы уверены, что хотите полностью очистить матрицы и балансы?')) {
+        if (confirm('Очистить всю систему?')) {
             await fetch(`${API_URL}/api/reset`, { method: 'POST' });
             updateMatrixView();
         }
     });
 
-    // Запуск автообновления экрана каждые 2 секунды, чтобы видеть работу робота
     updateMatrixView();
     setInterval(updateMatrixView, 2000);
 </script>
