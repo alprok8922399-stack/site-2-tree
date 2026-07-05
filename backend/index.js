@@ -21,43 +21,40 @@ function createInitialTree() {
 
 let treeDB = createInitialTree();
 let isRobotActive = false;
+let robotInterval = null;
 
 function findNextEmptyCell(tree) {
-    // 1. Уровни A, B, C строго по порядку
     const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 2. Ряд D строго шахматами
     const orderD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
     for (const key of orderD) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 3. Ряд E (4 четверки). Заполнение по кругу: 1-е места, 2-е места...
     const orderE = [
-        'E1', 'E5', 'E9', 'E13',  // 1-й круг
-        'E2', 'E6', 'E10', 'E14', // 2-й круг
-        'E3', 'E7', 'E11', 'E15', // 3-й круг
-        'E4', 'E8', 'E12', 'E16'  // 4-й круг
+        'E1', 'E5', 'E9', 'E13',
+        'E2', 'E6', 'E10', 'E14',
+        'E3', 'E7', 'E11', 'E15',
+        'E4', 'E8', 'E12', 'E16'
     ];
     for (const key of orderE) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 4. Ряд F (8 четверок). Опечатка с F22 полностью ИСПРАВЛЕНА
     const orderF = [
-        'F1', 'F5', 'F9', 'F13', 'F17', 'F21', 'F25', 'F29',  // 1-й круг
-        'F2', 'F6', 'F10', 'F14', 'F18', 'F22', 'F26', 'F30', // 2-й круг
-        'F3', 'F7', 'F11', 'F15', 'F19', 'F23', 'F27', 'F31', // 3-й круг
-        'F4', 'F8', 'F12', 'F16', 'F20', 'F24', 'F28', 'F32'  // 4-й круг
+        'F1', 'F5', 'F9', 'F13', 'F17', 'F21', 'F25', 'F29',
+        'F2', 'F6', 'F10', 'F14', 'F18', 'F22', 'F26', 'F30',
+        'F3', 'F7', 'F11', 'F15', 'F19', 'F23', 'F27', 'F31',
+        'F4', 'F8', 'F12', 'F16', 'F20', 'F24', 'F28', 'F32'
     ];
     for (const key of orderF) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    return null; // Жёсткий СТОП на F32
+    return null;
 }
 
 function checkAndGenerateChildren(tree) {
@@ -80,7 +77,6 @@ function checkAndGenerateChildren(tree) {
         }
     }
 
-    // Открытие ряда F
     if (tree['E4'] && tree['E4'].user && !tree['F1']) {
         for (let i = 1; i <= 8; i++) {
             const id = `F${i}`;
@@ -107,23 +103,47 @@ function checkAndGenerateChildren(tree) {
     }
 }
 
+function runRobotCycle() {
+    if (!isRobotActive) return;
+
+    console.log("Робот: проверка...");
+    const cellId = findNextEmptyCell(treeDB);
+
+    if (cellId) {
+        const botName = `Bot_${Date.now().toString().slice(-4)}`;
+        treeDB[cellId].user = botName;
+        checkAndGenerateChildren(treeDB);
+        console.log(`Робот успешно занял ячейку: ${cellId} (User: ${botName})`);
+    } else {
+        console.log("Робот: все ячейки заняты.");
+    }
+}
+
 app.get('/api/robot/status', (req, res) => {
-    res.json({ active: isRobotActive });
+    res.json({ running: isRobotActive });
 });
 
 app.post('/api/robot/start', (req, res) => {
-    isRobotActive = true;
-    console.log("Робот ЗАПУЩЕН");
-    res.json({ success: true });
+    if (!isRobotActive) {
+        isRobotActive = true;
+        robotInterval = setInterval(runRobotCycle, 5000);
+        console.log("Робот ЗАПУЩЕН");
+    }
+    res.json({ success: true, message: "Робот активирован" });
 });
 
 app.post('/api/robot/stop', (req, res) => {
     isRobotActive = false;
+    if (robotInterval) {
+        clearInterval(robotInterval);
+        robotInterval = null;
+    }
     console.log("Робот ОСТАНОВЛЕН");
-    res.json({ success: true });
+    res.json({ success: true, message: "Робот остановлен" });
 });
 
 app.get('/api/tree', (req, res) => res.json(treeDB));
+
 app.post('/api/register', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
@@ -133,9 +153,14 @@ app.post('/api/register', (req, res) => {
     checkAndGenerateChildren(treeDB);
     res.json({ success: true, cellId, user: username });
 });
+
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
     isRobotActive = false;
+    if (robotInterval) {
+        clearInterval(robotInterval);
+        robotInterval = null;
+    }
     res.json({ success: true });
 });
 
