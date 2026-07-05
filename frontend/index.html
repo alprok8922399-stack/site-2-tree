@@ -51,12 +51,32 @@
             cursor: pointer;
             font-weight: bold;
         }
+        
+        /* Новые кнопки робота */
+        .robot-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .robot-controls button {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #startBtn { background: #27ae60; }
+        #stopBtn { background: #c0392b; }
+
         .slider-zone {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 10px;
             font-size: 14px;
+            margin-top: 10px;
         }
         .slider-zone input { flex: 1; }
         .btn-reset {
@@ -169,6 +189,13 @@
             <input type="text" id="searchInput" placeholder="Введите логин пользователя...">
             <button id="searchBtn">Найти</button>
         </div>
+
+        <div class="robot-controls">
+            <button id="startBtn">ЗАПУСК</button>
+            <button id="stopBtn">СТОП</button>
+        </div>
+        <div id="robotStatus" style="margin-top: 8px; text-align: center; font-size: 12px; color: #888;">Статус: загрузка...</div>
+        
         <div class="slider-zone">
             <span>Масштаб:</span>
             <input type="range" id="zoomSlider" min="0.3" max="1" step="0.05" value="0.8">
