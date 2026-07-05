@@ -76,30 +76,8 @@
         .btn-primary { background: #3b82f6; color: white; }
         .btn-primary:hover { background: #2563eb; }
         
-        .btn-success { background: #10b981; color: white; }
-        .btn-success:hover { background: #059669; }
-        
         .btn-danger { background: #ef4444; color: white; }
         .btn-danger:hover { background: #dc2626; }
-
-        /* Лог автомата */
-        .log-container {
-            flex: 1;
-            margin-top: 15px;
-            background: #1a1c23;
-            border: 1px solid #323545;
-            border-radius: 6px;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 12px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            line-height: 1.5;
-        }
-
-        .info { color: #f59e0b; }
-        .succ { color: #10b981; }
-        .err { color: #ef4444; }
 
         /* Правая область с деревом */
         .main-content {
@@ -249,18 +227,9 @@
             <input type="range" id="zoomSlider" min="0.3" max="2" step="0.1" value="1">
         </div>
 
-        <div class="control-group" style="border-top: 1px solid #323545; padding-top: 15px;">
-            <label>Тест покупок (Робот):</label>
-            <button id="startBtn" class="btn-success">Запустить регистрацию</button>
-            <button id="stopBtn" class="btn-danger" style="display: none;">Остановить робота</button>
-        </div>
-
         <div class="control-group" style="margin-top: auto;">
             <button id="resetBtn" class="btn-danger">Очистить базу данных</button>
         </div>
-
-        <label>Лог действий:</label>
-        <div id="log" class="log-container">> Ожидание запуска...</div>
     </div>
 
     <div class="main-content">
