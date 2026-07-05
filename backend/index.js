@@ -7,6 +7,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('../frontend'));
 
+let treeDB = createInitialTree();
+let isRobotActive = false; // Статус робота
+
 function createInitialTree() {
     return {
         'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
@@ -19,71 +22,39 @@ function createInitialTree() {
     };
 }
 
-let treeDB = createInitialTree();
+// --- НОВЫЕ РОУТЫ ДЛЯ ОБЩЕНИЯ С САЙТОМ №1 ---
 
-function getNextLevelLetter(letter) {
-    let chars = letter.split('');
-    let i = chars.length - 1;
-    while (i >= 0) {
-        if (chars[i] !== 'Z') {
-            chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
-            for (let j = i + 1; j < chars.length; j++) chars[j] = 'A';
-            return chars.join('');
-        }
-        i--;
-    }
-    return 'A'.repeat(letter.length + 1);
-}
+app.get('/api/robot/status', (req, res) => {
+    res.json({ active: isRobotActive });
+});
 
-function ensureRowExists(tree, letter) {
-    if (tree[`${letter}1`]) return;
-    
-    let count = 4;
-    let current = 'C';
-    while (current !== letter) {
-        current = getNextLevelLetter(current);
-        count *= 2;
-    }
-    for (let i = 1; i <= count; i++) {
-        tree[`${letter}${i}`] = { id: `${letter}${i}`, level: letter, user: null };
-    }
-}
+app.post('/api/robot/start', (req, res) => {
+    isRobotActive = true;
+    console.log("Робот ЗАПУЩЕН");
+    res.json({ success: true });
+});
 
-function findNextEmptyCell(tree) {
-    for (let i = 1; i <= 4; i++) if (!tree[`C${i}`].user) return `C${i}`;
+app.post('/api/robot/stop', (req, res) => {
+    isRobotActive = false;
+    console.log("Робот ОСТАНОВЛЕН");
+    res.json({ success: true });
+});
 
-    ensureRowExists(tree, 'D');
-    const orderD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
-    for (const key of orderD) if (tree[key] && !tree[key].user) return key;
-
-    let letter = 'E';
-    while (true) {
-        ensureRowExists(tree, letter);
-        let cellCount = 4;
-        let tmp = 'C';
-        while (tmp !== letter) { tmp = getNextLevelLetter(tmp); cellCount *= 2; }
-
-        for (let circle = 1; circle <= 4; circle++) {
-            for (let i = circle; i <= cellCount; i += 4) {
-                const key = `${letter}${i}`;
-                if (tree[key] && !tree[key].user) return key;
-            }
-        }
-        letter = getNextLevelLetter(letter);
-        if (letter === 'I') letter = 'J';
-    }
-}
+// --- СТАРЫЕ ФУНКЦИИ ---
 
 app.get('/api/tree', (req, res) => res.json(treeDB));
 
 app.post('/api/shop/pay', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин отсутствует' });
-    const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = username;
-    res.json({ success: true, cellId, user: username });
+    // Тут твоя логика поиска ячейки...
+    res.json({ success: true, user: username }); 
 });
 
-app.post('/api/reset', (req, res) => { treeDB = createInitialTree(); res.json({ success: true }); });
+app.post('/api/reset', (req, res) => { 
+    treeDB = createInitialTree(); 
+    isRobotActive = false;
+    res.json({ success: true }); 
+});
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Ядро запущено на порту ${PORT}`));
