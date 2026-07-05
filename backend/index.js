@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('../frontend'));
 
-// Железный занавес — не трогаем!
+// Железный занавес (константы)
 function createInitialTree() {
     return {
         'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
@@ -22,6 +22,7 @@ function createInitialTree() {
 
 let treeDB = createInitialTree();
 
+// Математика уровней: получение следующей буквы алфавита
 function getNextLevelLetter(letter) {
     let chars = letter.split('');
     let i = chars.length - 1;
@@ -36,6 +37,7 @@ function getNextLevelLetter(letter) {
     return 'A'.repeat(letter.length + 1);
 }
 
+// Генерация пустых ячеек для нового ряда на лету
 function ensureRowExists(tree, letter) {
     if (tree[`${letter}1`]) return;
     
@@ -50,16 +52,17 @@ function ensureRowExists(tree, letter) {
     }
 }
 
+// Бесконечный поиск свободной ячейки
 function findNextEmptyCell(tree) {
-    // Ряд C
+    // 1. Ряд C (линейно)
     for (let i = 1; i <= 4; i++) if (!tree[`C${i}`].user) return `C${i}`;
 
-    // Ряд D (Шахматы)
+    // 2. Ряд D (шахматы)
     ensureRowExists(tree, 'D');
     const orderD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
     for (const key of orderD) if (tree[key] && !tree[key].user) return key;
 
-    // Бесконечный цикл по рядам E, F, G, H, J...
+    // 3. Бесконечные ряды E, F, G, H, J... (циклы по 4)
     let letter = 'E';
     while (true) {
         ensureRowExists(tree, letter);
@@ -79,12 +82,15 @@ function findNextEmptyCell(tree) {
 }
 
 app.get('/api/tree', (req, res) => res.json(treeDB));
+
 app.post('/api/shop/pay', (req, res) => {
     const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин отсутствует' });
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = username;
-    res.json({ success: true, cellId });
+    res.json({ success: true, cellId, user: username });
 });
+
 app.post('/api/reset', (req, res) => { treeDB = createInitialTree(); res.json({ success: true }); });
 
-app.listen(PORT, () => console.log(`Ядро запущено на ${PORT}`));
+app.listen(PORT, () => console.log(`Ядро запущено на порту ${PORT}`));
