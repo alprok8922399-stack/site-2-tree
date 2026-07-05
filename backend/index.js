@@ -7,81 +7,111 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('../frontend'));
 
-const LEVELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-
 // База данных покупателей интернет-магазина (Логин -> Данные)
 let shopUsersDB = {
-    'SYSTEM_ROOT': { username: 'SYSTEM_ROOT', isPaid: true, balance: 0 },
-    'LEADER_1': { username: 'LEADER_1', isPaid: true, balance: 0 },
-    'LEADER_2': { username: 'LEADER_2', isPaid: true, balance: 0 }
+    'SYSTEM_ROOT': { username: 'SYSTEM_ROOT', isPaid: true, balance: 0, referrer: null },
+    'LEADER_1': { username: 'LEADER_1', isPaid: true, balance: 0, referrer: 'SYSTEM_ROOT' },
+    'LEADER_2': { username: 'LEADER_2', isPaid: true, balance: 0, referrer: 'SYSTEM_ROOT' }
 };
 
-// Глобальная секретная структура матрицы
-function createInitialTree() {
-    return {
-        'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
-        'B1': { id: 'B1', level: 'B', user: 'LEADER_1' },
-        'B2': { id: 'B2', level: 'B', user: 'LEADER_2' }
-    };
+// Глобальная секретная структура матрицы (индексы ячеек от 1 до бесконечности)
+// Храним в плоском виде: { 1: 'SYSTEM_ROOT', 2: 'LEADER_1', 3: 'LEADER_2' }
+// Ряд A = 1
+// Ряд B = 2, 3
+// Ряд C = 4, 5, 6, 7
+// Ряд D = 8..15
+// Ряд E = 16..31
+// Ряд F = 32..63
+let treeDB = {
+    1: { id: 1, label: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
+    2: { id: 2, label: 'B1', level: 'B', user: 'LEADER_1' },
+    3: { id: 3, label: 'B2', level: 'B', user: 'LEADER_2' }
+};
+
+// Журнал бухгалтерских Ledger-проводок
+let financialLedger = [];
+
+// Вспомогательная функция определения имени ряда и порядкового номера в ряду по индексу
+function getCellMeta(index) {
+    const row = Math.floor(Math.log2(index));
+    const letter = String.fromCharCode(65 + row); // 65 - это 'A' в ASCII
+    const startIdx = Math.pow(2, row);
+    const numInRow = index - startIdx + 1;
+    return { level: letter, label: `${letter}${numInRow}` };
 }
 
-let treeDB = createInitialTree();
-
-function getOrderForLevel(levelName) {
-    const levelIdx = LEVELS.indexOf(levelName);
-    if (levelIdx === -1) return [];
+// Умный веерный алгоритм поиска следующей ячейки по Закону Четырёх
+function findNextEmptyCellIndex() {
+    let checkIndex = 4; // Начинаем поиск с ряда C (индекс 4)
     
-    const count = Math.pow(2, levelIdx);
-    
-    if (levelName === 'A' || levelName === 'B' || levelName === 'C') {
-        return Array.from({ length: count }, (_, i) => `${levelName}${i + 1}`);
-    }
-    
-    if (levelName === 'D') {
-        return ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
-    }
-    
-    const order = [];
-    for (let step = 0; step < 4; step++) {
-        for (let i = 1; i <= count; i += 4) {
-            if (i + step <= count) {
-                order.push(`${levelName}${i + step}`);
+    while (true) {
+        const meta = getCellMeta(checkIndex);
+        const row = Math.floor(Math.log2(checkIndex));
+        const countInRow = Math.pow(2, row);
+        
+        // Ряды A, B, C заполняются по порядку (1, 2, 4 ячейки)
+        if (row <= 2) {
+            if (!treeDB[checkIndex] || !treeDB[checkIndex].user) {
+                return checkIndex;
             }
+            checkIndex++;
+            continue;
         }
-    }
-    return order;
-}
 
-function findNextEmptyCell(tree) {
-    for (const lvl of LEVELS) {
-        const order = getOrderForLevel(lvl);
-        const hasAnyCell = order.some(key => tree[key]);
-        if (!hasAnyCell) {
-            return order[0] || null;
+        // Ряд D (индекс 8-15) идет прыжками под лидеров ряда B
+        if (row === 3) {
+            const dOrder = [8, 12, 9, 13, 10, 14, 11, 15];
+            for (let idx of dOrder) {
+                if (!treeDB[idx] || !treeDB[idx].user) return idx;
+            }
+            checkIndex = 16; // Если весь D закрыт, прыгаем на E
+            continue;
+        }
+
+        // Для всех рядов ниже E, F, G... до бесконечности применяем циклическую веерную формулу четверками
+        // Нам нужно пройти по всем первым ячейкам каждого сектора, потом по вторым и т.д.
+        const startRowIndex = countInRow;
+        
+        for (let step = 0; step < 4; step++) {
+            for (let i = 0; i < countInRow; i += 4) {
+                const targetIdx = startRowIndex + i + step;
+                if (!treeDB[targetIdx] || !treeDB[targetIdx].user) {
+                    return targetIdx;
+                }
+            }
         }
         
-        for (const key of order) {
-            if (tree[key] === undefined) {
-                tree[key] = { id: key, level: lvl, user: null };
-            }
-            if (!tree[key].user) {
-                return key;
-            }
-        }
+        // Если весь текущий ряд заполнился, переходим на индекс начала следующего ряда
+        checkIndex = startRowIndex + countInRow;
     }
-    return null;
 }
 
-function generateNextLevelPreemptively(tree, currentLvl) {
-    const currentIdx = LEVELS.indexOf(currentLvl);
-    const nextLvl = LEVELS[currentIdx + 1];
-    if (!nextLvl) return;
+// Функция начисления денег по «Модели 1-2-4» (3 уровня бухгалтерии)
+function processMatrixPayout(newCellIndex, amount) {
+    // Выплата идет тому, кто стоит на 2 уровня выше в локальном треугольнике
+    // В бинарном дереве родитель ячейки N равен Math.floor(N / 2)
+    // Соответственно, вершина локальной семерки — это Math.floor(Math.floor(newCellIndex / 2) / 2) = Math.floor(newCellIndex / 4)
+    const targetVertexIndex = Math.floor(newCellIndex / 4);
     
-    const nextCount = Math.pow(2, currentIdx + 1);
-    for (let i = 1; i <= nextCount; i++) {
-        const id = `${nextLvl}${i}`;
-        if (!tree[id]) {
-            tree[id] = { id, level: nextLvl, user: null };
+    if (targetVertexIndex >= 1 && treeDB[targetVertexIndex]) {
+        const vertexUser = treeDB[targetVertexIndex].user;
+        if (vertexUser && shopUsersDB[vertexUser]) {
+            const payoutAmount = amount * 0.5; // 50% от суммы оплаты идет на выплату вершине
+            
+            // Начисляем баланс в базу
+            shopUsersDB[vertexUser].balance += payoutAmount;
+            
+            // Записываем строгую транзакцию в бухгалтерский Ledger-лог
+            financialLedger.push({
+                timestamp: new Date().toISOString(),
+                cellIndex: newCellIndex,
+                cellLabel: getCellMeta(newCellIndex).label,
+                payoutTo: vertexUser,
+                vertexCell: getCellMeta(targetVertexIndex).label,
+                amount: payoutAmount
+            });
+            
+            console.log(`[LEDGER] Бухгалтерия: Ячейка ${getCellMeta(newCellIndex).label} закрылась. Выплата ${payoutAmount} руб начислена на вершину ${getCellMeta(targetVertexIndex).label} пользователю ${vertexUser}`);
         }
     }
 }
@@ -90,80 +120,100 @@ function generateNextLevelPreemptively(tree, currentLvl) {
 // ЭНДПОИНТЫ ДЛЯ МАРКЕТПЛЕЙСА (ПЕРВЫЙ САЙТ)
 // ==========================================
 
-// 1. Обычная регистрация покупателя на сайте (БЕЗ попадания в матрицу)
+// 1. Регистрация покупателя (с привязкой реферала)
 app.post('/api/shop/register', (req, res) => {
-    const { username } = req.body;
+    const { username, ref } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
     
     if (shopUsersDB[username]) {
-        return res.status(400).json({ error: 'Пользователь уже зарегистрирован в магазине' });
+        return res.status(400).json({ error: 'Пользователь уже зарегистрирован' });
     }
     
-    // Создаем профиль обычного покупателя
+    // Проверяем существование пригласителя, иначе пишем SYSTEM_ROOT
+    let referrerUser = 'SYSTEM_ROOT';
+    if (ref && shopUsersDB[ref]) {
+        referrerUser = ref;
+    }
+    
     shopUsersDB[username] = {
         username: username,
-        isPaid: false,      // Еще не оплатил товар
-        balance: 0          // Внутренний баланс
+        isPaid: false,
+        balance: 0,
+        referrer: referrerUser // Жесткая фиксация спонсора в БД
     };
     
-    res.json({ success: true, message: 'Покупатель успешно зарегистрирован на маркетплейсе', user: shopUsersDB[username] });
+    res.json({ success: true, message: 'Покупатель успешно зарегистрирован', user: shopUsersDB[username] });
 });
 
-// 2. Имитация ОПЛАТЫ товара (Ввод 10 000 рублей, Сплитование и ПОСАДКА в матрицу)
+// 2. Оплата товара и автоматическая посадка в скрытую матрицу
 app.post('/api/shop/pay', (req, res) => {
     const { username, amount } = req.body;
-    if (!username || !amount) return res.status(400).json({ error: 'Не указан логин или сумма платежа' });
+    if (!username || !amount) return res.status(400).json({ error: 'Не указан логин или сумма' });
     
     const user = shopUsersDB[username];
     if (!user) return res.status(404).json({ error: 'Покупатель не найден' });
-    if (user.isPaid) return res.status(400).json({ error: 'Этот заказ уже оплачен' });
+    if (user.isPaid) return res.status(400).json({ error: 'Заказ уже оплачен' });
     
-    // НАУКА СПЛИТОВАНИЯ (на будущее):
-    // В реальности тут идет вызов API ЮKassa/Stripe для разделения платежа
-    const marketPlacePart = amount * 0.5; // 50% летит на маркетплейс за товар
-    const myWalletPart = amount * 0.5;    // 50% летит в твой кошелек структуры
-    
-    // Фиксируем оплату в магазине
     user.isPaid = true;
-    user.balance += myWalletPart; // Условно отображаем твою долю или кэшбэк
     
-    // ЧУДО МАТРИЦЫ: Молча и незаметно для юзера сажаем его в глобальное дерево!
-    let cellId = findNextEmptyCell(treeDB);
-    if (!cellId) return res.status(500).json({ error: 'Ошибка структуры матрицы' });
+    // Вычисляем следующую пустую ячейку по нашему веерному алгоритму
+    const nextIdx = findNextEmptyCellIndex();
+    const meta = getCellMeta(nextIdx);
     
-    const lvl = cellId.replace(/[0-9]/g, '');
-    if (!treeDB[cellId]) {
-        treeDB[cellId] = { id: cellId, level: lvl, user: null };
-    }
+    // Сохраняем пользователя в ячейку матрицы
+    treeDB[nextIdx] = {
+        id: nextIdx,
+        label: meta.label,
+        level: meta.level,
+        user: username
+    };
     
-    treeDB[cellId].user = username;
-    generateNextLevelPreemptively(treeDB, lvl);
+    // Запускаем транзакционный расчет выплаты по «Модели 1-2-4»
+    processMatrixPayout(nextIdx, amount);
     
-    console.log(`[SPLIT PAYMENT] Юзер ${username} оплатил ${amount} руб. Товар куплен! Матрица молча выделила ячейку ${cellId}`);
+    console.log(`[MATRIX] Юзер ${username} оплатил товар. Встал в ячейку ${meta.label} (Индекс: ${nextIdx})`);
     
     res.json({ 
         success: true, 
-        message: 'Оплата успешно прошла!', 
-        split: { marketplace: marketPlacePart, myWallet: myWalletPart },
+        message: 'Оплата обработана, матрица обновлена', 
+        cellLabel: meta.label,
         shopUserStatus: user
     });
 });
 
-
 // ==========================================
 // ЭНДПОИНТЫ ДЛЯ СЕКРЕТНОЙ АДМИНКИ (ВТОРОЙ САЙТ)
 // ==========================================
-app.get('/api/tree', (req, res) => res.json(treeDB));
 
+// Отдаем всю матрицу в плоском формате
+app.get('/api/tree', (req, res) => {
+    res.json(treeDB);
+});
+
+// Отдаем данные пользователей и их реферальные связи
+app.get('/api/users', (req, res) => {
+    res.json(shopUsersDB);
+});
+
+// Отдаем лог бухгалтерских проводок
+app.get('/api/ledger', (req, res) => {
+    res.json(financialLedger);
+});
+
+// Полный сброс всей системы в начальное состояние
 app.post('/api/reset', (req, res) => {
-    treeDB = createInitialTree();
-    // Оставляем только системных юзеров при сбросе
-    shopUsersDB = {
-        'SYSTEM_ROOT': { username: 'SYSTEM_ROOT', isPaid: true, balance: 0 },
-        'LEADER_1': { username: 'LEADER_1', isPaid: true, balance: 0 },
-        'LEADER_2': { username: 'LEADER_2', isPaid: true, balance: 0 }
+    treeDB = {
+        1: { id: 1, label: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
+        2: { id: 2, label: 'B1', level: 'B', user: 'LEADER_1' },
+        3: { id: 3, label: 'B2', level: 'B', user: 'LEADER_2' }
     };
-    res.json({ success: true });
+    shopUsersDB = {
+        'SYSTEM_ROOT': { username: 'SYSTEM_ROOT', isPaid: true, balance: 0, referrer: null },
+        'LEADER_1': { username: 'LEADER_1', isPaid: true, balance: 0, referrer: 'SYSTEM_ROOT' },
+        'LEADER_2': { username: 'LEADER_2', isPaid: true, balance: 0, referrer: 'SYSTEM_ROOT' }
+    };
+    financialLedger = [];
+    res.json({ success: true, message: 'Система полностью очищена' });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
