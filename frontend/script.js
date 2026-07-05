@@ -6,8 +6,42 @@ const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const refTableBody = document.getElementById('refTableBody');
 
+// Новые элементы для управления роботом
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const robotStatus = document.getElementById('robotStatus');
+
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
+
+// --- Логика робота ---
+
+async function checkRobotStatus() {
+    try {
+        const res = await fetch(`${API_URL}/robot/status`);
+        const data = await res.json();
+        robotStatus.textContent = data.running ? 'Статус: РОБОТ ВКЛЮЧЕН' : 'Статус: РОБОТ ВЫКЛЮЧЕН';
+        robotStatus.style.color = data.running ? '#27ae60' : '#888';
+    } catch (err) {
+        robotStatus.textContent = 'Статус: ошибка связи';
+    }
+}
+
+async function controlRobot(action) {
+    try {
+        const res = await fetch(`${API_URL}/robot/${action}`, { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'Команда отправлена');
+        checkRobotStatus(); // Обновляем статус после команды
+    } catch (err) {
+        alert('Ошибка при отправке команды роботу');
+    }
+}
+
+startBtn.addEventListener('click', () => controlRobot('start'));
+stopBtn.addEventListener('click', () => controlRobot('stop'));
+
+// --- Существующая логика ---
 
 zoomSlider.addEventListener('input', (e) => {
     mainTreeDisplay.style.transform = `scale(${e.target.value})`;
@@ -239,5 +273,8 @@ resetBtn.addEventListener('click', async () => {
     }
 });
 
+// Инициализация
 fetchTree();
+checkRobotStatus(); // Проверяем статус робота при загрузке
 setInterval(fetchTree, 2000);
+setInterval(checkRobotStatus, 5000); // Обновляем статус каждые 5 сек
