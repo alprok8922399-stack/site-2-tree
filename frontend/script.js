@@ -1,4 +1,5 @@
-const API_URL = '/api';
+const API_URL = window.location.origin + '/api';
+
 const mainTreeDisplay = document.getElementById('mainTreeDisplay');
 const zoomSlider = document.getElementById('zoomSlider');
 const resetBtn = document.getElementById('resetBtn');
@@ -6,7 +7,7 @@ const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const refTableBody = document.getElementById('refTableBody');
 
-// Кнопки управления роботом (находятся на этой же странице)
+// Кнопки управления роботом
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const logDiv = document.getElementById('log');
@@ -42,7 +43,7 @@ if (startBtn && stopBtn) {
         isRunning = false;
         startBtn.style.display = 'block';
         stopBtn.style.display = 'none';
-        printLog('Робот остановлен.', 'err');
+        printLog('Автомат остановлен.', 'err');
         if (timerId) clearTimeout(timerId);
     });
 }
@@ -85,7 +86,7 @@ async function runNextCycle() {
             await fetchTree(); // Обновляем экран
         }
     } catch (err) {
-        printLog(`⚠️ Ошибка сети бэкенда`, 'err');
+        printLog(`⚠️ Ошибка сети: Нет связи с сервером`, 'err');
     }
 
     if (isRunning) {
@@ -317,7 +318,7 @@ if (resetBtn) {
     resetBtn.addEventListener('click', async () => {
         if (!confirm('Очистить базу данных дерева?')) return;
         try {
-            const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
+            const res = await fetch(`${window.location.origin}/api/reset`, { method: 'POST' });
             const data = await res.json();
             if (data.success) {
                 userIndex = 1;
@@ -334,5 +335,5 @@ if (resetBtn) {
 
 // Запуск инициализации при открытии страницы
 fetchTree();
-// Автообновление экрана каждые 2 секунды (независимо от робота)
+// Автообновление экрана каждые 2 секунды
 setInterval(fetchTree, 2000);
