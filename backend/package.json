@@ -1,7 +1,7 @@
 {
   "name": "site-2-tree-backend",
   "version": "1.0.0",
-  "description": "Бэкенд ядра дерева и базы данных для Сайта №2",
+  "description": "Бэкенд бинарного маркетинг-плана",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
