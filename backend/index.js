@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path'); // Добавили модуль для работы с путями
 
 const app = express();
 app.use(cors());
@@ -10,24 +11,18 @@ const PORT = process.env.PORT || 10000;
 // ==========================================
 // ГЛОБАЛЬНОЕ СОСТОЯНИЕ СИСТЕМЫ (В памяти)
 // ==========================================
-// Массив имитирует идеальное бинарное дерево (двоичную кучу). 
-// Индекс 1 — Главный Основатель (Founder).
-// Индексы 2-3 — Ряд B, 4-7 — Ряд C, 8-15 — Ряд D и так далее.
 let binaryTree = [null]; 
 let systemLogs = [];
 let totalUsersCount = 0;
 
-// Список имен для симулятора живых регистраций
 const mockNames = ['CryptoKing', 'Alpha_Менеджер', 'LuckyStrike', 'Bitcoin_Bro', 'CyberPulse', 'Tesla_Fan', 'Web3_Wanderer', 'Matrix_Neo', 'Rich_Fox', 'Future_Shark', 'Infinity', 'GoldenБосс'];
 
-// Функция отправки сообщений в живой лог
 function addLog(message) {
     const time = new Date().toLocaleTimeString('ru-RU');
-    systemLogs.unshift(`[${time}] ${message}`); // Добавляем свежие логи наверх
-    if (systemLogs.length > 50) systemLogs.pop(); // Храним только последние 50 событий
+    systemLogs.unshift(`[${time}] ${message}`);
+    if (systemLogs.length > 50) systemLogs.pop();
 }
 
-// Проверка: заполнилась ли личная 7-местная матрица у пользователя?
 function isMatrixFull(globalIndex) {
     const b1 = globalIndex * 2;
     const b2 = globalIndex * 2 + 1;
@@ -35,52 +30,50 @@ function isMatrixFull(globalIndex) {
     const c2 = globalIndex * 4 + 1;
     const c3 = globalIndex * 4 + 2;
     const c4 = globalIndex * 4 + 3;
-
-    // Матрица считается заполненной, если заняты все 6 мест под ним (его ряды B и C)
     return !!(binaryTree[b1] && binaryTree[b2] && binaryTree[c1] && binaryTree[c2] && binaryTree[c3] && binaryTree[c4]);
 }
 
-// Инициализация: ставим Главного лидера на вершину структуры
 binaryTree[1] = { login: 'FOUNDER', globalIndex: 1 };
 totalUsersCount = 1;
 addLog('Система успешно запущена. Главный стол (FOUNDER) активирован.');
 
-// ==========================================
 // АВТО-СИМУЛЯТОР ЖИВЫХ РЕГИСТРАЦИЙ
-// ==========================================
-// Каждые 4 секунды скрипт находит свободное место сверху-вниз, слева-направо
 setInterval(() => {
     let nextIndex = binaryTree.length;
-    
-    // Генерируем случайный логин
     const randomName = mockNames[Math.floor(Math.random() * mockNames.length)];
     const uniqueLogin = `${randomName}_${Math.floor(100 + Math.random() * 900)}`;
     
-    // Добавляем пользователя в глобальное дерево
     binaryTree[nextIndex] = { login: uniqueLogin, globalIndex: nextIndex };
     totalUsersCount++;
 
-    // Вычисляем, под кого именно в структуре сел этот человек
     const parentIndex = Math.floor(nextIndex / 2);
     const parentLogin = binaryTree[parentIndex].login;
-    
     addLog(`Регистрация: ${uniqueLogin} занял глобальное место №${nextIndex} под спонсором ${parentLogin}.`);
 
-    // Проверяем, не закрылась ли матрица у вышестоящего
     if (isMatrixFull(parentIndex)) {
         addLog(`🔥 МАТРИЦА ЗАКРЫТА! У пользователя ${parentLogin} заполнился нижний ряд. Начислена выплата! Юзер ушел в архив.`);
     }
 }, 4000);
 
+// ==========================================
+// МАРШРУТЫ (ROUTES)
+// ==========================================
 
-// ==========================================
-// API ЭНДПОИНТ: СБОРКА ЛОКАЛЬНОЙ МАТРИЦЫ С УЧЕТОМ ЛИНЗЫ
-// ==========================================
+// 1. НАСТРОЙКА ГЛАВНОЙ СТРАНИЦЫ (Убирает ошибку Cannot GET /)
+app.get('/', (req, res) => {
+    res.json({
+        status: "ONLINE",
+        message: "Бэкенд Бизнес-Матрицы успешно запущен и работает!",
+        database: `Зарегистрировано юзеров: ${totalUsersCount}`,
+        instruction: "Чтобы получить структуру матрицы, сделайте запрос на /api/matrix"
+    });
+});
+
+// 2. API ЭНДПОИНТ: СБОРКА ЛОКАЛЬНОЙ МАТРИЦЫ С УЧЕТОМ ЛИНЗЫ
 app.get('/api/matrix', (req, res) => {
     const rootQuery = req.query.root;
-    let targetIndex = 1; // По умолчанию показываем Главный стол
+    let targetIndex = 1;
 
-    // Если фронтенд передал конкретный логин для фокуса, ищем его индекс в дереве
     if (rootQuery) {
         const found = binaryTree.findIndex(u => u && u.login.toLowerCase() === rootQuery.toLowerCase());
         if (found !== -1) {
@@ -88,7 +81,6 @@ app.get('/api/matrix', (req, res) => {
         }
     }
 
-    // Математический расчет индексов 7-местной матрицы для текущего фокуса
     const idxA1 = targetIndex;
     const idxB1 = targetIndex * 2;
     const idxB2 = targetIndex * 2 + 1;
@@ -97,23 +89,15 @@ app.get('/api/matrix', (req, res) => {
     const idxC3 = targetIndex * 4 + 2;
     const idxC4 = targetIndex * 4 + 3;
 
-    // Сборка информации о конкретной ячейке
     const getCellInfo = (idx) => {
         if (idx >= binaryTree.length || !binaryTree[idx]) return null;
-        
-        // Проверяем статус (активный или уже заархивирован)
         let status = 'active';
         if (isMatrixFull(idx)) {
-            status = 'archived'; // Блекнет на фронте, если его личная семерка закрыта
+            status = 'archived';
         }
-        
-        return {
-            login: binaryTree[idx].login,
-            status: status
-        };
+        return { login: binaryTree[idx].login, status: status };
     };
 
-    // Формируем относительную 7-местную матрицу для отправки на экран
     const localMatrix = {
         'A1': getCellInfo(idxA1),
         'B1': getCellInfo(idxB1),
@@ -124,14 +108,12 @@ app.get('/api/matrix', (req, res) => {
         'C4': getCellInfo(idxC4)
     };
 
-    // Находим логин спонсора на один уровень выше для кнопки «⬆ Наверх»
     let parentRootLogin = null;
     if (targetIndex > 1) {
         const pIdx = Math.floor(targetIndex / 2);
         if (binaryTree[pIdx]) parentRootLogin = binaryTree[pIdx].login;
     }
 
-    // Отдаем упакованные данные на фронтенд
     res.json({
         matrix: localMatrix,
         parentRoot: parentRootLogin,
