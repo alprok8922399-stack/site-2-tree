@@ -6,18 +6,20 @@
     <title>САЙТ 2 - Бинарная Матрица</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-        body { background: #0b0b0e; color: #fff; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        
+        /* Глобальный благородный однотонный фон (Премиальный полуночный индиго) */
+        body { background: #111422; color: #fff; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         
         /* Верхняя панель управления */
-        .controls { background: #14141c; padding: 12px 15px; border-bottom: 2px solid #00bcd4; display: flex; flex-direction: column; gap: 10px; z-index: 10; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        .controls { background: #171b2f; padding: 12px 15px; border-bottom: 2px solid #00f0ff; display: flex; flex-direction: column; gap: 10px; z-index: 10; box-shadow: 0 4px 25px rgba(0,0,0,0.6); }
         .search-row { display: flex; gap: 10px; }
-        .search-input { flex: 1; background: #1f1f2a; border: 2px solid #3f4456; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 16px; font-weight: bold; }
-        .search-input:focus { border-color: #00bcd4; outline: none; }
+        .search-input { flex: 1; background: #202642; border: 2px solid #343b5e; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 16px; font-weight: bold; }
+        .search-input:focus { border-color: #00f0ff; outline: none; box-shadow: 0 0 10px rgba(0,240,255,0.3); }
         .zoom-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #fff; font-weight: bold; }
-        .zoom-slider { flex: 1; accent-color: #00bcd4; height: 8px; }
+        .zoom-slider { flex: 1; accent-color: #00f0ff; height: 8px; }
 
-        /* Пространство холста матрицы (touch-action: none убирает лаги пальца) */
-        .viewport { flex: 1; position: relative; overflow: hidden; cursor: grab; background: radial-gradient(#2c2c3a 1px, transparent 1px); background-size: 30px 30px; touch-action: none; }
+        /* Пространство холста матрицы (Сделали чисто однотонным, без точек) */
+        .viewport { flex: 1; position: relative; overflow: hidden; cursor: grab; background: #111422; touch-action: none; }
         .viewport:active { cursor: grabbing; }
         .canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 200px; display: flex; flex-direction: column; align-items: center; gap: 50px; will-change: transform; }
 
@@ -25,21 +27,21 @@
         .row { display: flex; justify-content: center; gap: 24px; position: relative; }
         
         /* БАЗОВАЯ ЯЧЕЙКА */
-        .cell { background: #1e2235; border: 2px solid #00bcd4; border-radius: 10px; padding: 12px; width: 125px; text-align: center; box-shadow: 0 6px 16px rgba(0,0,0,0.6); transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s; position: relative; }
+        .cell { background: #1c203b; border: 2px solid #00bcd4; border-radius: 10px; padding: 12px; width: 125px; text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,0.5); transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s; position: relative; }
         .cell-id { font-weight: 900; color: #00ffcc; margin-bottom: 6px; display: block; font-size: 12px; letter-spacing: 1px; }
         .cell-login { font-weight: bold; color: #ffffff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
         
         /* СТАТУС: АКТИВНАЯ ЯЧЕЙКА */
-        .cell.active { background: #0d47a1; border-color: #00ffcc; box-shadow: 0 0 12px rgba(0, 255, 204, 0.3); }
+        .cell.active { background: #0e43a1; border-color: #00ffcc; box-shadow: 0 0 15px rgba(0, 255, 204, 0.4); }
         
         /* СТАТУС: АРХИВНАЯ ЯЧЕЙКА */
-        .cell.archived { opacity: 0.4; background: #111420; border-color: #444; }
-        .cell.archived .cell-id { color: #888; }
-        .cell.archived .cell-login { color: #aaa; }
+        .cell.archived { opacity: 0.35; background: #141729; border-color: #2e3554; }
+        .cell.archived .cell-id { color: #5c668d; }
+        .cell.archived .cell-login { color: #7e8cb3; }
 
         /* УНИКАЛЬНАЯ ЗОЛОТАЯ ЯЧЕЙКА А1 (FOUNDER) */
-        #cell-A1 { background: #ffb300 !important; border-color: #ffffff !important; box-shadow: 0 0 20px #ffb300 !important; opacity: 1 !important; }
-        #cell-A1 .cell-id { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+        #cell-A1 { background: #ffb300 !important; border-color: #ffffff !important; box-shadow: 0 0 25px #ffb300 !important; opacity: 1 !important; }
+        #cell-A1 .cell-id { color: #ffffff !important; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
         #cell-A1 .cell-login { color: #000000 !important; font-weight: 900; }
 
         /* СТАТУС: ПОДСВЕЧЕННАЯ ПОИСКОМ */
@@ -47,15 +49,15 @@
         .cell.highlight .cell-id { color: #fff; }
 
         /* СТАТУС: ПУСТАЯ ОЖИДАЮЩАЯ ЯЧЕЙКА */
-        .cell.empty { border: 2px dashed #4e5573; background: rgba(30, 34, 53, 0.2); opacity: 0.6; }
-        .cell.empty .cell-id { color: #4e5573; }
-        .cell.empty .cell-login { color: #4e5573; font-weight: normal; font-size: 12px; }
+        .cell.empty { border: 2px dashed #343b5e; background: rgba(28, 32, 59, 0.3); opacity: 0.6; }
+        .cell.empty .cell-id { color: #4e567d; }
+        .cell.empty .cell-login { color: #4e567d; font-weight: normal; font-size: 12px; }
 
         /* Нижний подвал: Живой Лог */
-        .footer { background: #14141c; height: 180px; border-top: 2px solid #00bcd4; display: flex; flex-direction: column; z-index: 10; box-shadow: 0 -4px 20px rgba(0,0,0,0.5); }
-        .stats-bar { background: #1f1f2a; padding: 8px 15px; font-size: 13px; display: flex; justify-content: space-between; color: #fff; font-weight: bold; border-bottom: 1px solid #2a2a35; }
-        .log-stream { flex: 1; padding: 10px; overflow-y: auto; font-family: monospace; font-size: 12px; background: #050508; color: #00ff66; }
-        .log-line { margin-bottom: 4px; border-bottom: 1px solid #111; padding-bottom: 4px; }
+        .footer { background: #171b2f; height: 180px; border-top: 2px solid #00f0ff; display: flex; flex-direction: column; z-index: 10; box-shadow: 0 -4px 25px rgba(0,0,0,0.6); }
+        .stats-bar { background: #202642; padding: 8px 15px; font-size: 13px; display: flex; justify-content: space-between; color: #fff; font-weight: bold; border-bottom: 1px solid #2a3154; }
+        .log-stream { flex: 1; padding: 10px; overflow-y: auto; font-family: monospace; font-size: 12px; background: #0b0d17; color: #00ff66; }
+        .log-line { margin-bottom: 4px; border-bottom: 1px solid #141729; padding-bottom: 4px; }
     </style>
 </head>
 <body>
@@ -106,7 +108,6 @@
     let prevDiff = -1;
     let ticking = false;
 
-    // Оптимизированный ультра-плавный рендеринг позиции без микро-рывков
     function updateTransform() {
         canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
         ticking = false;
