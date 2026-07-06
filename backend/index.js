@@ -1,167 +1,186 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('../frontend'));
 
-function createInitialTree() {
-    return {
-        'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
-        'B1': { id: 'B1', level: 'B', user: 'LEADER_1' },
-        'B2': { id: 'B2', level: 'B', user: 'LEADER_2' },
-        'C1': { id: 'C1', level: 'C', user: null },
-        'C2': { id: 'C2', level: 'C', user: null },
-        'C3': { id: 'C3', level: 'C', user: null },
-        'C4': { id: 'C4', level: 'C', user: null }
-    };
+// ==========================================
+// ГЛОБАЛЬНОЕ СОСТОЯНИЕ СИСТЕМЫ (БАЗА ДАННЫХ В ПАМЯТИ)
+// ==========================================
+let users = [];       // Общий список всех прилетевших участников
+let matrixData = {};  // Объект со структурой ячеек: { 'A1': { login, time }, 'D5': {...} }
+let activeLogs = [];  // Логи для нижней панели живой ленты
+
+// Статические начальные ячейки (всегда заполнены по ТЗ)
+matrixData['A1'] = { login: 'FOUNDER_A1', time: new Date().toISOString(), status: 'archived' };
+matrixData['B1'] = { login: 'LEADER_B1', time: new Date().toISOString(), status: 'active' };
+matrixData['B2'] = { login: 'LEADER_B2', time: new Date().toISOString(), status: 'active' };
+
+// Ряд С заполняется статично по порядку (C1-C4)
+let nextRowCIndex = 1; 
+
+// Параметры для веерного алгоритма начиная с ряда D
+let currentTargetRow = 'D'; // Текущий заполняемый ряд
+let currentRound = 1;       // Текущий круг веера (место внутри четверок: 1, 2, 3 или 4)
+let currentSectorIndex = 0; // Какой сектор в текущем кругу заполняем
+
+// Настройки портов для Render
+const PORT = process.env.PORT || 5000;
+
+// Вспомогательная функция для генерации секторов конкретного ряда
+function getSectorsForRow(rowName) {
+    const rowCounts = { 'C': 4, 'D': 8, 'E': 16, 'F': 32, 'G': 64, 'H': 128, 'I': 256, 'J': 512 };
+    // Если ряд дальше J, рассчитываем математически как 2^level
+    let count = rowCounts[rowName];
+    if (!count) {
+        const charCodeDiff = rowName.charCodeAt(0) - 'C'.charCodeAt(0);
+        count = 4 * Math.pow(2, charCodeDiff);
+    }
+    
+    const sectorCount = count / 4;
+    const sectors = [];
+    
+    for (let s = 0; s < sectorCount; s++) {
+        const startNum = s * 4 + 1;
+        sectors.push([
+            `${rowName}${startNum}`,
+            `${rowName}${startNum + 1}`,
+            `${rowName}${startNum + 2}`,
+            `${rowName}${startNum + 3}`
+        ]);
+    }
+    return sectors;
 }
 
-let treeDB = createInitialTree();
-let isRobotActive = false;
-let robotInterval = null;
-
-function findNextEmptyCell(tree) {
-    const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
-    for (const key of orderABC) {
-        if (tree[key] && !tree[key].user) return key;
-    }
-
-    const orderD = ['D1', 'D5', 'D2', 'D6', 'D3', 'D7', 'D4', 'D8'];
-    for (const key of orderD) {
-        if (tree[key] && !tree[key].user) return key;
-    }
-
-    const orderE = [
-        'E1', 'E5', 'E9', 'E13',
-        'E2', 'E6', 'E10', 'E14',
-        'E3', 'E7', 'E11', 'E15',
-        'E4', 'E8', 'E12', 'E16'
-    ];
-    for (const key of orderE) {
-        if (tree[key] && !tree[key].user) return key;
-    }
-
-    const orderF = [
-        'F1', 'F5', 'F9', 'F13', 'F17', 'F21', 'F25', 'F29',
-        'F2', 'F6', 'F10', 'F14', 'F18', 'F22', 'F26', 'F30',
-        'F3', 'F7', 'F11', 'F15', 'F19', 'F23', 'F27', 'F31',
-        'F4', 'F8', 'F12', 'F16', 'F20', 'F24', 'F28', 'F32'
-    ];
-    for (const key of orderF) {
-        if (tree[key] && !tree[key].user) return key;
-    }
-
-    return null;
+// Определение следующего ряда по алфавиту
+function getNextRowLetter(rowLetter) {
+    return String.fromCharCode(rowLetter.charCodeAt(0) + 1);
 }
 
-function checkAndGenerateChildren(tree) {
-    if (tree['C4'] && tree['C4'].user && !tree['D1']) {
-        for (let i = 1; i <= 8; i++) {
-            const id = `D${i}`;
-            tree[id] = { id, level: 'D', user: null };
-        }
-    }
-    if (tree['D4'] && tree['D4'].user && !tree['E1']) {
-        for (let i = 1; i <= 8; i++) {
-            const id = `E${i}`;
-            tree[id] = { id, level: 'E', user: null };
-        }
-    }
-    if (tree['D8'] && tree['D8'].user && !tree['E9']) {
-        for (let i = 9; i <= 16; i++) {
-            const id = `E${i}`;
-            tree[id] = { id, level: 'E', user: null };
-        }
-    }
-
-    if (tree['E4'] && tree['E4'].user && !tree['F1']) {
-        for (let i = 1; i <= 8; i++) {
-            const id = `F${i}`;
-            tree[id] = { id, level: 'F', user: null };
-        }
-    }
-    if (tree['E8'] && tree['E8'].user && !tree['F9']) {
-        for (let i = 9; i <= 16; i++) {
-            const id = `F${i}`;
-            tree[id] = { id, level: 'F', user: null };
-        }
-    }
-    if (tree['E12'] && tree['E12'].user && !tree['F17']) {
-        for (let i = 17; i <= 24; i++) {
-            const id = `F${i}`;
-            tree[id] = { id, level: 'F', user: null };
-        }
-    }
-    if (tree['E16'] && tree['E16'].user && !tree['F25']) {
-        for (let i = 25; i <= 32; i++) {
-            const id = `F${i}`;
-            tree[id] = { id, level: 'F', user: null };
-        }
-    }
+// Проверка: заполнен ли сектор на 100%
+function isSectorFilled(sector) {
+    return sector.every(cellId => matrixData[cellId] !== undefined);
 }
 
-function runRobotCycle() {
-    if (!isRobotActive) return;
-
-    console.log("Робот: проверка...");
-    const cellId = findNextEmptyCell(treeDB);
-
-    if (cellId) {
-        const botName = `Bot_${Date.now().toString().slice(-4)}`;
-        treeDB[cellId].user = botName;
-        checkAndGenerateChildren(treeDB);
-        console.log(`Робот успешно занял ячейку: ${cellId} (User: ${botName})`);
-    } else {
-        console.log("Робот: все ячейки заняты.");
+// ==========================================
+// ГЛАВНЫЙ АЛГОРИТМ: ПОИСК СЛЕДУЮЩЕЙ СВОБОДНОЙ ЯЧЕЙКИ ПО ВЕЕРУ
+// ==========================================
+function findNextFreeCellAndPlaceUser(login) {
+    const timestamp = new Date().toISOString();
+    
+    // 1. ОБРАБОТКА ТЕСТОВОГО РЯДА C (Простое заполнение по порядку)
+    if (nextRowCIndex <= 4) {
+        const cellId = `C${nextRowCIndex}`;
+        matrixData[cellId] = { login, time: timestamp, status: 'active' };
+        nextRowCIndex++;
+        
+        // Триггер: когда ряд С полностью закрылся ячейкой C4
+        if (nextRowCIndex > 4) {
+            // Верхушка А1 получает выплату и тускнеет
+            if (matrixData['A1']) matrixData['A1'].status = 'archived';
+            
+            // Защитный барьер: под С1-C4 мгновенно рождается весь ряд D (8 ячеек, 2 четверки)
+            // В памяти они пока просто пусты, но готовы к вееру
+            activeLogs.unshift(`[${new Date().toLocaleTimeString()}] Ряд C заполнен! Матрица делит ряд A1. Открыт ряд D.`);
+        }
+        return cellId;
+    }
+    
+    // 2. ВЕЕРНЫЙ АЛГОРИТМ (Для рядов D, E, F и до бесконечности)
+    while (true) {
+        let sectors = getSectorsForRow(currentTargetRow);
+        
+        // Ищем ячейку по текущему кругу (currentRound: 1-е места, 2-е места...)
+        if (currentSectorIndex < sectors.length) {
+            let sector = sectors[currentSectorIndex];
+            let cellId = sector[currentRound - 1]; // Выбираем 1-ю, 2-ю, 3-ю или 4-ю ячейку в секторе
+            
+            // Переходим к следующему сектору для следующего шага веера
+            currentSectorIndex++;
+            
+            // Если ячейка свободна, занимаем её!
+            if (!matrixData[cellId]) {
+                matrixData[cellId] = { login, time: timestamp, status: 'active' };
+                
+                // Проверяем ТРИГГЕР: Если это была 4-я ячейка сектора, сектор сомкнулся на 100%!
+                if (currentRound === 4 && isSectorFilled(sector)) {
+                    const nextRow = getNextRowLetter(currentTargetRow);
+                    const sectorNumInRow = currentSectorIndex; // Номер текущего сектора
+                    
+                    // Вычисляем, какие именно 8 ячеек следующего ряда должны родиться под этим сектором
+                    const startE = (sectorNumInRow - 1) * 8 + 1;
+                    activeLogs.unshift(`[${new Date().toLocaleTimeString()}] БАХ! Сектор ${sectorNumInRow} ряда ${currentTargetRow} закрыт ячейкой ${cellId}! Внизу родились ячейки ряда ${nextRow} с ${nextRow}${startE} по ${nextRow}${startE + 7}`);
+                    
+                    // Логика тускнения верхних: определяем родителя над этой четверкой (Ряды B, C и т.д.)
+                    // Для простоты визуализации на фронтенде статус архивных будет вычисляться автоматически
+                }
+                
+                // Проверяем, закрылся ли ВЕСЬ текущий ряд полностью
+                let allFilled = sectors.every(sec => sec.every(c => matrixData[c] !== undefined));
+                if (allFilled) {
+                    activeLogs.unshift(`[${new Date().toLocaleTimeString()}] Ряд ${currentTargetRow} полностью закрыт! Переходим на ряд ${getNextRowLetter(currentTargetRow)}.`);
+                    currentTargetRow = getNextRowLetter(currentTargetRow);
+                    currentRound = 1;
+                    currentSectorIndex = 0;
+                }
+                
+                return cellId;
+            }
+        } else {
+            // Если прошли все сектора в текущем кругу, переходим к следующему кругу мест (например, от 1-х мест ко 2-м)
+            currentRound++;
+            currentSectorIndex = 0;
+            
+            // Защита: если вышли за рамки 4 мест в четверках, сбрасываем (хотя ряд должен закрыться на 4 кругу)
+            if (currentRound > 4) {
+                currentRound = 1;
+            }
+        }
     }
 }
 
-app.get('/api/robot/status', (req, res) => {
-    res.json({ running: isRobotActive });
-});
+// ==========================================
+// ЭНДПОИНТЫ API
+// ==========================================
 
-app.post('/api/robot/start', (req, res) => {
-    if (!isRobotActive) {
-        isRobotActive = true;
-        robotInterval = setInterval(runRobotCycle, 5000);
-        console.log("Робот ЗАПУЩЕН");
-    }
-    res.json({ success: true, message: "Робот активирован" });
-});
-
-app.post('/api/robot/stop', (req, res) => {
-    isRobotActive = false;
-    if (robotInterval) {
-        clearInterval(robotInterval);
-        robotInterval = null;
-    }
-    console.log("Робот ОСТАНОВЛЕН");
-    res.json({ success: true, message: "Робот остановлен" });
-});
-
-app.get('/api/tree', (req, res) => res.json(treeDB));
-
+// 1. Приём новых регистраций с Сайта 1
 app.post('/api/register', (req, res) => {
-    const { username } = req.body;
-    if (!username) return res.status(400).json({ error: 'Имя обязательно' });
-    const cellId = findNextEmptyCell(treeDB);
-    if (!cellId) return res.status(400).json({ error: 'Все текущие уровни заполнены' });
-    treeDB[cellId].user = username;
-    checkAndGenerateChildren(treeDB);
-    res.json({ success: true, cellId, user: username });
-});
-
-app.post('/api/reset', (req, res) => {
-    treeDB = createInitialTree();
-    isRobotActive = false;
-    if (robotInterval) {
-        clearInterval(robotInterval);
-        robotInterval = null;
+    const { login } = req.body;
+    if (!login) {
+        return res.status(400).json({ success: false, error: 'Логин не указан' });
     }
-    res.json({ success: true });
+    
+    // Запускаем робота распределения по матрице
+    const allocatedCell = findNextFreeCellAndPlaceUser(login);
+    
+    const userData = {
+        login,
+        cell: allocatedCell,
+        time: new Date().toLocaleTimeString()
+    };
+    
+    users.push(userData);
+    activeLogs.unshift(`[${userData.time}] Пользователь ${login} прилетел с Сайта 1 ➔ встал в ячейку ${allocatedCell}`);
+    
+    res.json({ success: true, data: userData });
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// 2. Отдача всей матрицы и логов для фронтенда Сайта 2
+app.get('/api/matrix', (req, res) => {
+    res.json({
+        matrix: matrixData,
+        logs: activeLogs.slice(0, 50), // Отдаем последние 50 логов для экономии трафика смартфона
+        totalUsers: users.length + 3,  // +3 изначальных статичных лидера
+        currentConfig: {
+            row: currentTargetRow,
+            round: currentRound,
+            sector: currentSectorIndex
+        }
+    });
+});
+
+// Запуск сервера
+app.listen(PORT, () => {
+    console.log(`Сервер бэкенда матрицы запущен на порту ${PORT}`);
+});
