@@ -6,36 +6,51 @@
     <title>САЙТ 2 - Бинарная Матрица</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-        body { background: #121216; color: #fff; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        body { background: #0b0b0e; color: #fff; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         
         /* Верхняя панель управления */
-        .controls { background: #1a1a24; padding: 10px 15px; border-bottom: 2px solid #2a2a35; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .controls { background: #14141c; padding: 12px 15px; border-bottom: 2px solid #00bcd4; display: flex; flex-direction: column; gap: 10px; z-index: 10; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         .search-row { display: flex; gap: 10px; }
-        .search-input { flex: 1; background: #222; border: 1px solid #444; border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 14px; }
-        .zoom-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #aaa; }
-        .zoom-slider { flex: 1; accent-color: #00bcd4; }
+        .search-input { flex: 1; background: #1f1f2a; border: 2px solid #3f4456; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 16px; font-weight: bold; }
+        .search-input:focus { border-color: #00bcd4; outline: none; }
+        .zoom-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #fff; font-weight: bold; }
+        .zoom-slider { flex: 1; accent-color: #00bcd4; height: 8px; }
 
         /* Пространство холста матрицы */
-        .viewport { flex: 1; position: relative; overflow: hidden; cursor: grab; background: radial-gradient(#222 1px, transparent 1px); background-size: 20px 20px; }
+        .viewport { flex: 1; position: relative; overflow: hidden; cursor: grab; background: radial-gradient(#2c2c3a 1px, transparent 1px); background-size: 30px 30px; }
         .viewport:active { cursor: grabbing; }
-        .canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 200px; display: flex; flex-direction: column; align-items: center; gap: 40px; }
+        .canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 200px; display: flex; flex-direction: column; align-items: center; gap: 50px; }
 
         /* Стилизация рядов и ячеек */
-        .row { display: flex; justify-content: center; gap: 20px; position: relative; }
-        .cell { background: #222530; border: 2px solid #3f4456; border-radius: 8px; padding: 10px; width: 110px; text-align: center; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); transition: all 0.3s; position: relative; }
-        .cell-id { font-weight: bold; color: #00bcd4; margin-bottom: 4px; display: block; font-size: 10px; }
-        .cell-login { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+        .row { display: flex; justify-content: center; gap: 24px; position: relative; }
         
-        /* Статусы ячеек */
-        .cell.archived { opacity: 0.35; background: #15171f; border-color: #222; }
-        .cell.highlight { border-color: #ff9800; box-shadow: 0 0 15px #ff9800; transform: scale(1.1); background: #3a2e1b; }
-        .cell.empty { border-style: dashed; background: transparent; opacity: 0.5; color: #666; }
+        /* БАЗОВАЯ ЯЧЕЙКА (Сделали крупнее, ярче и с жирным белым текстом) */
+        .cell { background: #1e2235; border: 2px solid #00bcd4; border-radius: 10px; padding: 12px; width: 125px; text-align: center; box-shadow: 0 6px 16px rgba(0,0,0,0.6); transition: all 0.2s; position: relative; }
+        .cell-id { font-weight: 900; color: #00ffcc; margin-bottom: 6px; display: block; font-size: 12px; letter-spacing: 1px; }
+        .cell-login { font-weight: bold; color: #ffffff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+        
+        /* СТАТУС: АКТИВНАЯ ЯЧЕЙКА (Яркий сочный синий неон) */
+        .cell.active { background: #0d47a1; border-color: #00ffcc; box-shadow: 0 0 12px rgba(0, 255, 204, 0.3); }
+        
+        /* СТАТУС: АРХИВНАЯ ЯЧЕЙКА (Потухшая, уходит на задний план, но текст разборчив) */
+        .cell.archived { opacity: 0.4; background: #111420; border-color: #444; }
+        .cell.archived .cell-id { color: #888; }
+        .cell.archived .cell-login { color: #aaa; }
+
+        /* СТАТУС: ПОДСВЕЧЕННАЯ ПОИСКОМ (Огненный взрыв) */
+        .cell.highlight { border-color: #ff5722; box-shadow: 0 0 25px #ff5722; transform: scale(1.15); background: #bf360c; z-index: 5; }
+        .cell.highlight .cell-id { color: #fff; }
+
+        /* СТАТУС: ПУСТАЯ ОЖИДАЮЩАЯ ЯЧЕЙКА (Заметный пунктир, чтобы было видно куда встанет веер) */
+        .cell.empty { border: 2px dashed #4e5573; background: rgba(30, 34, 53, 0.2); opacity: 0.8; }
+        .cell.empty .cell-id { color: #4e5573; }
+        .cell.empty .cell-login { color: #4e5573; font-weight: normal; font-size: 12px; }
 
         /* Нижний подвал: Живой Лог */
-        .footer { background: #1a1a24; height: 180px; border-top: 2px solid #2a2a35; display: flex; flex-direction: column; z-index: 10; }
-        .stats-bar { background: #222530; padding: 6px 15px; font-size: 12px; display: flex; justify-content: space-between; color: #aaa; border-bottom: 1px solid #2a2a35; }
-        .log-stream { flex: 1; padding: 10px; overflow-y: auto; font-family: monospace; font-size: 11px; background: #0c0c10; color: #00ff66; }
-        .log-line { margin-bottom: 4px; border-bottom: 1px solid #15151f; padding-bottom: 2px; }
+        .footer { background: #14141c; height: 180px; border-top: 2px solid #00bcd4; display: flex; flex-direction: column; z-index: 10; box-shadow: 0 -4px 20px rgba(0,0,0,0.5); }
+        .stats-bar { background: #1f1f2a; padding: 8px 15px; font-size: 13px; display: flex; justify-content: space-between; color: #fff; font-weight: bold; border-bottom: 1px solid #2a2a35; }
+        .log-stream { flex: 1; padding: 10px; overflow-y: auto; font-family: monospace; font-size: 12px; background: #050508; color: #00ff66; }
+        .log-line { margin-bottom: 4px; border-bottom: 1px solid #111; padding-bottom: 4px; }
     </style>
 </head>
 <body>
@@ -52,8 +67,7 @@
     </div>
 
     <div class="viewport" id="viewport">
-        <div class="canvas" id="canvas">
-            </div>
+        <div class="canvas" id="canvas"></div>
     </div>
 
     <div class="footer">
@@ -76,7 +90,6 @@
     const statTotal = document.getElementById('statTotal');
     const statTarget = document.getElementById('statTarget');
 
-    // Настройки портов и ссылок
     const BACKEND_URL = 'https://site-2-tree.onrender.com/api/matrix';
 
     let zoom = 1;
@@ -85,19 +98,12 @@
     let isDragging = false;
     let startX, startY;
     let searchString = '';
-
-    // Для Pinch-to-zoom на телефоне
-    let evHistory = [];
     let prevDiff = -1;
 
-    // Обновление трансформации холста
     function updateTransform() {
         canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
     }
 
-    // ==========================================
-    // ЛОГИКА ПЕРЕДВИЖЕНИЯ И ЗУМА ПАЛЬЦАМИ
-    // ==========================================
     viewport.addEventListener('pointerdown', (e) => {
         if(e.target.closest('.controls') || e.target.closest('.footer')) return;
         isDragging = true;
@@ -118,14 +124,12 @@
         viewport.releasePointerCapture(e.pointerId);
     });
 
-    // Изменение ползунка масштаба
     zoomSlider.addEventListener('input', (e) => {
         zoom = parseFloat(e.target.value);
         zoomVal.innerText = zoom.toFixed(1) + 'x';
         updateTransform();
     });
 
-    // Обработка тач-масштабирования (pinch-to-zoom)
     viewport.addEventListener('touchstart', (e) => {
         if (e.targetTouches.length === 2) {
             prevDiff = Math.hypot(
@@ -152,23 +156,15 @@
 
     viewport.addEventListener('touchend', () => { prevDiff = -1; });
 
-    // ==========================================
-    // СБОРКА И ОТРИСОВКА ИНТЕРФЕЙСА МАТРИЦЫ
-    // ==========================================
     function renderMatrix(matrix) {
         canvas.innerHTML = '';
-        
-        // Определяем, какие ряды у нас есть в базе данных на данный момент
         const rowsToRender = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-        
-        // Максимальное количество ячеек в рядах по ТЗ
         const rowCounts = { 'A': 1, 'B': 2, 'C': 4, 'D': 8, 'E': 16, 'F': 32, 'G': 64, 'H': 128 };
 
         rowsToRender.forEach(letter => {
             const maxCells = rowCounts[letter];
             let hasAnyDataInRow = false;
             
-            // Проверим, нужно ли нам вообще рендерить этот ряд (есть ли там хоть кто-то)
             for (let i = 1; i <= maxCells; i++) {
                 if (matrix[`${letter}${i}`]) {
                     hasAnyDataInRow = true;
@@ -176,7 +172,6 @@
                 }
             }
             
-            // Если ряд пуст и это не D (базовый рабочий), пока не рендерим его, чтобы не захламлять экран
             if (!hasAnyDataInRow && letter !== 'A' && letter !== 'B' && letter !== 'C' && letter !== 'D') return;
 
             const rowDiv = document.createElement('div');
@@ -191,15 +186,13 @@
                 
                 if (cellData) {
                     cellDiv.className = `cell ${cellData.status || 'active'}`;
-                    // Если включен поиск и логин совпал — подсвечиваем
                     if (searchString && cellData.login.toLowerCase().includes(searchString.toLowerCase())) {
                         cellDiv.classList.add('highlight');
                     }
                     cellDiv.innerHTML = `<span class="cell-id">${cellId}</span><span class="cell-login">${cellData.login}</span>`;
                 } else {
-                    // Пустая ячейка для веера
                     cellDiv.className = 'cell empty';
-                    cellDiv.innerHTML = `<span class="cell-id">${cellId}</span><span class="cell-login">пусто</span>`;
+                    cellDiv.innerHTML = `<span class="cell-id">${cellId}</span><span class="cell-login">ожидание</span>`;
                 }
                 rowDiv.appendChild(cellDiv);
             }
@@ -207,22 +200,17 @@
         });
     }
 
-    // Слушатель поиска
     searchInput.addEventListener('input', (e) => {
         searchString = e.target.value.trim();
-        // Перерисовываем с подсветкой, если ищем
         if(window.lastMatrixData) {
             renderMatrix(window.lastMatrixData);
-            
-            // Если нашли точное совпадение, центрируем экран на этой ячейке
             if(searchString) {
                 for (let key in window.lastMatrixData) {
                     if(window.lastMatrixData[key].login.toLowerCase() === searchString.toLowerCase()) {
                         const targetEl = document.getElementById(`cell-${key}`);
                         if(targetEl) {
-                            // Автоматический фокус-сдвиг к ячейке
                             panX = (viewport.offsetWidth / 2) - targetEl.offsetLeft;
-                            panY = 150; // Примерный сдвиг
+                            panY = 150;
                             updateTransform();
                         }
                     }
@@ -231,22 +219,16 @@
         }
     });
 
-    // ==========================================
-    // ПОЛУЧЕНИЕ ОБНОВЛЕНИЙ (ОПРОС СЕРВЕРА)
-    // ==========================================
     async function fetchUpdate() {
         try {
             const response = await fetch(BACKEND_URL);
             const res = await response.json();
-            
             window.lastMatrixData = res.matrix;
             renderMatrix(res.matrix);
 
-            // Статистика
             statTotal.innerText = `Всего в системе: ${res.totalUsers}`;
-            statTarget.innerText = `Текущий рабочий ряд: ${res.currentConfig.row} (круг ${res.currentConfig.round})`;
+            statTarget.innerText = `Ряд: ${res.currentConfig.row} (круг ${res.currentConfig.round})`;
 
-            // Лента логов
             logStream.innerHTML = '';
             res.logs.forEach(log => {
                 const div = document.createElement('div');
@@ -254,18 +236,15 @@
                 div.innerText = log;
                 logStream.appendChild(div);
             });
-
         } catch (error) {
-            console.error("Ошибка обновления матрицы:", error);
+            console.error("Ошибка обновления:", error);
         }
     }
 
-    // Первичный запуск и цикл опроса раз в 1.5 секунды
     fetchUpdate();
     setInterval(fetchUpdate, 1500);
     
-    // Инициализация позиции холста в центре экрана
-    panX = window.innerWidth / 2 - 300;
+    panX = window.innerWidth / 2 - 60;
     panY = 60;
     updateTransform();
 </script>
