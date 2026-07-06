@@ -2,225 +2,273 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Мониторинг Матриц 7-К</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>САЙТ 2 - Бинарная Матрица</title>
     <style>
-        body {
-            background-color: #1a1a2e;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        h1 { margin: 5px 0; font-size: 20px; text-shadow: 0 0 10px #00fff0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { background: #121216; color: #fff; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         
-        /* Панель управления для мобильного */
-        .control-panel {
-            background: #162447;
-            padding: 10px;
-            border-radius: 8px;
-            width: 100%;
-            max-width: 500px;
-            box-sizing: border-box;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-        }
-        .search-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        .search-box input {
-            flex: 1;
-            padding: 8px;
-            border-radius: 5px;
-            border: 1px solid #0f4c81;
-            background: #1f4068;
-            color: #fff;
-            font-size: 16px;
-        }
-        .search-box button {
-            padding: 8px 15px;
-            background: #e43f5a;
-            border: none;
-            color: white;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-        }
+        /* Верхняя панель управления */
+        .controls { background: #1a1a24; padding: 10px 15px; border-bottom: 2px solid #2a2a35; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .search-row { display: flex; gap: 10px; }
+        .search-input { flex: 1; background: #222; border: 1px solid #444; border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 14px; }
+        .zoom-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #aaa; }
+        .zoom-slider { flex: 1; accent-color: #00bcd4; }
+
+        /* Пространство холста матрицы */
+        .viewport { flex: 1; position: relative; overflow: hidden; cursor: grab; background: radial-gradient(#222 1px, transparent 1px); background-size: 20px 20px; }
+        .viewport:active { cursor: grabbing; }
+        .canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 200px; display: flex; flex-direction: column; align-items: center; gap: 40px; }
+
+        /* Стилизация рядов и ячеек */
+        .row { display: flex; justify-content: center; gap: 20px; position: relative; }
+        .cell { background: #222530; border: 2px solid #3f4456; border-radius: 8px; padding: 10px; width: 110px; text-align: center; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); transition: all 0.3s; position: relative; }
+        .cell-id { font-weight: bold; color: #00bcd4; margin-bottom: 4px; display: block; font-size: 10px; }
+        .cell-login { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
         
-        /* Новые кнопки робота */
-        .robot-controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .robot-controls button {
-            flex: 1;
-            padding: 8px;
-            border: none;
-            border-radius: 5px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        #startBtn { background: #27ae60; }
-        #stopBtn { background: #c0392b; }
+        /* Статусы ячеек */
+        .cell.archived { opacity: 0.35; background: #15171f; border-color: #222; }
+        .cell.highlight { border-color: #ff9800; box-shadow: 0 0 15px #ff9800; transform: scale(1.1); background: #3a2e1b; }
+        .cell.empty { border-style: dashed; background: transparent; opacity: 0.5; color: #666; }
 
-        .slider-zone {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            font-size: 14px;
-            margin-top: 10px;
-        }
-        .slider-zone input { flex: 1; }
-        .btn-reset {
-            background: #438a5e;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        /* Экран матриц */
-        .screen-container {
-            width: 100%;
-            overflow-x: auto;
-            padding: 10px 0;
-            display: flex;
-            justify-content: center;
-        }
-        #mainTreeDisplay {
-            transform-origin: top center;
-            transition: transform 0.2s ease;
-        }
-        .matrices-row {
-            display: flex;
-            gap: 30px;
-            padding: 10px;
-        }
-
-        /* Стили Домика (Семерки) */
-        .semerka-matrix {
-            background: rgba(22, 36, 71, 0.8);
-            border: 2px solid #0f4c81;
-            border-radius: 12px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            align-items: center;
-            min-width: 260px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }
-        .matrix-row {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            width: 100%;
-        }
-        
-        /* Ячейки */
-        .cell {
-            background: #1f4068;
-            border: 1px solid #0f4c81;
-            border-radius: 6px;
-            padding: 6px;
-            text-align: center;
-            min-width: 55px;
-            box-sizing: border-box;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-        .cell:active { transform: scale(0.95); }
-        .cell-id { font-size: 10px; color: #888; font-weight: bold; }
-        .cell-user { font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; }
-        
-        /* Цвета ролей */
-        .level-1 { border: 2px solid #ffd700; background: #3a3000; } /* Золотая вершина */
-        .level-2 { border: 2px solid #00fff0; background: #002b36; } /* Синие плечи */
-        .level-3 { border: 1px dashed #ffffff; background: #2b2b2b; } /* Серый низ выплат */
-        
-        .occupied { background: #16a085 !important; border-color: #1abc9c !important; }
-        .focused-cell { animation: pulse 1s infinite alternate; border-color: #ff3366 !important; box-shadow: 0 0 15px #ff3366 !important; background: #ff3366 !important; }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            100% { transform: scale(1.05); }
-        }
-
-        /* Таблица структур */
-        .table-container {
-            width: 100%;
-            max-width: 500px;
-            margin-top: 20px;
-            background: #162447;
-            border-radius: 8px;
-            padding: 10px;
-            box-sizing: border-box;
-        }
-        .table-container h2 { font-size: 16px; margin: 0 0 10px 0; color: #00fff0; text-align: center; }
-        .ref-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-        .ref-table th, .ref-table td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid #1f4068;
-        }
-        .ref-table th { background: #0f4c81; color: white; }
-        .ref-table tr:hover { background: rgba(255,255,255,0.05); cursor: pointer; }
+        /* Нижний подвал: Живой Лог */
+        .footer { background: #1a1a24; height: 180px; border-top: 2px solid #2a2a35; display: flex; flex-direction: column; z-index: 10; }
+        .stats-bar { background: #222530; padding: 6px 15px; font-size: 12px; display: flex; justify-content: space-between; color: #aaa; border-bottom: 1px solid #2a2a35; }
+        .log-stream { flex: 1; padding: 10px; overflow-y: auto; font-family: monospace; font-size: 11px; background: #0c0c10; color: #00ff66; }
+        .log-line { margin-bottom: 4px; border-bottom: 1px solid #15151f; padding-bottom: 2px; }
     </style>
 </head>
 <body>
 
-    <h1>Панель Управления Админа</h1>
-
-    <div class="control-panel">
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Введите логин пользователя...">
-            <button id="searchBtn">Найти</button>
+    <div class="controls">
+        <div class="search-row">
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Найти логин в матрице...">
         </div>
-
-        <div class="robot-controls">
-            <button id="startBtn">ЗАПУСК</button>
-            <button id="stopBtn">СТОП</button>
+        <div class="zoom-row">
+            <span>Зум:</span>
+            <input type="range" id="zoomSlider" class="zoom-slider" min="0.1" max="2" step="0.05" value="1">
+            <span id="zoomVal">1.0x</span>
         </div>
-        <div id="robotStatus" style="margin-top: 8px; text-align: center; font-size: 12px; color: #888;">Статус: загрузка...</div>
+    </div>
+
+    <div class="viewport" id="viewport">
+        <div class="canvas" id="canvas">
+            </div>
+    </div>
+
+    <div class="footer">
+        <div class="stats-bar">
+            <span id="statTotal">Всего в системе: 3</span>
+            <span id="statTarget">Ожидание данных...</span>
+        </div>
+        <div class="log-stream" id="logStream">
+            <div class="log-line">[Система]: Ожидание подключения к бэкенду матрицы...</div>
+        </div>
+    </div>
+
+<script>
+    const viewport = document.getElementById('viewport');
+    const canvas = document.getElementById('canvas');
+    const zoomSlider = document.getElementById('zoomSlider');
+    const zoomVal = document.getElementById('zoomVal');
+    const searchInput = document.getElementById('searchInput');
+    const logStream = document.getElementById('logStream');
+    const statTotal = document.getElementById('statTotal');
+    const statTarget = document.getElementById('statTarget');
+
+    // Настройки портов и ссылок
+    const BACKEND_URL = 'https://site-2-tree.onrender.com/api/matrix';
+
+    let zoom = 1;
+    let panX = 50;
+    let panY = 50;
+    let isDragging = false;
+    let startX, startY;
+    let searchString = '';
+
+    // Для Pinch-to-zoom на телефоне
+    let evHistory = [];
+    let prevDiff = -1;
+
+    // Обновление трансформации холста
+    function updateTransform() {
+        canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    }
+
+    // ==========================================
+    // ЛОГИКА ПЕРЕДВИЖЕНИЯ И ЗУМА ПАЛЬЦАМИ
+    // ==========================================
+    viewport.addEventListener('pointerdown', (e) => {
+        if(e.target.closest('.controls') || e.target.closest('.footer')) return;
+        isDragging = true;
+        startX = e.clientX - panX;
+        startY = e.clientY - panY;
+        viewport.setPointerCapture(e.pointerId);
+    });
+
+    viewport.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        updateTransform();
+    });
+
+    viewport.addEventListener('pointerup', (e) => {
+        isDragging = false;
+        viewport.releasePointerCapture(e.pointerId);
+    });
+
+    // Изменение ползунка масштаба
+    zoomSlider.addEventListener('input', (e) => {
+        zoom = parseFloat(e.target.value);
+        zoomVal.innerText = zoom.toFixed(1) + 'x';
+        updateTransform();
+    });
+
+    // Обработка тач-масштабирования (pinch-to-zoom)
+    viewport.addEventListener('touchstart', (e) => {
+        if (e.targetTouches.length === 2) {
+            prevDiff = Math.hypot(
+                e.targetTouches[0].clientX - e.targetTouches[1].clientX,
+                e.targetTouches[0].clientY - e.targetTouches[1].clientY
+            );
+        }
+    });
+
+    viewport.addEventListener('touchmove', (e) => {
+        if (e.targetTouches.length === 2 && prevDiff > 0) {
+            let curDiff = Math.hypot(
+                e.targetTouches[0].clientX - e.targetTouches[1].clientX,
+                e.targetTouches[0].clientY - e.targetTouches[1].clientY
+            );
+            let factor = curDiff / prevDiff;
+            zoom = Math.min(Math.max(zoom * factor, 0.1), 2);
+            zoomSlider.value = zoom;
+            zoomVal.innerText = zoom.toFixed(1) + 'x';
+            updateTransform();
+            prevDiff = curDiff;
+        }
+    });
+
+    viewport.addEventListener('touchend', () => { prevDiff = -1; });
+
+    // ==========================================
+    // СБОРКА И ОТРИСОВКА ИНТЕРФЕЙСА МАТРИЦЫ
+    // ==========================================
+    function renderMatrix(matrix) {
+        canvas.innerHTML = '';
         
-        <div class="slider-zone">
-            <span>Масштаб:</span>
-            <input type="range" id="zoomSlider" min="0.3" max="1" step="0.05" value="0.8">
-            <button class="btn-reset" id="resetBtn">Сброс БД</button>
-        </div>
-    </div>
+        // Определяем, какие ряды у нас есть в базе данных на данный момент
+        const rowsToRender = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        
+        // Максимальное количество ячеек в рядах по ТЗ
+        const rowCounts = { 'A': 1, 'B': 2, 'C': 4, 'D': 8, 'E': 16, 'F': 32, 'G': 64, 'H': 128 };
 
-    <div class="screen-container">
-        <div id="mainTreeDisplay"></div>
-    </div>
+        rowsToRender.forEach(letter => {
+            const maxCells = rowCounts[letter];
+            let hasAnyDataInRow = false;
+            
+            // Проверим, нужно ли нам вообще рендерить этот ряд (есть ли там хоть кто-то)
+            for (let i = 1; i <= maxCells; i++) {
+                if (matrix[`${letter}${i}`]) {
+                    hasAnyDataInRow = true;
+                    break;
+                }
+            }
+            
+            // Если ряд пуст и это не D (базовый рабочий), пока не рендерим его, чтобы не захламлять экран
+            if (!hasAnyDataInRow && letter !== 'A' && letter !== 'B' && letter !== 'C' && letter !== 'D') return;
 
-    <div class="table-container">
-        <h2>Реестр участников В СТОЛБИК («Кто-за-кем»)</h2>
-        <table class="ref-table">
-            <thead>
-                <tr>
-                    <th>Логин партнера</th>
-                    <th>ID Ячейки</th>
-                </tr>
-            </thead>
-            <tbody id="refTableBody">
-                </tbody>
-        </table>
-    </div>
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'row';
 
-    <script src="script.js"></script>
+            for (let i = 1; i <= maxCells; i++) {
+                const cellId = `${letter}${i}`;
+                const cellData = matrix[cellId];
+                
+                const cellDiv = document.createElement('div');
+                cellDiv.id = `cell-${cellId}`;
+                
+                if (cellData) {
+                    cellDiv.className = `cell ${cellData.status || 'active'}`;
+                    // Если включен поиск и логин совпал — подсвечиваем
+                    if (searchString && cellData.login.toLowerCase().includes(searchString.toLowerCase())) {
+                        cellDiv.classList.add('highlight');
+                    }
+                    cellDiv.innerHTML = `<span class="cell-id">${cellId}</span><span class="cell-login">${cellData.login}</span>`;
+                } else {
+                    // Пустая ячейка для веера
+                    cellDiv.className = 'cell empty';
+                    cellDiv.innerHTML = `<span class="cell-id">${cellId}</span><span class="cell-login">пусто</span>`;
+                }
+                rowDiv.appendChild(cellDiv);
+            }
+            canvas.appendChild(rowDiv);
+        });
+    }
+
+    // Слушатель поиска
+    searchInput.addEventListener('input', (e) => {
+        searchString = e.target.value.trim();
+        // Перерисовываем с подсветкой, если ищем
+        if(window.lastMatrixData) {
+            renderMatrix(window.lastMatrixData);
+            
+            // Если нашли точное совпадение, центрируем экран на этой ячейке
+            if(searchString) {
+                for (let key in window.lastMatrixData) {
+                    if(window.lastMatrixData[key].login.toLowerCase() === searchString.toLowerCase()) {
+                        const targetEl = document.getElementById(`cell-${key}`);
+                        if(targetEl) {
+                            // Автоматический фокус-сдвиг к ячейке
+                            panX = (viewport.offsetWidth / 2) - targetEl.offsetLeft;
+                            panY = 150; // Примерный сдвиг
+                            updateTransform();
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // ==========================================
+    // ПОЛУЧЕНИЕ ОБНОВЛЕНИЙ (ОПРОС СЕРВЕРА)
+    // ==========================================
+    async function fetchUpdate() {
+        try {
+            const response = await fetch(BACKEND_URL);
+            const res = await response.json();
+            
+            window.lastMatrixData = res.matrix;
+            renderMatrix(res.matrix);
+
+            // Статистика
+            statTotal.innerText = `Всего в системе: ${res.totalUsers}`;
+            statTarget.innerText = `Текущий рабочий ряд: ${res.currentConfig.row} (круг ${res.currentConfig.round})`;
+
+            // Лента логов
+            logStream.innerHTML = '';
+            res.logs.forEach(log => {
+                const div = document.createElement('div');
+                div.className = 'log-line';
+                div.innerText = log;
+                logStream.appendChild(div);
+            });
+
+        } catch (error) {
+            console.error("Ошибка обновления матрицы:", error);
+        }
+    }
+
+    // Первичный запуск и цикл опроса раз в 1.5 секунды
+    fetchUpdate();
+    setInterval(fetchUpdate, 1500);
+    
+    // Инициализация позиции холста в центре экрана
+    panX = window.innerWidth / 2 - 300;
+    panY = 60;
+    updateTransform();
+</script>
+
 </body>
 </html>
