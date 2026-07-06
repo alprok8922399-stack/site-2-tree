@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>САЙТ 2 - Бинарная Матрица</title>
+    <title>САЙТ 2 - Бинарная Матрица 7 ячеек</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
         
@@ -18,7 +18,7 @@
         .zoom-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #fff; font-weight: bold; }
         .zoom-slider { flex: 1; accent-color: #00f0ff; height: 8px; }
 
-        /* Пространство холста матрицы (Сделали чисто однотонным, без точек) */
+        /* Пространство холста матрицы (Чисто однотонное) */
         .viewport { flex: 1; position: relative; overflow: hidden; cursor: grab; background: #111422; touch-action: none; }
         .viewport:active { cursor: grabbing; }
         .canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 200px; display: flex; flex-direction: column; align-items: center; gap: 50px; will-change: transform; }
@@ -172,24 +172,14 @@
 
     viewport.addEventListener('touchend', () => { prevDiff = -1; });
 
+    // Жестко зафиксированная структура: Ряды A (1 ячейка), B (2 ячейки), C (4 ячейки) = ровно 7 ячеек всегда!
     function renderMatrix(matrix) {
         canvas.innerHTML = '';
-        const rowsToRender = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-        const rowCounts = { 'A': 1, 'B': 2, 'C': 4, 'D': 8, 'E': 16, 'F': 32, 'G': 64, 'H': 128 };
+        const rowsToRender = ['A', 'B', 'C'];
+        const rowCounts = { 'A': 1, 'B': 2, 'C': 4 };
 
         rowsToRender.forEach(letter => {
             const maxCells = rowCounts[letter];
-            let hasAnyDataInRow = false;
-            
-            for (let i = 1; i <= maxCells; i++) {
-                if (matrix[`${letter}${i}`]) {
-                    hasAnyDataInRow = true;
-                    break;
-                }
-            }
-            
-            if (!hasAnyDataInRow && letter !== 'A' && letter !== 'B' && letter !== 'C' && letter !== 'D') return;
-
             const rowDiv = document.createElement('div');
             rowDiv.className = 'row';
 
@@ -207,6 +197,7 @@
                     }
                     cellDiv.innerHTML = `<span class="cell-id">${cellId}</span><span class="cell-login">${cellData.login}</span>`;
                 } else {
+                    // Если данных на бэкенде еще нет, отрисовываем красивое пустое "ожидание"
                     cellDiv.className = 'cell empty';
                     cellDiv.innerHTML = `<span class="cell-id">${cellId}</span><span class="cell-login">ожидание</span>`;
                 }
