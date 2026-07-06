@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>САЙТ 2 - Бинарная Матрица 7 ячеек</title>
+    <title>САЙТ 2 - Динамическая Бинарная Матрица</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
         
@@ -12,13 +12,19 @@
         
         /* Верхняя панель управления */
         .controls { background: #171b2f; padding: 12px 15px; border-bottom: 2px solid #00f0ff; display: flex; flex-direction: column; gap: 10px; z-index: 10; box-shadow: 0 4px 25px rgba(0,0,0,0.6); }
-        .search-row { display: flex; gap: 10px; }
+        .search-row { display: flex; gap: 10px; align-items: center; }
         .search-input { flex: 1; background: #202642; border: 2px solid #343b5e; border-radius: 8px; padding: 10px 14px; color: #fff; font-size: 16px; font-weight: bold; }
         .search-input:focus { border-color: #00f0ff; outline: none; box-shadow: 0 0 10px rgba(0,240,255,0.3); }
+        
+        /* Кнопки навигации по уровням дерева */
+        .nav-btn { background: #202642; border: 2px solid #00bcd4; color: #00ffcc; border-radius: 8px; padding: 10px 14px; font-weight: bold; cursor: pointer; font-size: 14px; transition: background 0.2s, color 0.2s; white-space: nowrap; }
+        .nav-btn:hover { background: #00bcd4; color: #111422; }
+        .nav-btn:disabled { border-color: #343b5e; color: #5c668d; cursor: not-allowed; background: #171b2f; }
+
         .zoom-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #fff; font-weight: bold; }
         .zoom-slider { flex: 1; accent-color: #00f0ff; height: 8px; }
 
-        /* Пространство холста матрицы (Чисто однотонное) */
+        /* Пространство холста матрицы */
         .viewport { flex: 1; position: relative; overflow: hidden; cursor: grab; background: #111422; touch-action: none; }
         .viewport:active { cursor: grabbing; }
         .canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 200px; display: flex; flex-direction: column; align-items: center; gap: 50px; will-change: transform; }
@@ -26,30 +32,31 @@
         /* Стилизация рядов и ячеек */
         .row { display: flex; justify-content: center; gap: 24px; position: relative; }
         
-        /* БАЗОВАЯ ЯЧЕЙКА */
-        .cell { background: #1c203b; border: 2px solid #00bcd4; border-radius: 10px; padding: 12px; width: 125px; text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,0.5); transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s; position: relative; }
-        .cell-id { font-weight: 900; color: #00ffcc; margin-bottom: 6px; display: block; font-size: 12px; letter-spacing: 1px; }
-        .cell-login { font-weight: bold; color: #ffffff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+        /* БАЗОВАЯ ЗАНЯТАЯ ЯЧЕЙКА (Кликабельная для проваливания вглубь) */
+        .cell { background: #1c203b; border: 2px solid #00bcd4; border-radius: 10px; padding: 12px; width: 125px; text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,0.5); transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s; position: relative; cursor: pointer; }
+        .cell:hover:not(.empty):not(.archived) { border-color: #00ffcc; transform: scale(1.05); box-shadow: 0 0 15px rgba(0, 255, 204, 0.4); }
+        .cell-id { font-weight: 900; color: #00ffcc; margin-bottom: 6px; display: block; font-size: 12px; letter-spacing: 1px; pointer-events: none; }
+        .cell-login { font-weight: bold; color: #ffffff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; pointer-events: none; }
         
         /* СТАТУС: АКТИВНАЯ ЯЧЕЙКА */
-        .cell.active { background: #0e43a1; border-color: #00ffcc; box-shadow: 0 0 15px rgba(0, 255, 204, 0.4); }
+        .cell.active { background: #0e43a1; border-color: #00ffcc; }
         
-        /* СТАТУС: АРХИВНАЯ ЯЧЕЙКА */
-        .cell.archived { opacity: 0.35; background: #141729; border-color: #2e3554; }
-        .cell.archived .cell-id { color: #5c668d; }
-        .cell.archived .cell-login { color: #7e8cb3; }
+        /* СТАТУС: АРХИВНАЯ ЯЧЕЙКА (Потухшая после выплаты, остаётся на вершине) */
+        .cell.archived { opacity: 0.35 !important; background: #141729 !important; border-color: #2e3554 !important; box-shadow: none !important; cursor: default !important; transform: none !important; }
+        .cell.archived .cell-id { color: #5c668d !important; }
+        .cell.archived .cell-login { color: #7e8cb3 !important; }
 
-        /* УНИКАЛЬНАЯ ЗОЛОТАЯ ЯЧЕЙКА А1 (FOUNDER) */
-        #cell-A1 { background: #ffb300 !important; border-color: #ffffff !important; box-shadow: 0 0 25px #ffb300 !important; opacity: 1 !important; }
-        #cell-A1 .cell-id { color: #ffffff !important; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
-        #cell-A1 .cell-login { color: #000000 !important; font-weight: 900; }
+        /* УНИКАЛЬНАЯ ЗОЛОТАЯ ЯЧЕЙКА А1 (FOUNDER) - Горит золотом только пока активна */
+        #cell-A1:not(.archived) { background: #ffb300 !important; border-color: #ffffff !important; box-shadow: 0 0 25px #ffb300 !important; opacity: 1 !important; cursor: default !important; transform: none !important; }
+        #cell-A1:not(.archived) .cell-id { color: #ffffff !important; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+        #cell-A1:not(.archived) .cell-login { color: #000000 !important; font-weight: 900; }
 
         /* СТАТУС: ПОДСВЕЧЕННАЯ ПОИСКОМ */
-        .cell.highlight { border-color: #ff5722; box-shadow: 0 0 25px #ff5722; transform: scale(1.15); background: #bf360c; z-index: 5; }
-        .cell.highlight .cell-id { color: #fff; }
+        .cell.highlight { border-color: #ff5722 !important; box-shadow: 0 0 25px #ff5722 !important; transform: scale(1.1) !important; background: #bf360c !important; }
+        .cell.highlight .cell-id { color: #fff !important; }
 
         /* СТАТУС: ПУСТАЯ ОЖИДАЮЩАЯ ЯЧЕЙКА */
-        .cell.empty { border: 2px dashed #343b5e; background: rgba(28, 32, 59, 0.3); opacity: 0.6; }
+        .cell.empty { border: 2px dashed #343b5e; background: rgba(28, 32, 59, 0.3); opacity: 0.6; cursor: default; }
         .cell.empty .cell-id { color: #4e567d; }
         .cell.empty .cell-login { color: #4e567d; font-weight: normal; font-size: 12px; }
 
@@ -64,7 +71,9 @@
 
     <div class="controls">
         <div class="search-row">
-            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Найти логин в матрице...">
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Найти логин и сфокусировать...">
+            <button id="btnUp" class="nav-btn" disabled>⬆ Наверх</button>
+            <button id="btnHome" class="nav-btn" disabled>🏠 На самый верх</button>
         </div>
         <div class="zoom-row">
             <span>Зум:</span>
@@ -79,8 +88,8 @@
 
     <div class="footer">
         <div class="stats-bar">
-            <span id="statTotal">Всего в системе: 3</span>
-            <span id="statTarget">Ожидание данных...</span>
+            <span id="statTotal">Всего в системе: 0</span>
+            <span id="statTarget">Фокус: Главный стол</span>
         </div>
         <div class="log-stream" id="logStream">
             <div class="log-line">[Система]: Ожидание подключения к бэкенду матрицы...</div>
@@ -96,8 +105,15 @@
     const logStream = document.getElementById('logStream');
     const statTotal = document.getElementById('statTotal');
     const statTarget = document.getElementById('statTarget');
+    const btnUp = document.getElementById('btnUp');
+    const btnHome = document.getElementById('btnHome');
 
     const BACKEND_URL = 'https://site-2-tree.onrender.com/api/matrix';
+
+    // Состояние навигации («Линзы»)
+    let currentRootLogin = ''; // Пустая строка означает абсолютную вершину (Founder)
+    let parentRootLogin = null;
+    let mainRootLogin = '';
 
     let zoom = 1;
     let panX = 50;
@@ -120,6 +136,7 @@
         }
     }
 
+    // Перетаскивание (Pan) холста
     viewport.addEventListener('pointerdown', (e) => {
         if(e.target.closest('.controls') || e.target.closest('.footer')) return;
         isDragging = true;
@@ -140,12 +157,14 @@
         viewport.releasePointerCapture(e.pointerId);
     });
 
+    // Изменение масштаба ползунком
     zoomSlider.addEventListener('input', (e) => {
         zoom = parseFloat(e.target.value);
         zoomVal.innerText = zoom.toFixed(1) + 'x';
         requestTick();
     });
 
+    // Pinch-to-zoom для мобилок
     viewport.addEventListener('touchstart', (e) => {
         if (e.targetTouches.length === 2) {
             prevDiff = Math.hypot(
@@ -172,7 +191,18 @@
 
     viewport.addEventListener('touchend', () => { prevDiff = -1; });
 
-    // Жестко зафиксированная структура: Ряды A (1 ячейка), B (2 ячейки), C (4 ячейки) = ровно 7 ячеек всегда!
+    // Функция переключения фокуса матрицы на выбранного пользователя
+    function changeFocus(login) {
+        if (!login) return;
+        currentRootLogin = login;
+        fetchUpdate();
+        // Плавно центрируем холст при переходе
+        panX = window.innerWidth / 2 - 60;
+        panY = 60;
+        requestTick();
+    }
+
+    // Сборка и отрисовка локальной 7-местной структуры
     function renderMatrix(matrix) {
         canvas.innerHTML = '';
         const rowsToRender = ['A', 'B', 'C'];
@@ -192,12 +222,19 @@
                 
                 if (cellData) {
                     cellDiv.className = `cell ${cellData.status || 'active'}`;
+                    
+                    // Если логин частично совпадает с поисковым запросом — подсвечиваем оранжевым
                     if (searchString && cellData.login.toLowerCase().includes(searchString.toLowerCase())) {
                         cellDiv.classList.add('highlight');
                     }
+                    
                     cellDiv.innerHTML = `<span class="cell-id">${cellId}</span><span class="cell-login">${cellData.login}</span>`;
+                    
+                    // Навешиваем клик для перехода вглубь структуры (кроме заархивированной вершины)
+                    if (cellId !== 'A1' || cellData.status !== 'archived') {
+                        cellDiv.addEventListener('click', () => changeFocus(cellData.login));
+                    }
                 } else {
-                    // Если данных на бэкенде еще нет, отрисовываем красивое пустое "ожидание"
                     cellDiv.className = 'cell empty';
                     cellDiv.innerHTML = `<span class="cell-id">${cellId}</span><span class="cell-login">ожидание</span>`;
                 }
@@ -207,35 +244,55 @@
         });
     }
 
+    // Поиск пользователя в глобальной базе данных
     searchInput.addEventListener('input', (e) => {
         searchString = e.target.value.trim();
         if(window.lastMatrixData) {
             renderMatrix(window.lastMatrixData);
-            if(searchString) {
-                for (let key in window.lastMatrixData) {
-                    if(window.lastMatrixData[key].login.toLowerCase() === searchString.toLowerCase()) {
-                        const targetEl = document.getElementById(`cell-${key}`);
-                        if(targetEl) {
-                            panX = (viewport.offsetWidth / 2) - targetEl.offsetLeft;
-                            panY = 150;
-                            requestTick();
-                        }
-                    }
+            
+            // Если введено точное имя пользователя, мгновенно перестраиваем матрицу вокруг него
+            for (let key in window.lastMatrixData) {
+                if(window.lastMatrixData[key].login.toLowerCase() === searchString.toLowerCase()) {
+                    changeFocus(window.lastMatrixData[key].login);
+                    searchString = '';
+                    searchInput.value = '';
+                    break;
                 }
             }
         }
     });
 
+    // Обработчики кнопок навигации вверх
+    btnUp.addEventListener('click', () => {
+        if (parentRootLogin) changeFocus(parentRootLogin);
+    });
+
+    btnHome.addEventListener('click', () => {
+        if (mainRootLogin) changeFocus(mainRootLogin);
+    });
+
+    // Основной цикл запроса данных с бэкенда
     async function fetchUpdate() {
         try {
-            const response = await fetch(BACKEND_URL);
+            // Отправляем текущий корень (фокус) на бэкенд в параметрах запроса
+            const url = currentRootLogin ? `${BACKEND_URL}?root=${encodeURIComponent(currentRootLogin)}` : BACKEND_URL;
+            const response = await fetch(url);
             const res = await response.json();
+            
             window.lastMatrixData = res.matrix;
+            parentRootLogin = res.parentRoot;
+            mainRootLogin = res.mainRoot;
+
             renderMatrix(res.matrix);
 
+            // Обновляем статистику и состояние кнопок управления
             statTotal.innerText = `Всего в системе: ${res.totalUsers}`;
-            statTarget.innerText = `Ряд: ${res.currentConfig.row} (круг ${res.currentConfig.round})`;
+            statTarget.innerText = `Фокус: ${res.currentRootDisplay || 'Главный стол'}`;
 
+            btnUp.disabled = !parentRootLogin;
+            btnHome.disabled = !currentRootLogin || currentRootLogin === mainRootLogin;
+
+            // Обновляем живой лог событий
             logStream.innerHTML = '';
             res.logs.forEach(log => {
                 const div = document.createElement('div');
@@ -244,13 +301,15 @@
                 logStream.appendChild(div);
             });
         } catch (error) {
-            console.error("Ошибка обновления:", error);
+            console.error("Ошибка обновления матрицы:", error);
         }
     }
 
+    // Первичный запуск и интервал обновления (1.5 секунды)
     fetchUpdate();
     setInterval(fetchUpdate, 1500);
     
+    // Начальное центрирование дерева на экране
     panX = window.innerWidth / 2 - 60;
     panY = 60;
     requestTick();
