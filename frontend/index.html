@@ -91,10 +91,15 @@
             transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
             padding-bottom: 50px;
         }
+        /* Ищи этот класс в секции <style> и замени его на этот вариант: */
         .matrices-row {
             display: flex;
+            flex-wrap: wrap;       /* МАГИЯ ТУТ: Разрешает матрицам падать на нижнюю строчку! */
             gap: 30px;
             padding: 10px;
+            justify-content: center; /* Центрирует домики на экране */
+            width: 100%;           /* Ряд занимает всю ширину, не улетая бесконечно вправо */
+            box-sizing: border-box;
         }
 
         /* Стили Матрицы (Семерки) */
