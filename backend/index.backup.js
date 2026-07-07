@@ -3,9 +3,13 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+// Полный доступ для Сайта №1 (и любых локальных портов)
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static('../frontend'));
+
+// База данных пользователей магазина (Сайт 1)
+let shopUsersDB = {};
 
 function createInitialTree() {
     return {
@@ -45,7 +49,7 @@ function findNextEmptyCell(tree) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // 4. Ряд F (8 четверок). Опечатка с F22 полностью ИСПРАВЛЕНА
+    // 4. Ряд F (8 четверок)
     const orderF = [
         'F1', 'F5', 'F9', 'F13', 'F17', 'F21', 'F25', 'F29',  // 1-й круг
         'F2', 'F6', 'F10', 'F14', 'F18', 'F22', 'F26', 'F30', // 2-й круг
@@ -106,19 +110,67 @@ function checkAndGenerateChildren(tree) {
     }
 }
 
+// === API МАТРИЦЫ ===
 app.get('/api/tree', (req, res) => res.json(treeDB));
+
 app.post('/api/register', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
+    
+    // Проверка дубликатов в дереве
+    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase());
+    if (isExist) return res.status(400).json({ error: 'Этот пользователь уже занял место в матрице' });
+
     const cellId = findNextEmptyCell(treeDB);
     if (!cellId) return res.status(400).json({ error: 'Все текущие уровни заполнены' });
+    
     treeDB[cellId].user = username;
     checkAndGenerateChildren(treeDB);
     res.json({ success: true, cellId, user: username });
 });
+
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
+    shopUsersDB = {}; // Очищаем и покупателей маркетплейса при сбросе
     res.json({ success: true });
+});
+
+// === API МАРКЕТПЛЕЙСА (ДЛЯ САЙТА №1) ===
+app.post('/api/shop/register', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+    if (shopUsersDB[username]) return res.status(400).json({ error: 'Такой покупатель уже зарегистрирован' });
+    
+    shopUsersDB[username] = { username, isPaid: false, balance: 0 };
+    res.json({ success: true, shopUserStatus: shopUsersDB[username] });
+});
+
+app.post('/api/shop/pay', (req, res) => {
+    const { username, amount } = req.body;
+    if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Покупатель не найден' });
+    if (shopUsersDB[username].isPaid) return res.status(400).json({ error: 'Заказ уже оплачен' });
+
+    // Пробуем поставить человека в матрицу
+    const cellId = findNextEmptyCell(treeDB);
+    if (!cellId) return res.status(400).json({ error: 'Извините, в матрице нет свободных мест для распределения кэшбэка!' });
+
+    // Фиксируем оплату и начисляем кэшбэк
+    shopUsersDB[username].isPaid = true;
+    shopUsersDB[username].balance += 3000; // 30% кэшбэк на баланс
+
+    treeDB[cellId].user = username;
+    checkAndGenerateChildren(treeDB);
+
+    res.json({
+        success: true,
+        shopUserStatus: shopUsersDB[username],
+        cellId,
+        split: {
+            total: amount,
+            marketplace: 7000,
+            myWallet: 3000
+        }
+    });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
