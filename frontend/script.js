@@ -9,8 +9,12 @@ const refTableBody = document.getElementById('refTableBody');
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
 
+// Исправленное масштабирование: добавляем центрирование и компенсацию размеров рамки
 zoomSlider.addEventListener('input', (e) => {
-    mainTreeDisplay.style.transform = `scale(${e.target.value})`;
+    const scaleValue = e.target.value;
+    mainTreeDisplay.style.transform = `scale(${scaleValue})`;
+    // Корректируем ширину контейнера, чтобы убрать пустые невидимые поля и разблокировать прокрутку вправо
+    mainTreeDisplay.style.width = `${100 / scaleValue}%`;
 });
 
 searchBtn.addEventListener('click', () => {
@@ -197,6 +201,11 @@ function renderDynamicSplitting(tree) {
             ${activeMatricesHTML.join('')}
         </div>
     `;
+    
+    // Принудительно применяем текущий масштаб из ползунка после перерисовки дерева
+    const currentScale = zoomSlider.value;
+    mainTreeDisplay.style.transform = `scale(${currentScale})`;
+    mainTreeDisplay.style.width = `${100 / currentScale}%`;
 }
 
 function renderTableList(tree) {
