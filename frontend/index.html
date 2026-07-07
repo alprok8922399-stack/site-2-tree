@@ -15,7 +15,7 @@
             flex-direction: column;
             align-items: center;
             user-select: none; 
-            -webkit-select: none;
+            -webkit-user-select: none;
         }
         h1 { margin: 5px 0; font-size: 20px; text-shadow: 0 0 10px #00fff0; }
         
@@ -71,32 +71,36 @@
             cursor: pointer;
         }
 
-        /* Контейнер экрана: разрешаем крутить и вбок, и вниз */
+        /* Главный контейнер: теперь он работает как окно, в котором можно мотать в любые стороны */
         .screen-container {
             width: 100%;
-            overflow-x: auto;
-            overflow-y: auto;
-            padding: 20px;
+            max-width: 100vw;
+            overflow-x: auto; /* Включаем прокрутку вбок */
+            overflow-y: auto; /* Включаем прокрутку вниз */
+            display: block;   /* Убираем flex, чтобы не сжимал внутренности */
             background: #111122;
             border-radius: 8px;
             min-height: 450px;
             box-sizing: border-box;
             cursor: zoom-in;
+            padding: 20px;
         }
+        
         #mainTreeDisplay {
             transform-origin: top left;
             transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
-            padding-bottom: 50px;
-            width: max-content;
+            display: block;
+            width: max-content; /* Позволяет раздуваться в ширину под размер ряда */
         }
         
-        /* Фиксируем ширину ряда под 50 домиков (каждый домик ~260px + 30px отступы) */
+        /* Ряд строго на 50 домиков в ширину */
         .matrices-row {
-            display: flex;
-            flex-wrap: wrap;       
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: wrap !important;       
             gap: 30px;
             padding: 10px;
-            width: 14500px; /* Жесткая ширина, вмещающая ровно 50 домиков в ряд */
+            width: 14500px !important; /* Намертво держим длину строки под 50 матриц */
             box-sizing: border-box;
         }
 
