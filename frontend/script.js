@@ -14,7 +14,7 @@ let searchTargetUser = '';
 function setZoom(scaleValue) {
     zoomSlider.value = scaleValue;
     mainTreeDisplay.style.transform = `scale(${scaleValue})`;
-    mainTreeDisplay.style.width = `${100 / scaleValue}%`;
+    mainTreeDisplay.style.width = '100%';
 }
 
 // Ручное изменение ползунка
@@ -25,7 +25,6 @@ zoomSlider.addEventListener('input', (e) => {
 // Клик по пустому пространству контейнера резко возвращает матрицу на экран
 if (screenContainer) {
     screenContainer.addEventListener('click', (e) => {
-        // Если кликнули именно по фону, а не по буквам или ячейкам
         if (e.target === screenContainer || e.target === mainTreeDisplay || e.target.classList.contains('matrices-row')) {
             setZoom(0.8);
         }
@@ -40,7 +39,7 @@ searchBtn.addEventListener('click', () => {
     } else {
         currentRootId = 'A1';
         searchTargetUser = '';
-        setZoom(0.8); // Возвращаем масштаб при пустом поиске
+        setZoom(0.8); 
         fetchTree();
     }
 });
@@ -100,7 +99,7 @@ function findUserAndFocus(username) {
 
                 currentRootId = rootId;
                 searchTargetUser = username; 
-                setZoom(0.8); // Резко приближаем найденную структуру на весь экран
+                setZoom(0.8); 
                 renderDynamicSplitting(tree);
                 renderTableList(tree);
             } else {
@@ -127,7 +126,7 @@ function getCellHTML(cell, roleClass, fallbackId = '-') {
 
 window.switchFocus = function(cellId) {
     currentRootId = cellId;
-    setZoom(0.8); // РЕЗКИЙ ЗУМ: При любом клике на ячейку разворачиваем матрицу во весь рост!
+    setZoom(0.8); 
     fetchTree();
 };
 
@@ -155,6 +154,7 @@ function parseCell(id) {
     return { letter: match[1], num: parseInt(match[2], 10) };
 }
 
+// Алгоритм буквенных уровней бинарного дерева (А -> B -> C ...)
 function getNextLevelLetter(letter) {
     let i = letter.length - 1;
     while (i >= 0) {
@@ -220,10 +220,9 @@ function renderDynamicSplitting(tree) {
         </div>
     `;
     
-    // Сохраняем текущий выбранный зум ползунка при автоматическом обновлении каждые 2 секунды
     const currentScale = zoomSlider.value;
     mainTreeDisplay.style.transform = `scale(${currentScale})`;
-    mainTreeDisplay.style.width = `${100 / currentScale}%`;
+    mainTreeDisplay.style.width = '100%';
 }
 
 function renderTableList(tree) {
