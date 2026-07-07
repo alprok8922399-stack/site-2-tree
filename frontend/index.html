@@ -3,248 +3,197 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Линза Бинарной Матрицы - Сайт 2</title>
+    <title>Мониторинг Матриц 7-К</title>
     <style>
-        :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --accent-active: #38bdf8;
-            --accent-archived: #64748b;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-        }
-
         body {
-            font-family: 'Segoe UI', Roboto, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
+            background-color: #1a1a2e;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
-
-        h1 { margin-bottom: 5px; color: var(--accent-active); }
-        .stats { color: var(--text-muted); margin-bottom: 20px; font-size: 1.1rem; }
-
-        /* Панель управления навигацией */
-        .controls {
-            margin-bottom: 25px;
+        h1 { margin: 5px 0; font-size: 20px; text-shadow: 0 0 10px #00fff0; }
+        
+        /* Панель управления для мобильного */
+        .control-panel {
+            background: #162447;
+            padding: 10px;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 500px;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .search-box {
             display: flex;
             gap: 10px;
+            margin-bottom: 10px;
         }
-        button {
-            background-color: var(--card-bg);
-            color: var(--text-main);
-            border: 1px solid #334155;
-            padding: 10px 15px;
-            border-radius: 6px;
+        .search-box input {
+            flex: 1;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #0f4c81;
+            background: #1f4068;
+            color: #fff;
+            font-size: 16px;
+        }
+        .search-box button {
+            padding: 8px 15px;
+            background: #e43f5a;
+            border: none;
+            color: white;
+            border-radius: 5px;
             cursor: pointer;
-            transition: 0.2s;
+            font-weight: bold;
         }
-        button:hover { background-color: #334155; border-color: var(--accent-active); }
-
-        /* ИЕРАРХИЧЕСКАЯ СЕТКА МАТРИЦЫ (ЛИНЗА 7 ЯЧЕЕК) */
-        .matrix-container {
+        .slider-zone {
             display: flex;
-            flex-direction: column;
-            gap: 40px;
             align-items: center;
-            max-width: 900px;
-            width: 100%;
-            background: rgba(30, 41, 59, 0.5);
-            padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
-            border: 1px solid #334155;
-            position: relative;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 14px;
+        }
+        .slider-zone input { flex: 1; }
+        .btn-reset {
+            background: #438a5e;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
         }
 
-        .row {
+        /* Экран матриц */
+        .screen-container {
+            width: 100%;
+            overflow-x: auto;
+            padding: 10px 0;
             display: flex;
             justify-content: center;
-            width: 100%;
-            gap: 20px;
+        }
+        #mainTreeDisplay {
+            transform-origin: top center;
+            transition: transform 0.2s ease;
+        }
+        .matrices-row {
+            display: flex;
+            gap: 30px;
+            padding: 10px;
         }
 
-        /* Стилизация ячеек пользователей */
-        .cell {
-            background-color: var(--card-bg);
-            border: 2px solid #334155;
-            border-radius: 10px;
-            padding: 15px;
-            text-align: center;
-            min-width: 120px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        /* Статус: Активный (зарабатывает) */
-        .cell.active {
-            border-color: var(--accent-active);
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
-        }
-        .cell.active .role { color: var(--accent-active); font-weight: bold; }
-
-        /* Статус: Архивный (матрица закрылась, получил выплату, поблек) */
-        .cell.archived {
-            opacity: 0.4;
-            border-color: var(--accent-archived);
-            filter: grayscale(80%);
-        }
-        .cell.archived .role { color: var(--accent-archived); }
-
-        /* Пустая ячейка */
-        .cell.empty {
-            border-style: dashed;
-            border-color: #475569;
-            cursor: default;
-        }
-        .cell.empty .username { color: #475569; font-style: italic; }
-
-        .username { font-size: 1.1rem; font-weight: 600; margin-bottom: 4px; word-break: break-all; }
-        .role { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
-
-        /* ЖИВОЙ ЛОГ СОБЫТИЙ С БЭКЕНДА */
-        .log-container {
-            margin-top: 35px;
-            width: 100%;
-            max-width: 900px;
-            background-color: #020617;
-            border: 1px solid #1e293b;
-            border-radius: 8px;
-            padding: 15px;
-        }
-        .log-title { font-size: 1rem; color: #e2e8f0; margin-bottom: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 5px; }
-        .log-box {
-            height: 150px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 0.9rem;
-            color: #38bdf8;
+        /* Стили Домика (Семерки) */
+        .semerka-matrix {
+            background: rgba(22, 36, 71, 0.8);
+            border: 2px solid #0f4c81;
+            border-radius: 12px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 12px;
+            align-items: center;
+            min-width: 260px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
+        .matrix-row {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+        }
+        
+        /* Ячейки */
+        .cell {
+            background: #1f4068;
+            border: 1px solid #0f4c81;
+            border-radius: 6px;
+            padding: 6px;
+            text-align: center;
+            min-width: 55px;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .cell:active { transform: scale(0.95); }
+        .cell-id { font-size: 10px; color: #888; font-weight: bold; }
+        .cell-user { font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; }
+        
+        /* Цвета ролей */
+        .level-1 { border: 2px solid #ffd700; background: #3a3000; } /* Золотая вершина */
+        .level-2 { border: 2px solid #00fff0; background: #002b36; } /* Синие плечи */
+        .level-3 { border: 1px dashed #ffffff; background: #2b2b2b; } /* Серый низ выплат */
+        
+        .occupied { background: #16a085 !important; border-color: #1abc9c !important; }
+        .focused-cell { animation: pulse 1s infinite alternate; border-color: #ff3366 !important; box-shadow: 0 0 15px #ff3366 !important; background: #ff3366 !important; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
+
+        /* Таблица структур */
+        .table-container {
+            width: 100%;
+            max-width: 500px;
+            margin-top: 20px;
+            background: #162447;
+            border-radius: 8px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        .table-container h2 { font-size: 16px; margin: 0 0 10px 0; color: #00fff0; text-align: center; }
+        .ref-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .ref-table th, .ref-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #1f4068;
+        }
+        .ref-table th { background: #0f4c81; color: white; }
+        .ref-table tr:hover { background: rgba(255,255,255,0.05); cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <h1>Бизнес-Матрица (Сайт №2)</h1>
-    <div class="stats" id="global-info">Загрузка данных из глобального дерева...</div>
+    <h1>Панель Управления Админа</h1>
 
-    <div class="controls">
-        <button id="btn-back" style="display: none;">⬆ На уровень вверх</button>
-        <button id="btn-reset">🏠 Главный стол (FOUNDER)</button>
-    </div>
-
-    <div class="matrix-container">
-        <div class="row">
-            <div class="cell empty" id="cell-A1"><div class="username">Свободно</div><div class="role">Фокус (А1)</div></div>
+    <div class="control-panel">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Введите логин пользователя...">
+            <button id="searchBtn">Найти</button>
         </div>
-        
-        <div class="row">
-            <div class="cell empty" id="cell-B1"><div class="username">Свободно</div><div class="role">Плечо (В1)</div></div>
-            <div class="cell empty" id="cell-B2"><div class="username">Свободно</div><div class="role">Плечо (В2)</div></div>
-        </div>
-        
-        <div class="row">
-            <div class="cell empty" id="cell-C1"><div class="username">Свободно</div><div class="role">Низ (С1)</div></div>
-            <div class="cell empty" id="cell-C2"><div class="username">Свободно</div><div class="role">Низ (С2)</div></div>
-            <div class="cell empty" id="cell-C3"><div class="username">Свободно</div><div class="role">Низ (С3)</div></div>
-            <div class="cell empty" id="cell-C4"><div class="username">Свободно</div><div class="role">Низ (С4)</div></div>
+        <div class="slider-zone">
+            <span>Масштаб:</span>
+            <input type="range" id="zoomSlider" min="0.3" max="1" step="0.05" value="0.8">
+            <button class="btn-reset" id="resetBtn">Сброс БД</button>
         </div>
     </div>
 
-    <div class="log-container">
-        <div class="log-title">⚡ Живой лог регистраций и закрытия матриц (бэкенд-симулятор):</div>
-        <div class="log-box" id="log-box">Ожидание логов...</div>
+    <div class="screen-container">
+        <div id="mainTreeDisplay"></div>
     </div>
 
-    <script>
-        // ВАЖНО: Замени эту ссылку на URL твоего запущенного бэкенда на Render!
-        const API_BASE_URL = 'https://ТВОЙ-БЭКЕНД-НА-RENDER.onrender.com'; 
+    <div class="table-container">
+        <h2>Реестр участников В СТОЛБИК («Кто-за-кем»)</h2>
+        <table class="ref-table">
+            <thead>
+                <tr>
+                    <th>Логин партнера</th>
+                    <th>ID Ячейки</th>
+                </tr>
+            </thead>
+            <tbody id="refTableBody">
+                </tbody>
+        </table>
+    </div>
 
-        let currentRoot = ''; // Кого сейчас смотрим (пусто — значит FOUNDER)
-        let parentRoot = null; // Кто находится на уровень выше
-
-        // Функция рендеринга одной ячейки матрицы
-        function updateCellDOM(cellId, data) {
-            const cellElement = document.getElementById(`cell-${cellId}`);
-            
-            if (!data) {
-                cellElement.className = 'cell empty';
-                cellElement.onclick = null;
-                cellElement.querySelector('.username').innerText = 'Свободно';
-                return;
-            }
-
-            cellElement.className = `cell ${data.status}`;
-            cellElement.querySelector('.username').innerText = data.login;
-            
-            // Если кликаем на заполненную ячейку — проваливаемся «линзой» вглубь структуры под него!
-            cellElement.onclick = () => {
-                currentRoot = data.login;
-                fetchMatrixData();
-            };
-        }
-
-        // Основная функция запроса данных с бэкенда
-        async function fetchMatrixData() {
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/matrix?root=${currentRoot}`);
-                const data = await response.json();
-
-                // Обновляем статистику шапки
-                document.getElementById('global-info').innerText = 
-                    `Всего участников в системе: ${data.totalUsers} | Текущий фокус линзы: ${data.currentRootDisplay}`;
-
-                // Обновляем все 7 ячеек линзы
-                const keys = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
-                keys.forEach(key => {
-                    updateCellDOM(key, data.matrix[key]);
-                });
-
-                // Настройка кнопок навигации вверх/вниз
-                parentRoot = data.parentRoot;
-                const btnBack = document.getElementById('btn-back');
-                if (parentRoot) {
-                    btnBack.style.display = 'inline-block';
-                    btnBack.innerText = `⬆ Подняться к ${parentRoot}`;
-                } else {
-                    btnBack.style.display = 'none';
-                }
-
-                // Выводим логи симулятора в реальном времени
-                const logBox = document.getElementById('log-box');
-                logBox.innerHTML = data.logs.map(log => `<div>${log}</div>`).join('');
-
-            } catch (error) {
-                console.error("Ошибка обновления матрицы:", error);
-                document.getElementById('global-info').innerText = "🔴 Ошибка соединения с бэкендом...";
-            }
-        }
-
-        // Кнопка возврата на уровень выше
-        document.getElementById('btn-back').onclick = () => {
-            if (parentRoot) {
-                currentRoot = parentRoot;
-                fetchMatrixData();
-            }
-        };
-
-        // Кнопка сброса на Главный стол
-        document.getElementById('btn-reset').onclick = () => {
-            currentRoot = '';
-            fetchMatrixData();
-        };
-
-        // Запускаем первичное обновление и включаем авто-апдейт каждые 3 секунды
-        fetchMatrixData();
-        setInterval(fetchMatrixData, 3000);
-    </script>
+    <script src="script.js"></script>
 </body>
-    </html>
+</html>
