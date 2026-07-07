@@ -1,5 +1,6 @@
 const API_URL = '/api';
 const mainTreeDisplay = document.getElementById('mainTreeDisplay');
+const screenContainer = document.getElementById('screenContainer');
 const zoomSlider = document.getElementById('zoomSlider');
 const resetBtn = document.getElementById('resetBtn');
 const searchInput = document.getElementById('searchInput');
@@ -9,9 +10,27 @@ const refTableBody = document.getElementById('refTableBody');
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
 
+// Функция принудительного изменения и синхронизации масштаба
+function setZoom(scaleValue) {
+    zoomSlider.value = scaleValue;
+    mainTreeDisplay.style.transform = `scale(${scaleValue})`;
+    mainTreeDisplay.style.width = `${100 / scaleValue}%`;
+}
+
+// Ручное изменение ползунка
 zoomSlider.addEventListener('input', (e) => {
-    mainTreeDisplay.style.transform = `scale(${e.target.value})`;
+    setZoom(e.target.value);
 });
+
+// Клик по пустому пространству контейнера резко возвращает матрицу на экран
+if (screenContainer) {
+    screenContainer.addEventListener('click', (e) => {
+        // Если кликнули именно по фону, а не по буквам или ячейкам
+        if (e.target === screenContainer || e.target === mainTreeDisplay || e.target.classList.contains('matrices-row')) {
+            setZoom(0.8);
+        }
+    });
+}
 
 searchBtn.addEventListener('click', () => {
     const val = searchInput.value.trim();
@@ -21,6 +40,7 @@ searchBtn.addEventListener('click', () => {
     } else {
         currentRootId = 'A1';
         searchTargetUser = '';
+        setZoom(0.8); // Возвращаем масштаб при пустом поиске
         fetchTree();
     }
 });
@@ -80,6 +100,7 @@ function findUserAndFocus(username) {
 
                 currentRootId = rootId;
                 searchTargetUser = username; 
+                setZoom(0.8); // Резко приближаем найденную структуру на весь экран
                 renderDynamicSplitting(tree);
                 renderTableList(tree);
             } else {
@@ -90,7 +111,7 @@ function findUserAndFocus(username) {
 
 function getCellHTML(cell, roleClass, fallbackId = '-') {
     if (!cell) {
-        return `<div class="cell ${roleClass}"><div class="cell-id">${fallbackId}</div><div class="cell-user">-</div></div>`;
+        return `<div class="cell ${roleClass}" onclick="switchFocus('${fallbackId}')"><div class="cell-id">${fallbackId}</div><div class="cell-user">-</div></div>`;
     }
     const isOccupied = cell.user ? 'occupied' : '';
     const displayUser = cell.user ? cell.user : '-';
@@ -106,12 +127,13 @@ function getCellHTML(cell, roleClass, fallbackId = '-') {
 
 window.switchFocus = function(cellId) {
     currentRootId = cellId;
+    setZoom(0.8); // РЕЗКИЙ ЗУМ: При любом клике на ячейку разворачиваем матрицу во весь рост!
     fetchTree();
 };
 
 function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids) {
     return `
-        <div class="semerka-matrix">
+        <div class="semerka-matrix" onclick="setZoom(0.8); event.stopPropagation();">
             <div class="matrix-row">${getCellHTML(topCell, 'level-1', ids.top)}</div>
             <div class="matrix-row">
                 ${getCellHTML(leftShoulder, 'level-2', ids.left)}
@@ -197,6 +219,11 @@ function renderDynamicSplitting(tree) {
             ${activeMatricesHTML.join('')}
         </div>
     `;
+    
+    // Сохраняем текущий выбранный зум ползунка при автоматическом обновлении каждые 2 секунды
+    const currentScale = zoomSlider.value;
+    mainTreeDisplay.style.transform = `scale(${currentScale})`;
+    mainTreeDisplay.style.width = `${100 / currentScale}%`;
 }
 
 function renderTableList(tree) {
@@ -232,6 +259,7 @@ resetBtn.addEventListener('click', async () => {
             alert('База успешно сброшена!');
             currentRootId = 'A1';
             searchTargetUser = '';
+            setZoom(0.8);
             fetchTree();
         }
     } catch (err) {
