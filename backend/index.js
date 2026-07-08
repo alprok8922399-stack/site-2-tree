@@ -59,31 +59,48 @@ function createInitialTree() {
 let treeDB = createInitialTree();
 
 function findNextEmptyCell(tree) {
+    // Начальные фиксированные уровни A, B, C
     const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    let levelIndex = 3; 
+    let levelIndex = 3; // Начинаем с уровня D (индекс 3)
     while (true) {
         const letter = getLevelLetter(levelIndex);
-        const countInLevel = 1 << levelIndex; 
-        const countOfQuads = countInLevel / 4;
+        const countInLevel = 1 << levelIndex; // Всего ячеек на данном буквенном уровне
+        const totalQuadsInLevel = countInLevel / 4; // Всего матриц ("четверок") на уровне
 
-        for (let position = 0; position < 4; position++) {
-            for (let quad = 0; quad < countOfQuads; quad++) {
-                const num = (quad * 4) + position + 1;
-                const id = `${letter}${num}`;
-                
-                if (!tree[id]) {
-                    tree[id] = { id, level: letter, user: null };
-                }
-                
-                if (!tree[id].user) {
-                    return id;
+        // Дробим матрицы уровня на порции строго по 32 матрицы (128 ячеек)
+        const CHUNK_SIZE = 32;
+
+        for (let chunkStart = 0; chunkStart < totalQuadsInLevel; chunkStart += CHUNK_SIZE) {
+            const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalQuadsInLevel);
+            
+            // Флаг: проверяем, закрыта ли текущая порция из 32 матриц полностью
+            let isChunkFull = true;
+
+            // Запускаем фирменный круговой обход ("гребёнку") строго ВНУТРИ текущей порции матриц
+            for (let position = 0; position < 4; position++) {
+                for (let quad = chunkStart; quad < chunkEnd; quad++) {
+                    const num = (quad * 4) + position + 1;
+                    const id = `${letter}${num}`;
+                    
+                    if (!tree[id]) {
+                        tree[id] = { id, level: letter, user: null };
+                    }
+                    
+                    if (!tree[id].user) {
+                        return id; // Нашли свободную ячейку по правилу гребёнки внутри этих 32 матриц!
+                    }
                 }
             }
+
+            // Если мы вышли из циклов позиций и не вернули id, значит вся текущая порция из 32 матриц забита.
+            // Только в этом случае цикл перейдет к следующей порции chunkStart (следующим 32 матрицам этого же уровня).
         }
+
+        // Если абсолютно весь буквенный уровень закрылся по порциям, спускаемся на букву ниже
         levelIndex++; 
     }
 }
@@ -199,8 +216,6 @@ app.post('/api/shop/pay', (req, res) => {
     const { username, amount } = req.body;
     if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Покупатель не найден' });
     
-    // ОШИБКА УБРАНА! Больше нет проверки "if (isPaid)" — разрешаем повторные покупки!
-
     const cellId = findNextEmptyCell(treeDB);
 
     shopUsersDB[username].isPaid = true;
