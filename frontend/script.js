@@ -10,19 +10,36 @@ const refTableBody = document.getElementById('refTableBody');
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
 
-// Функция принудительного изменения и синхронизации масштаба
+// Создаем HTML-структуру для всплывающего окна информации (если её еще нет на странице)
+let modal = document.getElementById('infoModal');
+if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'infoModal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0,0,0,0.85); display: none; justify-content: center;
+        align-items: center; z-index: 9999; font-family: sans-serif; padding: 20px; box-sizing: border-box;
+    `;
+    modal.innerHTML = `
+        <div style="background: #162447; border: 2px solid #00fff0; padding: 20px; border-radius: 12px; max-width: 450px; width: 100%; box-shadow: 0 0 20px rgba(0,255,240,0.3); color: #fff; position: relative;">
+            <h3 id="modalTitle" style="margin-top:0; color:#00fff0; font-size:20px; border-bottom:1px solid #0f4c81; padding-bottom:10px;">Информация о партнере</h3>
+            <div id="modalBody" style="font-size:15px; line-height:1.6; margin-bottom:20px;">Загрузка...</div>
+            <button onclick="document.getElementById('infoModal').style.display='none'" style="width:100%; padding:10px; background:#e43f5a; border:none; color:white; font-weight:bold; border-radius:6px; cursor:pointer;">ЗАКРЫТЬ</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
 function setZoom(scaleValue) {
     zoomSlider.value = scaleValue;
     mainTreeDisplay.style.transform = `scale(${scaleValue})`;
     mainTreeDisplay.style.width = '100%';
 }
 
-// Ручное изменение ползунка
 zoomSlider.addEventListener('input', (e) => {
     setZoom(e.target.value);
 });
 
-// Клик по пустому пространству контейнера резко возвращает матрицу на экран
 if (screenContainer) {
     screenContainer.addEventListener('click', (e) => {
         if (e.target === screenContainer || e.target === mainTreeDisplay || e.target.classList.contains('matrices-row')) {
@@ -103,10 +120,61 @@ function findUserAndFocus(username) {
                 renderDynamicSplitting(tree);
                 renderTableList(tree);
             } else {
-                alert(`Пользователь ${username} не найден в текущей структуре`);
+                alert(`Пользователь ${username} не найден в текущей структуру`);
             }
         });
 }
+
+// Функция клика пальцем по заполненной ячейке — вызывает модальное окно с деталями и цепочкой
+window.showUserDetails = async function(username, cellId, event) {
+    if (event) event.stopPropagation(); // Чтобы не срабатывал зум контейнера
+    
+    // Если ячейка пустая, просто переключаем фокус
+    if (!username || username === '-') {
+        currentRootId = cellId;
+        setZoom(0.8);
+        fetchTree();
+        return;
+    }
+
+    const modalView = document.getElementById('infoModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalBody = document.getElementById('modalBody');
+    
+    modalTitle.textContent = `Карточка: ${username}`;
+    modalBody.innerHTML = `<i>Загрузка связей...</i>`;
+    modalView.style.display = 'flex';
+
+    try {
+        const res = await fetch(`${API_URL}/user-details/${encodeURIComponent(username)}`);
+        const data = await res.json();
+        
+        if (data.success) {
+            const cellsList = data.cells.join(', ');
+            // Формируем красивую визуальную линию спонсоров: Спонсор -> Главный -> Корень
+            const chainLine = data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Корневой аккаунт';
+            
+            modalBody.innerHTML = `
+                <p>👤 <strong>Логин:</strong> ${data.username}</p>
+                <p>🏠 <strong>Занятые ячейки:</strong> ${cellsList}</p>
+                <p>🤝 <strong>Прямой Спонсор:</strong> <span style="color:#ffd700;">${data.sponsor}</span></p>
+                <div style="background:#1f4068; padding:10px; border-radius:6px; margin-top:15px; border:1px dashed #00fff0;">
+                    <strong style="color:#00fff0; display:block; margin-bottom:5px;">Линия спонсоров вверх («Кто-за-кем»):</strong>
+                    <div style="word-break: break-all; font-size:14px; color:#e2e2e2;">${chainLine}</div>
+                </div>
+            `;
+            
+            // Смещаем фокус матрицы на кликнутую ячейку на фоне
+            currentRootId = cellId;
+            searchTargetUser = username;
+            renderDynamicSplitting(globalTreeCached);
+        } else {
+            modalBody.innerHTML = `<span style="color:#e43f5a;">Ошибка: ${data.error}</span>`;
+        }
+    } catch (err) {
+        modalBody.innerHTML = `<span style="color:#e43f5a;">Не удалось связаться с сервером деталей</span>`;
+    }
+};
 
 function getCellHTML(cell, roleClass, fallbackId = '-') {
     if (!cell) {
@@ -116,8 +184,9 @@ function getCellHTML(cell, roleClass, fallbackId = '-') {
     const displayUser = cell.user ? cell.user : '-';
     const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
 
+    // При клике вызываем детальную карточку
     return `
-        <div class="cell ${roleClass} ${isOccupied} ${isFocused}" onclick="switchFocus('${cell.id}')">
+        <div class="cell ${roleClass} ${isOccupied} ${isFocused}" onclick="showUserDetails('${displayUser}', '${cell.id}', event)">
             <div class="cell-id">${cell.id}</div>
             <div class="cell-user">${displayUser}</div>
         </div>
@@ -154,7 +223,6 @@ function parseCell(id) {
     return { letter: match[1], num: parseInt(match[2], 10) };
 }
 
-// Алгоритм буквенных уровней бинарного дерева (А -> B -> C ...)
 function getNextLevelLetter(letter) {
     let i = letter.length - 1;
     while (i >= 0) {
@@ -166,7 +234,10 @@ function getNextLevelLetter(letter) {
     return 'A'.repeat(letter.length + 1);
 }
 
+let globalTreeCached = {}; // Кэш для плавной работы интерфейса
+
 function renderDynamicSplitting(tree) {
+    globalTreeCached = tree;
     let activeMatricesHTML = [];
     let queue = [currentRootId]; 
     let processedNodes = new Set();
@@ -238,8 +309,9 @@ function renderTableList(tree) {
 
     list.forEach(item => {
         const isCurrentSearch = (item.user === searchTargetUser) ? 'style="background: #ff3366; color: white; font-weight:bold;"' : '';
+        // Клик по строке таблицы теперь тоже открывает детальное окно спонсоров
         html += `
-            <tr ${isCurrentSearch} onclick="switchFocus('${item.id}')">
+            <tr ${isCurrentSearch} onclick="showUserDetails('${item.user}', '${item.id}', event)">
                 <td><strong>${item.user}</strong></td>
                 <td>${item.id}</td>
             </tr>
