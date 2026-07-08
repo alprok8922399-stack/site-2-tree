@@ -8,8 +8,15 @@ app.use(express.json());
 app.use(express.static('../frontend'));
 
 let shopUsersDB = {};
+// База данных реферальных связей (кто кого пригласил): { 'логин_пользователя': 'логин_спонсора' }
+let referalsDB = {
+    'SYSTEM_ROOT': null,
+    'LEADER_1': 'SYSTEM_ROOT',
+    'LEADER_2': 'SYSTEM_ROOT'
+};
+// Храним имя последнего зарегистрированного бота для создания автоматической цепочки
+let lastRegisteredBot = null;
 
-// Функция генерации буквенного индекса уровня по его порядковому номеру (0=A, 1=B, 2=C... 6=G...)
 function getLevelLetter(levelIndex) {
     let letter = '';
     let temp = levelIndex;
@@ -20,7 +27,6 @@ function getLevelLetter(levelIndex) {
     return letter;
 }
 
-// Перевод ID ячейки (например, "E13") в её глобальный индекс в бинарном дереве
 function cellIdToGlobalIndex(id) {
     const match = id.match(/^([A-Z]+)(\d+)$/);
     if (!match) return 0;
@@ -32,7 +38,7 @@ function cellIdToGlobalIndex(id) {
     for (let i = 0; i < letter.length; i++) {
         levelIndex = levelIndex * 26 + (letter.charCodeAt(i) - 64);
     }
-    levelIndex -= 1; // Индекс уровня (0 для A, 1 для B и т.д.)
+    levelIndex -= 1;
     
     const levelStartGlobalIndex = (1 << levelIndex) - 1;
     return levelStartGlobalIndex + (num - 1);
@@ -52,28 +58,23 @@ function createInitialTree() {
 
 let treeDB = createInitialTree();
 
-// Поиск следующего пустого места по циклическому правилу четырех для ЛЮБОГО уровня
 function findNextEmptyCell(tree) {
-    // Проверяем сначала базовые уровни A, B, C
     const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    // Если C заполнен, ищем в более глубоких уровнях (начиная с D, то есть с 3-го индекса уровня)
     let levelIndex = 3; 
     while (true) {
         const letter = getLevelLetter(levelIndex);
-        const countInLevel = 1 << levelIndex; // Количество мест на уровне (D=8, E=16, F=32, G=64...)
+        const countInLevel = 1 << levelIndex; 
         const countOfQuads = countInLevel / 4;
 
-        // Генерация циклического порядка: 1-е места всех четвёрок, 2-е места...
         for (let position = 0; position < 4; position++) {
             for (let quad = 0; quad < countOfQuads; quad++) {
                 const num = (quad * 4) + position + 1;
                 const id = `${letter}${num}`;
                 
-                // Если ячейки еще нет в базе, значит мы дошли до текущей границы и её нужно открыть
                 if (!tree[id]) {
                     tree[id] = { id, level: letter, user: null };
                 }
@@ -83,16 +84,14 @@ function findNextEmptyCell(tree) {
                 }
             }
         }
-        levelIndex++; // Если весь уровень заполнен, переходим на следующий
+        levelIndex++; 
     }
 }
 
-// Автоматическая генерация дочерних элементов для обеспечения работы логики переходов
 function checkAndGenerateChildren(tree, currentCellId) {
     if (!currentCellId) return;
     const globalIdx = cellIdToGlobalIndex(currentCellId);
     
-    // Индексы левого и правого ребенка в бинарном дереве
     const leftChildGlobal = globalIdx * 2 + 1;
     const rightChildGlobal = globalIdx * 2 + 2;
     
@@ -118,7 +117,7 @@ function checkAndGenerateChildren(tree, currentCellId) {
 app.get('/api/tree', (req, res) => res.json(treeDB));
 
 app.post('/api/register', (req, res) => {
-    const { username } = req.body;
+    const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
     
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase());
@@ -127,6 +126,9 @@ app.post('/api/register', (req, res) => {
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = username;
     
+    // Привязываем спонсора. Если не указан — привязываем к SYSTEM_ROOT
+    referalsDB[username] = sponsor ? sponsor : 'SYSTEM_ROOT';
+    
     checkAndGenerateChildren(treeDB, cellId);
     res.json({ success: true, cellId, user: username });
 });
@@ -134,23 +136,70 @@ app.post('/api/register', (req, res) => {
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
     shopUsersDB = {};
+    referalsDB = {
+        'SYSTEM_ROOT': null,
+        'LEADER_1': 'SYSTEM_ROOT',
+        'LEADER_2': 'SYSTEM_ROOT'
+    };
+    lastRegisteredBot = null;
     res.json({ success: true });
+});
+
+// Новый API эндпоинт для получения полных данных реферальной цепочки вверх («Кто-за-кем»)
+app.get('/api/user-details/:username', (req, res) => {
+    const username = req.params.username;
+    
+    // Находим все ячейки, которые занимает данный пользователь
+    const userCells = Object.values(treeDB)
+        .filter(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase())
+        .map(cell => cell.id);
+        
+    if (userCells.length === 0 && !referalsDB[username]) {
+        return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+    
+    // Выстраиваем спонсорскую линию вверх до SYSTEM_ROOT
+    let sponsorChain = [];
+    let currentSponsor = referalsDB[username] || 'SYSTEM_ROOT';
+    
+    while (currentSponsor) {
+        sponsorChain.push(currentSponsor);
+        currentSponsor = referalsDB[currentSponsor];
+    }
+    
+    res.json({
+        success: true,
+        username: username,
+        cells: userCells,
+        sponsor: referalsDB[username] || 'SYSTEM_ROOT',
+        chain: sponsorChain
+    });
 });
 
 // === API МАРКЕТПЛЕЙСА (ДЛЯ САЙТА №1) ===
 app.post('/api/shop/register', (req, res) => {
-    const { username } = req.body;
+    const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     if (shopUsersDB[username]) return res.status(400).json({ error: 'Такой покупатель уже зарегистрирован' });
     
     shopUsersDB[username] = { username, isPaid: false, balance: 0 };
+    
+    // Запоминаем спонсора. Если робот регистрирует пачку ботов, связываем их цепочкой друг за другом
+    if (sponsor) {
+        referalsDB[username] = sponsor;
+    } else {
+        referalsDB[username] = lastRegisteredBot ? lastRegisteredBot : 'SYSTEM_ROOT';
+    }
+    lastRegisteredBot = username; // Текущий бот становится спонсором для следующего
+    
     res.json({ success: true, shopUserStatus: shopUsersDB[username] });
 });
 
 app.post('/api/shop/pay', (req, res) => {
     const { username, amount } = req.body;
     if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Покупатель не найден' });
-    if (shopUsersDB[username].isPaid) return res.status(400).json({ error: 'Заказ уже оплачен' });
+    
+    // ОШИБКА УБРАНА! Больше нет проверки "if (isPaid)" — разрешаем повторные покупки!
 
     const cellId = findNextEmptyCell(treeDB);
 
