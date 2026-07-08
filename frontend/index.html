@@ -71,13 +71,13 @@
             cursor: pointer;
         }
 
-        /* Главный контейнер: теперь он работает как окно, в котором можно мотать в любые стороны */
+        /* Главный контейнер: окно с возможностью мотать в любые стороны */
         .screen-container {
             width: 100%;
             max-width: 100vw;
             overflow-x: auto; /* Включаем прокрутку вбок */
             overflow-y: auto; /* Включаем прокрутку вниз */
-            display: block;   /* Убираем flex, чтобы не сжимал внутренности */
+            display: block;   
             background: #111122;
             border-radius: 8px;
             min-height: 450px;
@@ -90,17 +90,15 @@
             transform-origin: top left;
             transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
             display: block;
-            width: max-content; /* Позволяет раздуваться в ширину под размер ряда */
+            width: max-content; 
         }
         
-        /* Ряд строго на 32 домика в ширину */
+        /* Ряд строго на 32 матрицы без капризных пикселей */
         .matrices-row {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: wrap !important;       
+            display: grid !important;
+            grid-template-columns: repeat(32, 260px) !important; /* Железобетонно 32 колонки по размеру матрицы */
             gap: 30px;
             padding: 10px;
-            width: 9250px !important; /* Намертво держим длину строки под 32 матрицы */
             box-sizing: border-box;
         }
 
