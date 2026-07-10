@@ -22,7 +22,6 @@ let searchTargetUser = '';
 let globalTreeCached = null; // Будет хранить последнюю успешную копию данных
 
 // Храним текущее состояние раскрытых веток в таблице рефералов
-// Структура: [ 'Логин_Спонсора_Уровня_1', 'Логин_Уровня_2', ... ]
 let currentRefBranch = []; 
 
 // Храним состояния свернутых колонок рефералов (true - свернуто, false - развернуто)
@@ -182,9 +181,8 @@ function findUserAndFocus(username) {
         });
 }
 
-// Функция клика по заполненной ячейке матрицы — вызывает модалку с деталями
 window.showUserDetails = async function(username, cellId, event) {
-    if (event) event.stopPropagation(); // Чтобы не срабатывал зум контейнера
+    if (event) event.stopPropagation(); 
     
     if (!username || username === '-') {
         currentRootId = cellId;
@@ -233,65 +231,59 @@ window.showUserDetails = async function(username, cellId, event) {
     }
 };
 
-// Функция переключения сворачивания/разворачивания колонки рефералов по клику на заголовок
 window.toggleColumnCollapse = function(columnIndex) {
     collapsedColumns[columnIndex] = !collapsedColumns[columnIndex];
     buildInteractiveRefTable();
 };
 
-// Главная логика построения многоуровневой матрешки рефералов в ширину
+// Исправленная и устойчивая логика построения цепочки рефералов
 async function buildInteractiveRefTable() {
     if (!globalTreeCached) return;
 
-    // Шаг 1: Находим корневого пользователя всей системы (самый первый на уровне А)
     let systemRoot = null;
     if (globalTreeCached['A1'] && globalTreeCached['A1'].user) {
         systemRoot = globalTreeCached['A1'].user;
     } else {
-        // Если база пустая, выводим заглушку
         refTableHeaders.innerHTML = '<th style="width:100%;">Реферальная сеть</th>';
         refTableColumnsBody.innerHTML = '<td><div style="text-align:center; padding: 20px;">База данных пуста</div></td>';
         return;
     }
 
-    // Если текущая выбранная ветка пуста, инициализируем её корнем системы
     if (currentRefBranch.length === 0) {
         currentRefBranch = [systemRoot];
     }
 
-    // Будем строить массив колонок. Каждая колонка — это список пользователей
     let columnsData = [];
-    
-    // Первая колонка — это всегда сам Корень/Спонсор ветки
+    // Добавляем корень как первую колонку
     columnsData.push([systemRoot]);
 
-    // Для каждого выбранного пользователя на уровнях 1, 2, 3... загружаем его личников по API
+    // Обходим активную цепочку пользователей по очереди
     for (let i = 0; i < currentRefBranch.length; i++) {
         const currentUser = currentRefBranch[i];
         try {
             const res = await fetch(`${API_URL}/user-details/${encodeURIComponent(currentUser)}`);
             const details = await res.json();
             
-            if (details.success && details.referrals && details.referrals.length > 0) {
-                // Добавляем список его личников как следующую колонку справа
-                columnsData.push(details.referrals);
+            // Защита: проверяем поле referrals ИЛИ children на случай расхождения названий в API бэкенда
+            const refs = details.referrals || details.children || [];
+            
+            if (details.success && refs.length > 0) {
+                columnsData.push(refs);
             } else {
-                // Если личников у этого партнера нет, цепочка вправо прерывается
                 break;
             }
         } catch (e) {
-            console.error("Ошибка получения личников для " + currentUser, e);
+            console.error("Ошибка получения рефералов для " + currentUser, e);
             break;
         }
     }
 
-    // Шаг 2: Генерируем HTML для заголовков <thead> (Рефералы_1, Рефералы_2...)
+    // Рендер заголовков
     let headersHTML = '';
     for (let i = 0; i < columnsData.length; i++) {
         const isCollapsed = collapsedColumns[i] || false;
         const arrowSymbol = isCollapsed ? '▶️' : '🔽';
         const arrowClass = isCollapsed ? 'header-arrow collapsed' : 'header-arrow';
-        
         let titleName = i === 0 ? "Спонсор ветки" : `Рефералы_${i}`;
         
         headersHTML += `
@@ -303,18 +295,16 @@ async function buildInteractiveRefTable() {
     }
     refTableHeaders.innerHTML = headersHTML;
 
-    // Шаг 3: Генерируем HTML для списков пользователей <tbody> по колонкам
+    // Рендер колонок со списками пользователей
     let columnsBodyHTML = '';
     for (let i = 0; i < columnsData.length; i++) {
         const usersInColumn = columnsData[i];
         const isColumnHidden = collapsedColumns[i] || false;
         
         columnsBodyHTML += `<td>`;
-        // Применяем класс hidden, если заголовок был свернут пользователем
         columnsBodyHTML += `<div class="referrals-column-list ${isColumnHidden ? 'hidden' : ''}">`;
         
         usersInColumn.forEach(username => {
-            // Ищем первую занятую ячейку пользователя для вывода бейджика ID
             let cellBadgeId = '';
             for (const [id, cell] of Object.entries(globalTreeCached)) {
                 if (cell && cell.user === username) {
@@ -323,9 +313,7 @@ async function buildInteractiveRefTable() {
                 }
             }
 
-            // Проверяем, выбран ли этот пользователь в текущей цепочке активной ветки
             const isActiveInBranch = currentRefBranch.includes(username) ? 'active-branch' : '';
-            // Проверяем, является ли он целью глобального поиска по логину
             const isTargetHighlight = (username === searchTargetUser) ? 'style="border-color:#ff3366; background:#ff3366 !important;"' : '';
 
             columnsBodyHTML += `
@@ -344,15 +332,14 @@ async function buildInteractiveRefTable() {
     refTableColumnsBody.innerHTML = columnsBodyHTML;
 }
 
-// Обработчик клика по карточке пользователя внутри реферального оверлея
 window.selectRefUser = function(username, columnIndex, event) {
     event.stopPropagation();
     
-    // Обрезаем ветку до уровня кликнутого пользователя и добавляем его как активный выбор
-    currentRefBranch = currentRefBranch.slice(0, columnIndex);
-    currentRefBranch.push(username);
+    currentRefBranch = currentRefBranch.slice(0, columnIndex + 1);
+    if (!currentRefBranch.includes(username)) {
+        currentRefBranch.push(username);
+    }
     
-    // Находим его ID ячейки в дереве, чтобы синхронно сфокусировать на нем задний фон матриц
     let targetCellId = 'A1';
     for (const [id, cell] of Object.entries(globalTreeCached)) {
         if (cell && cell.user === username) {
@@ -364,7 +351,6 @@ window.selectRefUser = function(username, columnIndex, event) {
     currentRootId = targetCellId;
     searchTargetUser = username;
     
-    // Отрендерить обновленные матрицы на фоне и перестроить цепочку рефералов вправо
     renderDynamicSplitting(globalTreeCached);
     buildInteractiveRefTable();
 };
@@ -496,7 +482,7 @@ resetBtn.addEventListener('click', async () => {
             alert('База успешно сброшена!');
             currentRootId = 'A1';
             searchTargetUser = '';
-            currentRefBranch = []; // Сбрасываем выбранную ветку рефералов
+            currentRefBranch = []; 
             collapsedColumns = {};
             setZoom(0.8);
             fetchTree();
