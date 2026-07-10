@@ -1,268 +1,210 @@
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors'); // Подключаем модуль CORS для разблокировки запросов
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
-app.use(cors({ origin: '*' }));
+// Разрешаем абсолютно всем внешним адресам (включая твой телефон) запрашивать данные
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
-app.use(express.static('../frontend'));
 
-let shopUsersDB = {};
-// База данных реферальных связей (кто кого пригласил): { 'логин_пользователя': 'логин_спонсора' }
-let referalsDB = {
-    'SYSTEM_ROOT': null,
-    'LEADER_1': 'SYSTEM_ROOT',
-    'LEADER_2': 'SYSTEM_ROOT'
+// Временное хранилище дерева в оперативной памяти сервера
+let treeStorage = {
+    "A1": { id: "A1", user: "Admin", parentId: null }
 };
-// Храним имя последнего зарегистрированного бота для создания автоматической цепочки
-let lastRegisteredBot = null;
 
-function getLevelLetter(levelIndex) {
-    let letter = '';
-    let temp = levelIndex;
-    while (temp >= 0) {
-        letter = String.fromCharCode((temp % 26) + 65) + letter;
-        temp = Math.floor(temp / 26) - 1;
-    }
-    return letter;
-}
-
-function cellIdToGlobalIndex(id) {
+// Хелпер для разбора имени ячейки (например, "A1" -> { letter: "A", num: 1 })
+function parseCellId(id) {
     const match = id.match(/^([A-Z]+)(\d+)$/);
-    if (!match) return 0;
-    const letter = match[1];
-    const num = parseInt(match[2], 10);
-    
-    let levelIndex = 0;
-    let temp = 0;
-    for (let i = 0; i < letter.length; i++) {
-        levelIndex = levelIndex * 26 + (letter.charCodeAt(i) - 64);
-    }
-    levelIndex -= 1;
-    
-    const levelStartGlobalIndex = (1 << levelIndex) - 1;
-    return levelStartGlobalIndex + (num - 1);
+    if (!match) return null;
+    return { letter: match[1], num: parseInt(match[2], 10) };
 }
 
-function createInitialTree() {
-    return {
-        'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
-        'B1': { id: 'B1', level: 'B', user: 'LEADER_1' },
-        'B2': { id: 'B2', level: 'B', user: 'LEADER_2' },
-        'C1': { id: 'C1', level: 'C', user: null },
-        'C2': { id: 'C2', level: 'C', user: null },
-        'C3': { id: 'C3', level: 'C', user: null },
-        'C4': { id: 'C4', level: 'C', user: null }
-    };
-}
-
-let treeDB = createInitialTree();
-
-function findNextEmptyCell(tree) {
-    const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
-    for (const key of orderABC) {
-        if (tree[key] && !tree[key].user) return key;
-    }
-
-    let levelIndex = 3; 
-    while (true) {
-        const letter = getLevelLetter(levelIndex);
-        const countInLevel = 1 << levelIndex; 
-        const totalQuadsInLevel = countInLevel / 4; 
-
-        const CHUNK_SIZE = 32;
-
-        for (let chunkStart = 0; chunkStart < totalQuadsInLevel; chunkStart += CHUNK_SIZE) {
-            const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalQuadsInLevel);
-            let isChunkFull = true;
-
-            for (let position = 0; position < 4; position++) {
-                for (let quad = chunkStart; quad < chunkEnd; quad++) {
-                    const num = (quad * 4) + position + 1;
-                    const id = `${letter}${num}`;
-                    
-                    if (!tree[id]) {
-                        tree[id] = { id, level: letter, user: null };
-                    }
-                    
-                    if (!tree[id].user) {
-                        return id; 
-                    }
-                }
-            }
-        }
-        levelIndex++; 
-    }
-}
-
-function checkAndGenerateChildren(tree, currentCellId) {
-    if (!currentCellId) return;
-    const globalIdx = cellIdToGlobalIndex(currentCellId);
-    
-    const leftChildGlobal = globalIdx * 2 + 1;
-    const rightChildGlobal = globalIdx * 2 + 2;
-    
-    function createCellByGlobalIndex(gIdx) {
-        let levelIndex = 0;
-        while ((1 << (levelIndex + 1)) - 1 <= gIdx) {
-            levelIndex++;
-        }
-        const levelStart = (1 << levelIndex) - 1;
-        const num = (gIdx - levelStart) + 1;
-        const letter = getLevelLetter(levelIndex);
-        const id = `${letter}${num}`;
-        if (!tree[id]) {
-            tree[id] = { id, level: letter, user: null };
-        }
-    }
-    
-    createCellByGlobalIndex(leftChildGlobal);
-    createCellByGlobalIndex(rightChildGlobal);
-}
-
-// === API МАТРИЦЫ ===
-app.get('/api/tree', (req, res) => res.json(treeDB));
-
-app.post('/api/register', (req, res) => {
-    const { username, sponsor } = req.body;
-    if (!username) return res.status(400).json({ error: 'Имя обязательно' });
-    
-    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase());
-    if (isExist) return res.status(400).json({ error: 'Этот пользователь уже занял место в матрице' });
-
-    const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = username;
-    
-    referalsDB[username] = sponsor ? sponsor : 'SYSTEM_ROOT';
-    
-    checkAndGenerateChildren(treeDB, cellId);
-    res.json({ success: true, cellId, user: username });
+// Эндпоинт 1: Получение всей структуры дерева для отрисовки матриц
+app.get('/api/tree', (req, res) => {
+    res.json(treeStorage);
 });
 
+// Эндпоинт 2: Сброс базы данных в начальное состояние
 app.post('/api/reset', (req, res) => {
-    treeDB = createInitialTree();
-    shopUsersDB = {};
-    referalsDB = {
-        'SYSTEM_ROOT': null,
-        'LEADER_1': 'SYSTEM_ROOT',
-        'LEADER_2': 'SYSTEM_ROOT'
+    treeStorage = {
+        "A1": { id: "A1", user: "Admin", parentId: null }
     };
-    lastRegisteredBot = null;
-    res.json({ success: true });
+    res.json({ success: true, message: "Дерево успешно сброшено" });
 });
 
-// НОВЫЙ API ЭНДПОИНТ: Отдает полное реферальное дерево для таблицы со стрелочками
-app.get('/api/referral-tree', (req, res) => {
-    // Вспомогательная функция, которая ищет всех личников для конкретного человека
-    function getDirectReferrals(parentUser) {
-        let list = [];
-        for (const [user, sponsor] of Object.entries(referalsDB)) {
-            if (sponsor && sponsor.toLowerCase() === parentUser.toLowerCase()) {
-                // Ищем ячейку, которую этот человек занимает в матрице
-                const cell = Object.values(treeDB).find(c => c.user && c.user.toLowerCase() === user.toLowerCase());
-                list.push({
-                    username: user,
-                    cellId: cell ? cell.id : 'Не в матрице'
-                });
-            }
+// Эндпоинт 3: Получение детальной информации о пользователе и его личниках
+app.get('/api/user-details/:username', (req, res) => {
+    const targetUser = req.params.username;
+    
+    // 1. Находим все ячейки, которые занял этот пользователь
+    let userCells = [];
+    for (const [id, cell] of Object.entries(treeStorage)) {
+        if (cell && cell.user && cell.user.toLowerCase() === targetUser.toLowerCase()) {
+            userCells.push(id);
         }
-        return list;
     }
 
-    // Рекурсивный сборщик уровней глубины (Рефералы_1, 2, 3...)
-    function buildTreeData(username) {
-        const referrals = getDirectReferrals(username);
-        return referrals.map(ref => {
-            return {
-                username: ref.username,
-                cellId: ref.cellId,
-                children: buildTreeData(ref.username) // Копаем вглубь (его личники)
-            };
+    if (userCells.length === 0) {
+        return res.json({ 
+            success: false, 
+            error: `Пользователь ${targetUser} не найден в базе данных.` 
         });
     }
 
-    // Начинаем строить дерево от SYSTEM_ROOT (или от первого корня)
-    const rootUser = 'SYSTEM_ROOT';
-    const cell = Object.values(treeDB).find(c => c.user && c.user === rootUser);
-
-    res.json({
-        success: true,
-        root: {
-            username: rootUser,
-            cellId: cell ? cell.id : 'A1',
-            children: buildTreeData(rootUser)
+    // 2. Ищем его прямого спонсора (родителя для его самой первой/главной ячейки)
+    // Сортируем ячейки по длине букв и номеру, чтобы найти самую раннюю
+    userCells.sort((a, b) => {
+        const pA = parseCellId(a);
+        const pB = parseCellId(b);
+        if (pA.letter.length !== pB.letter.length) {
+            return pA.letter.length - pB.letter.length;
         }
+        if (pA.letter !== pB.letter) {
+            return pA.letter.localeCompare(pB.letter);
+        }
+        return pA.num - pB.num;
     });
-});
 
-app.get('/api/user-details/:username', (req, res) => {
-    const username = req.params.username;
+    const primaryCellId = userCells[0];
+    const primaryCell = treeStorage[primaryCellId];
+    let sponsorName = "Нет спонсора (Корневой аккаунт)";
     
-    const userCells = Object.values(treeDB)
-        .filter(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase())
-        .map(cell => cell.id);
-        
-    if (userCells.length === 0 && !referalsDB[username]) {
-        return res.status(404).json({ error: 'Пользователь не найден' });
+    if (primaryCell && primaryCell.parentId) {
+        const parentCell = treeStorage[primaryCell.parentId];
+        if (parentCell && parentCell.user) {
+            sponsorName = parentCell.user;
+        }
     }
-    
-    let sponsorChain = [];
-    let currentSponsor = referalsDB[username] || 'SYSTEM_ROOT';
-    
-    while (currentSponsor) {
-        sponsorChain.push(currentSponsor);
-        currentSponsor = referalsDB[currentSponsor];
+
+    // 3. Строим цепочку спонсоров вверх ("Кто-за-кем")
+    let chain = [];
+    let currentId = primaryCellId;
+    while (currentId) {
+        const cCell = treeStorage[currentId];
+        if (cCell && cCell.user) {
+            chain.push(`${cCell.user} (${cCell.id})`);
+            currentId = cCell.parentId;
+        } else {
+            break;
+        }
     }
-    
+    // Разворачиваем, чтобы было от корня к пользователю
+    chain.reverse();
+
+    // 4. Находим всех его личников (приглашенных рефералов)
+    // Это пользователи, чьи ячейки ссылаются на ЛЮБУЮ из ячеек нашего targetUser
+    let referralsSet = new Set();
+    for (const [id, cell] of Object.entries(treeStorage)) {
+        if (cell && cell.parentId && cell.user) {
+            const parentCell = treeStorage[cell.parentId];
+            if (parentCell && parentCell.user && parentCell.user.toLowerCase() === targetUser.toLowerCase()) {
+                // Исключаем самоциклирование (если юзер встал под самого себя)
+                if (cell.user.toLowerCase() !== targetUser.toLowerCase()) {
+                    referralsSet.add(cell.user);
+                }
+            }
+        }
+    }
+
     res.json({
         success: true,
-        username: username,
+        username: targetUser,
         cells: userCells,
-        sponsor: referalsDB[username] || 'SYSTEM_ROOT',
-        chain: sponsorChain
+        sponsor: sponsorName,
+        chain: chain,
+        referrals: Array.from(referralsSet)
     });
 });
 
-// === API МАРКЕТПЛЕЙСА (ДЛЯ САЙТА №1) ===
-app.post('/api/shop/register', (req, res) => {
-    const { username, sponsor } = req.body;
-    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-    if (shopUsersDB[username]) return res.status(400).json({ error: 'Такой покупатель уже зарегистрирован' });
-    
-    shopUsersDB[username] = { username, isPaid: false, balance: 0 };
-    
-    if (sponsor) {
-        referalsDB[username] = sponsor;
-    } else {
-        referalsDB[username] = lastRegisteredBot ? lastRegisteredBot : 'SYSTEM_ROOT';
+// Эндпоинт 4: Регистрация нового пользователя (для связи с Первым сайтом)
+app.post('/api/register', (req, res) => {
+    const { username, parentCellId } = req.body;
+
+    if (!username || !parentCellId) {
+        return res.status(400).json({ success: false, error: "Не указан username или parentCellId" });
     }
-    lastRegisteredBot = username; 
+
+    // Логика автоматического поиска свободного места (стековый обход)
+    let queue = [parentCellId];
+    let targetCellId = null;
+
+    while (queue.length > 0) {
+        const currentId = queue.shift();
+        const cell = treeStorage[currentId];
+
+        if (!cell || !cell.user) {
+            targetCellId = currentId;
+            break;
+        }
+
+        const parsed = parseCellId(currentId);
+        if (!parsed) continue;
+
+        // Вычисляем буквы следующего уровня (для плеч)
+        let i = parsed.letter.length - 1;
+        let nextLetter = "";
+        while (i >= 0) {
+            if (parsed.letter[i] !== 'Z') {
+                nextLetter = parsed.letter.substring(0, i) + String.fromCharCode(parsed.letter.charCodeAt(i) + 1) + 'A'.repeat(parsed.letter.length - 1 - i);
+                break;
+            }
+            i--;
+        }
+        if (!nextLetter) nextLetter = 'A'.repeat(parsed.letter.length + 1);
+
+        const leftChildId = `${nextLetter}${parsed.num * 2 - 1}`;
+        const rightChildId = `${nextLetter}${parsed.num * 2}`;
+
+        queue.push(leftChildId);
+        queue.push(rightChildId);
+    }
+
+    if (!targetCellId) {
+        return res.json({ success: false, error: "Не удалось найти свободное место в дереве" });
+    }
+
+    // Сохраняем новую ячейку в дерево
+    const parsedTarget = parseCellId(targetCellId);
     
-    res.json({ success: true, shopUserStatus: shopUsersDB[username] });
-});
+    // Определяем родительскую ячейку для связи
+    let calculatedParentId = null;
+    if (targetCellId !== "A1") {
+        let prevLetter = "";
+        let k = parsedTarget.letter.length - 1;
+        while (k >= 0) {
+            if (parsedTarget.letter[k] !== 'A') {
+                prevLetter = parsedTarget.letter.substring(0, k) + String.fromCharCode(parsedTarget.letter.charCodeAt(k) - 1) + 'Z'.repeat(parsedTarget.letter.length - 1 - k);
+                break;
+            }
+            k--;
+        }
+        if (!prevLetter && parsedTarget.letter.length > 1) {
+            prevLetter = 'Z'.repeat(parsedTarget.letter.length - 1);
+        } else if (!prevLetter) {
+            prevLetter = 'A';
+        }
+        
+        calculatedParentId = `${prevLetter}${Math.floor((parsedTarget.num + 1) / 2)}`;
+    }
 
-app.post('/api/shop/pay', (req, res) => {
-    const { username, amount } = req.body;
-    if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Покупатель не найден' });
-    
-    const cellId = findNextEmptyCell(treeDB);
-
-    shopUsersDB[username].isPaid = true;
-    shopUsersDB[username].balance += 3000;
-
-    treeDB[cellId].user = username;
-    checkAndGenerateChildren(treeDB, cellId);
+    treeStorage[targetCellId] = {
+        id: targetCellId,
+        user: username,
+        parentId: calculatedParentId
+    };
 
     res.json({
         success: true,
-        shopUserStatus: shopUsersDB[username],
-        cellId,
-        split: {
-            total: amount,
-            marketplace: 7000,
-            myWallet: 3000
-        }
+        message: `Пользователь ${username} успешно зарегистрирован в ячейку ${targetCellId}`,
+        cellId: targetCellId
     });
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
