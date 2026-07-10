@@ -16,6 +16,7 @@ const closeOverlayBtn = document.getElementById('closeOverlayBtn');
 
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
+let globalTreeCached = null; // Будет хранить последнюю успешную копию данных
 
 // Создаем HTML-структуру для всплывающего окна информации (если её еще нет на странице)
 let modal = document.getElementById('infoModal');
@@ -105,6 +106,7 @@ async function fetchTree() {
     try {
         const res = await fetch(`${API_URL}/tree`);
         const data = await res.json();
+        globalTreeCached = data; // Обновляем глобальный кэш данных дерева
         renderDynamicSplitting(data);
         renderTableList(data);
     } catch (err) {
@@ -116,6 +118,7 @@ function findUserAndFocus(username) {
     fetch(`${API_URL}/tree`)
         .then(res => res.json())
         .then(tree => {
+            globalTreeCached = tree;
             let foundCellId = null;
             for (const [id, cell] of Object.entries(tree)) {
                 if (cell && cell.user && cell.user.toLowerCase() === username.toLowerCase()) {
@@ -160,12 +163,12 @@ function findUserAndFocus(username) {
                 renderDynamicSplitting(tree);
                 renderTableList(tree);
             } else {
-                alert(`Пользователь ${username} не найден в текущей структуру`);
+                alert(`Пользователь ${username} не найден в текущей структуре`);
             }
         });
 }
 
-// Функция клика пальцем по заполненой ячейке — вызывает модальное окно с деталями и цепочкой
+// Функция клика пальцем по заполненной ячейке — вызывает модальное окно с деталями и цепочкой
 window.showUserDetails = async function(username, cellId, event) {
     if (event) event.stopPropagation(); // Чтобы не срабатывал зум контейнера
     
@@ -191,7 +194,6 @@ window.showUserDetails = async function(username, cellId, event) {
         
         if (data.success) {
             const cellsList = data.cells.join(', ');
-            // Формируем красивую визуальную линию спонсоров: Спонсор -> Главный -> Корень
             const chainLine = data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Корневой аккаунт';
             
             modalBody.innerHTML = `
@@ -207,7 +209,11 @@ window.showUserDetails = async function(username, cellId, event) {
             // Смещаем фокус матрицы на кликнутую ячейку на фоне
             currentRootId = cellId;
             searchTargetUser = username;
-            renderDynamicSplitting(globalTreeCached);
+            
+            // Защита: рендерим дерево только если у нас есть данные в памяти
+            if (globalTreeCached) {
+                renderDynamicSplitting(globalTreeCached);
+            }
         } else {
             modalBody.innerHTML = `<span style="color:#e43f5a;">Ошибка: ${data.error}</span>`;
         }
@@ -224,7 +230,6 @@ function getCellHTML(cell, roleClass, fallbackId = '-') {
     const displayUser = cell.user ? cell.user : '-';
     const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
 
-    // При клике вызываем детальную карточку
     return `
         <div class="cell ${roleClass} ${isOccupied} ${isFocused}" onclick="showUserDetails('${displayUser}', '${cell.id}', event)">
             <div class="cell-id">${cell.id}</div>
@@ -274,10 +279,9 @@ function getNextLevelLetter(letter) {
     return 'A'.repeat(letter.length + 1);
 }
 
-let globalTreeCached = {}; // Кэш для плавной работы интерфейса
-
 function renderDynamicSplitting(tree) {
-    globalTreeCached = tree;
+    if (!tree || Object.keys(tree).length === 0) return;
+    
     let activeMatricesHTML = [];
     let queue = [currentRootId]; 
     let processedNodes = new Set();
@@ -341,4 +345,41 @@ function renderTableList(tree) {
     let list = [];
     for (const [id, cell] of Object.entries(tree)) {
         if (cell && cell.user) {
-            list.push({ id:
+            list.push({ id: id, user: cell.user });
+        }
+    }
+    
+    list.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true, sensitivity: 'base'}));
+
+    list.forEach(item => {
+        const isCurrentSearch = (item.user === searchTargetUser) ? 'style="background: #ff3366; color: white; font-weight:bold;"' : '';
+        html += `
+            <tr ${isCurrentSearch} onclick="document.getElementById('tableOverlay').classList.remove('show'); showUserDetails('${item.user}', '${item.id}', event)">
+                <td><strong>${item.user}</strong></td>
+                <td>${item.id}</td>
+            </tr>
+        `;
+    });
+
+    refTableBody.innerHTML = html || '<tr><td colspan="2" style="text-align:center;">База пуста</td></tr>';
+}
+
+resetBtn.addEventListener('click', async () => {
+    if (!confirm('Очистить базу данных дерева?')) return;
+    try {
+        const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            alert('База успешно сброшена!');
+            currentRootId = 'A1';
+            searchTargetUser = '';
+            setZoom(0.8);
+            fetchTree();
+        }
+    } catch (err) {
+        alert('Ошибка при сбросе');
+    }
+});
+
+fetchTree();
+setInterval(fetchTree, 2000);
