@@ -7,8 +7,48 @@ const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const refTableBody = document.getElementById('refTableBody');
 
+// --- НОВЫЕ ЭЛЕМЕНТЫ УПРАВЛЕНИЯ ---
+const menuToggleBtn = document.getElementById('menuToggleBtn');
+const menuContent = document.getElementById('menuContent');
+const openTableBtn = document.getElementById('openTableBtn');
+const tableOverlay = document.getElementById('tableOverlay');
+const closeOverlayBtn = document.getElementById('closeOverlayBtn');
+const interactiveRefTableBody = document.getElementById('interactiveRefTableBody');
+
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
+let globalTreeCached = null; // Кэшируем данные дерева для таблицы
+
+// --- ЛОГИКА МЕНЮ И ОВЕРЛЕЯ ---
+if (menuToggleBtn && menuContent) {
+    menuToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menuContent.classList.toggle('show');
+    });
+}
+
+if (openTableBtn && tableOverlay && menuContent) {
+    openTableBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        tableOverlay.classList.add('show');
+        menuContent.classList.remove('show');
+        buildInteractiveRefTable(); // Заполняем таблицу при открытии
+    });
+}
+
+if (closeOverlayBtn && tableOverlay) {
+    closeOverlayBtn.addEventListener('click', () => {
+        tableOverlay.classList.remove('show');
+    });
+}
+
+document.addEventListener('click', (e) => {
+    if (menuContent && menuContent.classList.contains('show')) {
+        if (!menuContent.contains(e.target) && e.target !== menuToggleBtn) {
+            menuContent.classList.remove('show');
+        }
+    }
+});
 
 // Создаем HTML-структуру для всплывающего окна информации (если её еще нет на странице)
 let modal = document.getElementById('infoModal');
@@ -65,8 +105,14 @@ async function fetchTree() {
     try {
         const res = await fetch(`${API_URL}/tree`);
         const data = await res.json();
+        globalTreeCached = data; // Записываем в кэш
         renderDynamicSplitting(data);
         renderTableList(data);
+        
+        // Обновляем оверлей, если он открыт
+        if (tableOverlay && tableOverlay.classList.contains('show')) {
+            buildInteractiveRefTable();
+        }
     } catch (err) {
         console.error('Ошибка загрузки данных:', err);
     }
@@ -234,8 +280,6 @@ function getNextLevelLetter(letter) {
     return 'A'.repeat(letter.length + 1);
 }
 
-let globalTreeCached = {}; // Кэш для плавной работы интерфейса
-
 function renderDynamicSplitting(tree) {
     globalTreeCached = tree;
     let activeMatricesHTML = [];
@@ -320,6 +364,74 @@ function renderTableList(tree) {
 
     refTableBody.innerHTML = html || '<tr><td colspan="2" style="text-align:center;">База пуста</td></tr>';
 }
+
+// --- ЛОГИКА НОВОЙ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ ---
+function buildInteractiveRefTable() {
+    if (!interactiveRefTableBody || !globalTreeCached) return;
+
+    let html = '';
+    let counter = 1;
+    let list = Object.entries(globalTreeCached).filter(([id, cell]) => cell && cell.user);
+    list.sort((a, b) => a[0].localeCompare(b[0], undefined, {numeric: true, sensitivity: 'base'}));
+
+    list.forEach(([id, cell]) => {
+        const rowId = 'detail_row_' + counter;
+        html += `
+            <tr style="border-bottom: 1px solid #1f4068;">
+                <td style="text-align: center;">
+                    <button class="row-toggle-btn" onclick="toggleRefRow('${rowId}', this, '${cell.user}')">▼</button>
+                </td>
+                <td><strong>${cell.user}</strong></td>
+                <td>${id}</td>
+            </tr>
+            <tr id="${rowId}" style="display: none; background-color: #112233;">
+                <td colspan="3" style="padding: 10px; border-left: 3px solid #00fff0;">
+                    <div id="content_${rowId}" style="color: #ccc; font-size: 13px;">
+                        <em>Загрузка данных...</em>
+                    </div>
+                </td>
+            </tr>
+        `;
+        counter++;
+    });
+
+    interactiveRefTableBody.innerHTML = html || '<tr><td colspan="3" style="text-align:center;">База пуста</td></tr>';
+}
+
+window.toggleRefRow = async function(rowId, btn, username) {
+    const detailRow = document.getElementById(rowId);
+    const contentDiv = document.getElementById('content_' + rowId);
+
+    if (detailRow.style.display === 'table-row') {
+        detailRow.style.display = 'none';
+        btn.innerHTML = '▼';
+    } else {
+        detailRow.style.display = 'table-row';
+        btn.innerHTML = '▲';
+
+        // Подгружаем данные с бэкенда при раскрытии
+        if (contentDiv.innerHTML.includes('Загрузка данных...')) {
+            try {
+                const res = await fetch(`${API_URL}/user-details/${encodeURIComponent(username)}`);
+                const data = await res.json();
+                if (data.success) {
+                    const chainLine = data.chain && data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Корневой аккаунт';
+                    const sponsor = data.sponsor || 'Нет спонсора';
+                    contentDiv.innerHTML = `
+                        <div style="margin-bottom: 5px;"><strong style="color: #fff;">Прямой спонсор:</strong> <span style="color: #ffd700;">${sponsor}</span></div>
+                        <div style="margin-bottom: 5px;"><strong style="color: #fff;">Занятые ячейки:</strong> ${data.cells.join(', ')}</div>
+                        <div><strong style="color: #00fff0;">Линия спонсоров вверх:</strong><br><span style="color: #e2e2e2; word-break: break-all;">${chainLine}</span></div>
+                    `;
+                } else {
+                    contentDiv.innerHTML = `<span style="color:#e43f5a;">Ошибка: ${data.error || 'Нет данных'}</span>`;
+                }
+            } catch (e) {
+                contentDiv.innerHTML = `<span style="color:#e43f5a;">Не удалось загрузить данные. Проверьте сервер.</span>`;
+            }
+        }
+    }
+};
+// ------------------------------------------
 
 resetBtn.addEventListener('click', async () => {
     if (!confirm('Очистить базу данных дерева?')) return;
