@@ -7,6 +7,13 @@ const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const refTableBody = document.getElementById('refTableBody');
 
+// Новые элементы управления меню и оверлеем
+const menuToggleBtn = document.getElementById('menuToggleBtn');
+const menuContent = document.getElementById('menuContent');
+const openTableBtn = document.getElementById('openTableBtn');
+const tableOverlay = document.getElementById('tableOverlay');
+const closeOverlayBtn = document.getElementById('closeOverlayBtn');
+
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
 
@@ -29,6 +36,39 @@ if (!modal) {
     `;
     document.body.appendChild(modal);
 }
+
+// Логика работы выпадающего меню управления (Шторка)
+if (menuToggleBtn && menuContent) {
+    menuToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menuContent.classList.toggle('show');
+    });
+}
+
+// Открытие полноэкранного окна с таблицей пользователей
+if (openTableBtn && tableOverlay && menuContent) {
+    openTableBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        tableOverlay.classList.add('show');
+        menuContent.classList.remove('show'); // Сворачиваем шторку обратно
+    });
+}
+
+// Закрытие полноэкранного окна с таблицей
+if (closeOverlayBtn && tableOverlay) {
+    closeOverlayBtn.addEventListener('click', () => {
+        tableOverlay.classList.remove('show');
+    });
+}
+
+// Закрытие шторки при клике в любое пустое место экрана
+document.addEventListener('click', (e) => {
+    if (menuContent && menuContent.classList.contains('show')) {
+        if (!menuContent.contains(e.target) && e.target !== menuToggleBtn) {
+            menuContent.classList.remove('show');
+        }
+    }
+});
 
 function setZoom(scaleValue) {
     zoomSlider.value = scaleValue;
@@ -125,7 +165,7 @@ function findUserAndFocus(username) {
         });
 }
 
-// Функция клика пальцем по заполненной ячейке — вызывает модальное окно с деталями и цепочкой
+// Функция клика пальцем по заполненой ячейке — вызывает модальное окно с деталями и цепочкой
 window.showUserDetails = async function(username, cellId, event) {
     if (event) event.stopPropagation(); // Чтобы не срабатывал зум контейнера
     
@@ -301,42 +341,4 @@ function renderTableList(tree) {
     let list = [];
     for (const [id, cell] of Object.entries(tree)) {
         if (cell && cell.user) {
-            list.push({ id: id, user: cell.user });
-        }
-    }
-    
-    list.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true, sensitivity: 'base'}));
-
-    list.forEach(item => {
-        const isCurrentSearch = (item.user === searchTargetUser) ? 'style="background: #ff3366; color: white; font-weight:bold;"' : '';
-        // Клик по строке таблицы теперь тоже открывает детальное окно спонсоров
-        html += `
-            <tr ${isCurrentSearch} onclick="showUserDetails('${item.user}', '${item.id}', event)">
-                <td><strong>${item.user}</strong></td>
-                <td>${item.id}</td>
-            </tr>
-        `;
-    });
-
-    refTableBody.innerHTML = html || '<tr><td colspan="2" style="text-align:center;">База пуста</td></tr>';
-}
-
-resetBtn.addEventListener('click', async () => {
-    if (!confirm('Очистить базу данных дерева?')) return;
-    try {
-        const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-            alert('База успешно сброшена!');
-            currentRootId = 'A1';
-            searchTargetUser = '';
-            setZoom(0.8);
-            fetchTree();
-        }
-    } catch (err) {
-        alert('Ошибка при сбросе');
-    }
-});
-
-fetchTree();
-setInterval(fetchTree, 2000);
+            list.push({ id:
