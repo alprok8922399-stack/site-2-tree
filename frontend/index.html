@@ -3,211 +3,241 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Мониторинг Матриц 7-К</title>
+    <title>Приватная Панель - Рефералы</title>
     <style>
         body {
-            background-color: #1a1a2e;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            user-select: none; 
-            -webkit-user-select: none;
-        }
-        h1 { margin: 5px 0; font-size: 20px; text-shadow: 0 0 10px #00fff0; }
-        
-        .control-panel {
-            background: #162447;
-            padding: 10px;
-            border-radius: 8px;
-            width: 100%;
-            max-width: 500px;
-            box-sizing: border-box;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            position: relative;
-            z-index: 10;
-        }
-        .search-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        .search-box input {
-            flex: 1;
-            padding: 8px;
-            border-radius: 5px;
-            border: 1px solid #0f4c81;
-            background: #1f4068;
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
             color: #fff;
-            font-size: 16px;
+            padding: 15px;
+            margin: 0;
         }
-        .search-box button {
-            padding: 8px 15px;
-            background: #e43f5a;
-            border: none;
+
+        /* Главная кнопка-выпадашка */
+        .dropdown-menu {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+            max-width: 350px;
+            margin-bottom: 20px;
+        }
+
+        .main-btn {
+            background-color: #333;
             color: white;
-            border-radius: 5px;
+            padding: 12px 20px;
+            font-size: 16px;
+            border: 1px solid #444;
+            border-radius: 8px;
             cursor: pointer;
-            font-weight: bold;
-        }
-        .slider-zone {
+            width: 100%;
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            gap: 10px;
+            align-items: center;
+            box-sizing: border-box;
+        }
+
+        .main-btn::after {
+            content: '▼';
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+
+        .main-btn.active::after {
+            transform: rotate(180deg);
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #222;
+            width: 100%;
+            border: 1px solid #444;
+            border-radius: 8px;
+            box-shadow: 0px 8px 16px rgba(0,0,0,0.5);
+            z-index: 100;
+            margin-top: 5px;
+            box-sizing: border-box;
+        }
+
+        .dropdown-content a {
+            color: #ddd;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            border-bottom: 1px solid #333;
+        }
+
+        .dropdown-content a:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-content a:hover {
+            background-color: #333;
+            color: #fff;
+        }
+
+        .show { display: block; }
+
+        /* Таблица рефералов */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+            margin-top: 10px;
+            display: none; /* Изначально скрыта, пока не нажали в меню */
+        }
+
+        .ref-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #222;
+            border-radius: 6px;
+            overflow: hidden;
             font-size: 14px;
         }
-        .slider-zone input { flex: 1; }
-        .btn-reset {
-            background: #438a5e;
-            color: white;
+
+        .ref-table th, .ref-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+
+        .ref-table th {
+            background-color: #2c2c2c;
+            color: #aaa;
+        }
+
+        /* Кнопка раскрытия строки в таблице */
+        .row-toggle-btn {
+            background: #444;
+            color: #fff;
             border: none;
             padding: 5px 10px;
             border-radius: 4px;
             cursor: pointer;
+            font-size: 12px;
         }
 
-        /* Главный контейнер: окно с возможностью мотать в любые стороны */
-        .screen-container {
-            width: 100%;
-            max-width: 100vw;
-            overflow-x: auto; /* Включаем прокрутку вбок */
-            overflow-y: auto; /* Включаем прокрутку вниз */
-            display: block;   
-            background: #111122;
-            border-radius: 8px;
-            min-height: 450px;
-            box-sizing: border-box;
-            cursor: zoom-in;
-            padding: 20px;
-        }
-        
-        #mainTreeDisplay {
-            transform-origin: top left;
-            transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
-            display: block;
-            width: max-content; 
-        }
-        
-        /* Ряд строго на 32 матрицы без капризных пикселей */
-        .matrices-row {
-            display: grid !important;
-            grid-template-columns: repeat(32, 260px) !important; /* Железобетонно 32 колонки по размеру матрицы */
-            gap: 30px;
-            padding: 10px;
-            box-sizing: border-box;
+        .row-toggle-btn::after {
+            content: ' ▼';
         }
 
-        .semerka-matrix {
-            background: rgba(22, 36, 71, 0.9);
-            border: 2px solid #0f4c81;
-            border-radius: 12px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            align-items: center;
-            min-width: 260px;
-            max-width: 260px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            cursor: default;
-        }
-        .matrix-row {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            width: 100%;
-        }
-        
-        .cell {
-            background: #1f4068;
-            border: 1px solid #0f4c81;
-            border-radius: 6px;
-            padding: 6px;
-            text-align: center;
-            min-width: 55px;
-            box-sizing: border-box;
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-        .cell:active { transform: scale(0.9) !important; }
-        .cell-id { font-size: 10px; color: #888; font-weight: bold; }
-        .cell-user { font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; }
-        
-        .level-1 { border: 2px solid #ffd700; background: #3a3000; } 
-        .level-2 { border: 2px solid #00fff0; background: #002b36; } 
-        .level-3 { border: 1px dashed #ffffff; background: #2b2b2b; } 
-        
-        .occupied { background: #16a085 !important; border-color: #1abc9c !important; }
-        .focused-cell { animation: pulse 1s infinite alternate; border-color: #ff3366 !important; box-shadow: 0 0 15px #ff3366 !important; background: #ff3366 !important; }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            100% { transform: scale(1.05); }
+        .row-toggle-btn.open::after {
+            content: ' ▲';
         }
 
-        .table-container {
-            width: 100%;
-            max-width: 500px;
-            margin-top: 20px;
-            background: #162447;
-            border-radius: 8px;
-            padding: 10px;
-            box-sizing: border-box;
+        /* Вложенная (выпадающая вниз) строка */
+        .detail-row {
+            display: none;
+            background-color: #1c1c1c;
         }
-        .table-container h2 { font-size: 16px; margin: 0 0 10px 0; color: #00fff0; text-align: center; }
-        .ref-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
+
+        .detail-container {
+            padding: 10px 15px;
+            font-size: 13px;
+            color: #ccc;
+            border-left: 3px solid #00bcd4; /* Подсветка вложенности */
         }
-        .ref-table th, .ref-table td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid #1f4068;
-        }
-        .ref-table th { background: #0f4c81; color: white; }
-        .ref-table tr:hover { background: rgba(255,255,255,0.05); cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <h1>Панель Управления Админа</h1>
-
-    <div class="control-panel">
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Введите логин пользователя...">
-            <button id="searchBtn">Найти</button>
-        </div>
-        <div class="slider-zone">
-            <span>Масштаб:</span>
-            <input type="range" id="zoomSlider" min="0.03" max="1" step="0.05" value="0.8">
-            <button class="btn-reset" id="resetBtn">Сброс БД</button>
+    <div class="dropdown-menu">
+        <button class="main-btn" id="menuBtn">Меню управления</button>
+        <div class="dropdown-content" id="menuContent">
+            <a href="#" id="showRefTableLink">Таблица Рефералов</a>
+            <a href="#">История начислений</a>
+            <a href="#">Карточки пользователей</a>
         </div>
     </div>
 
-    <div class="screen-container" id="screenContainer">
-        <div id="mainTreeDisplay"></div>
-    </div>
-
-    <div class="table-container">
-        <h2>Реестр участников В СТОЛБИК («Таблица Пользователей»)</h2>
+    <div class="table-container" id="refTableContainer">
         <table class="ref-table">
             <thead>
                 <tr>
-                    <th>Логин партнера</th>
-                    <th>ID Ячейки</th>
+                    <th>Действие</th>
+                    <th>Логин</th>
+                    <th>Матрица</th>
                 </tr>
             </thead>
-            <tbody id="refTableBody">
+            <tbody>
+                <tr>
+                    <td><button class="row-toggle-btn" onclick="toggleRow('details1', this)"></button></td>
+                    <td>user_ivan</td>
+                    <td>Ячейка C1</td>
+                </tr>
+                <tr id="details1" class="detail-row">
+                    <td colspan="3">
+                        <div class="detail-container">
+                            <strong>Информация о реферале:</strong><br>
+                            • Кто пригласил: admin_boss<br>
+                            • Дата активации: 10.07.2026<br>
+                            • Виртуальная оплата: 10 000 р. (Успешно)
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td><button class="row-toggle-btn" onclick="toggleRow('details2', this)"></button></td>
+                    <td>crypto_king</td>
+                    <td>Ячейка C2</td>
+                </tr>
+                <tr id="details2" class="detail-row">
+                    <td colspan="3">
+                        <div class="detail-container">
+                            <strong>Информация о реферале:</strong><br>
+                            • Кто пригласил: user_ivan<br>
+                            • Дата активации: 10.07.2026<br>
+                            • Виртуальная оплата: 10 000 р. (Успешно)
+                        </div>
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
 
-    <script src="script.js"></script>
+    <script>
+        // Логика работы главной выпадающей кнопки
+        const menuBtn = document.getElementById('menuBtn');
+        const menuContent = document.getElementById('menuContent');
+        const refTableContainer = document.getElementById('refTableContainer');
+        const showRefTableLink = document.getElementById('showRefTableLink');
+
+        menuBtn.addEventListener('click', () => {
+            menuContent.classList.toggle('show');
+            menuBtn.classList.toggle('active');
+        });
+
+        // Клик по первой строке "Таблица Рефералов"
+        showRefTableLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            refTableContainer.style.display = 'block'; // Показываем таблицу
+            menuContent.classList.remove('show'); // Закрываем само меню
+            menuBtn.classList.remove('active');
+        });
+
+        // Закрытие меню, если кликнули в другое место экрана
+        window.onclick = function(event) {
+            if (!event.target.matches('#menuBtn')) {
+                if (menuContent.classList.contains('show')) {
+                    menuContent.classList.remove('show');
+                    menuBtn.classList.remove('active');
+                }
+            }
+        }
+
+        // Логика раскрытия строк ВНИЗ внутри таблицы
+        function toggleRow(rowId, btn) {
+            const detailRow = document.getElementById(rowId);
+            if (detailRow.style.display === 'table-row') {
+                detailRow.style.display = 'none';
+                btn.classList.remove('open');
+            } else {
+                detailRow.style.display = 'table-row';
+                btn.classList.add('open');
+            }
+        }
+    </script>
+
 </body>
 </html>
