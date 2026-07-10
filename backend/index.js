@@ -59,28 +59,23 @@ function createInitialTree() {
 let treeDB = createInitialTree();
 
 function findNextEmptyCell(tree) {
-    // Начальные фиксированные уровни A, B, C
     const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    let levelIndex = 3; // Начинаем с уровня D (индекс 3)
+    let levelIndex = 3; 
     while (true) {
         const letter = getLevelLetter(levelIndex);
-        const countInLevel = 1 << levelIndex; // Всего ячеек на данном буквенном уровне
-        const totalQuadsInLevel = countInLevel / 4; // Всего матриц ("четверок") на уровне
+        const countInLevel = 1 << levelIndex; 
+        const totalQuadsInLevel = countInLevel / 4; 
 
-        // Дробим матрицы уровня на порции строго по 32 матрицы (128 ячеек)
         const CHUNK_SIZE = 32;
 
         for (let chunkStart = 0; chunkStart < totalQuadsInLevel; chunkStart += CHUNK_SIZE) {
             const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalQuadsInLevel);
-            
-            // Флаг: проверяем, закрыта ли текущая порция из 32 матриц полностью
             let isChunkFull = true;
 
-            // Запускаем фирменный круговой обход ("гребёнку") строго ВНУТРИ текущей порции матриц
             for (let position = 0; position < 4; position++) {
                 for (let quad = chunkStart; quad < chunkEnd; quad++) {
                     const num = (quad * 4) + position + 1;
@@ -91,16 +86,11 @@ function findNextEmptyCell(tree) {
                     }
                     
                     if (!tree[id].user) {
-                        return id; // Нашли свободную ячейку по правилу гребёнки внутри этих 32 матриц!
+                        return id; 
                     }
                 }
             }
-
-            // Если мы вышли из циклов позиций и не вернули id, значит вся текущая порция из 32 матриц забита.
-            // Только в этом случае цикл перейдет к следующей порции chunkStart (следующим 32 матрицам этого же уровня).
         }
-
-        // Если абсолютно весь буквенный уровень закрылся по порциям, спускаемся на букву ниже
         levelIndex++; 
     }
 }
@@ -143,7 +133,6 @@ app.post('/api/register', (req, res) => {
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = username;
     
-    // Привязываем спонсора. Если не указан — привязываем к SYSTEM_ROOT
     referalsDB[username] = sponsor ? sponsor : 'SYSTEM_ROOT';
     
     checkAndGenerateChildren(treeDB, cellId);
@@ -162,11 +151,53 @@ app.post('/api/reset', (req, res) => {
     res.json({ success: true });
 });
 
-// Новый API эндпоинт для получения полных данных реферальной цепочки вверх («Кто-за-кем»)
+// НОВЫЙ API ЭНДПОИНТ: Отдает полное реферальное дерево для таблицы со стрелочками
+app.get('/api/referral-tree', (req, res) => {
+    // Вспомогательная функция, которая ищет всех личников для конкретного человека
+    function getDirectReferrals(parentUser) {
+        let list = [];
+        for (const [user, sponsor] of Object.entries(referalsDB)) {
+            if (sponsor && sponsor.toLowerCase() === parentUser.toLowerCase()) {
+                // Ищем ячейку, которую этот человек занимает в матрице
+                const cell = Object.values(treeDB).find(c => c.user && c.user.toLowerCase() === user.toLowerCase());
+                list.push({
+                    username: user,
+                    cellId: cell ? cell.id : 'Не в матрице'
+                });
+            }
+        }
+        return list;
+    }
+
+    // Рекурсивный сборщик уровней глубины (Рефералы_1, 2, 3...)
+    function buildTreeData(username) {
+        const referrals = getDirectReferrals(username);
+        return referrals.map(ref => {
+            return {
+                username: ref.username,
+                cellId: ref.cellId,
+                children: buildTreeData(ref.username) // Копаем вглубь (его личники)
+            };
+        });
+    }
+
+    // Начинаем строить дерево от SYSTEM_ROOT (или от первого корня)
+    const rootUser = 'SYSTEM_ROOT';
+    const cell = Object.values(treeDB).find(c => c.user && c.user === rootUser);
+
+    res.json({
+        success: true,
+        root: {
+            username: rootUser,
+            cellId: cell ? cell.id : 'A1',
+            children: buildTreeData(rootUser)
+        }
+    });
+});
+
 app.get('/api/user-details/:username', (req, res) => {
     const username = req.params.username;
     
-    // Находим все ячейки, которые занимает данный пользователь
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase())
         .map(cell => cell.id);
@@ -175,7 +206,6 @@ app.get('/api/user-details/:username', (req, res) => {
         return res.status(404).json({ error: 'Пользователь не найден' });
     }
     
-    // Выстраиваем спонсорскую линию вверх до SYSTEM_ROOT
     let sponsorChain = [];
     let currentSponsor = referalsDB[username] || 'SYSTEM_ROOT';
     
@@ -201,13 +231,12 @@ app.post('/api/shop/register', (req, res) => {
     
     shopUsersDB[username] = { username, isPaid: false, balance: 0 };
     
-    // Запоминаем спонсора. Если робот регистрирует пачку ботов, связываем их цепочкой друг за другом
     if (sponsor) {
         referalsDB[username] = sponsor;
     } else {
         referalsDB[username] = lastRegisteredBot ? lastRegisteredBot : 'SYSTEM_ROOT';
     }
-    lastRegisteredBot = username; // Текущий бот становится спонсором для следующего
+    lastRegisteredBot = username; 
     
     res.json({ success: true, shopUserStatus: shopUsersDB[username] });
 });
