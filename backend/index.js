@@ -24,6 +24,11 @@ function parseCellId(id) {
     return { letter: match[1], num: parseInt(match[2], 10) };
 }
 
+// Главная страница (чтобы не было ошибки Cannot GET /)
+app.get('/', (req, res) => {
+    res.send('<h1>Сервер дерева успешно запущен и работает!</h1><p>Ожидаю запросы от фронтенда...</p>');
+});
+
 // Эндпоинт 1: Получение всей структуры дерева для отрисовки матриц
 app.get('/api/tree', (req, res) => {
     res.json(treeStorage);
@@ -97,13 +102,11 @@ app.get('/api/user-details/:username', (req, res) => {
     chain.reverse();
 
     // 4. Находим всех его личников (приглашенных рефералов)
-    // Это пользователи, чьи ячейки ссылаются на ЛЮБУЮ из ячеек нашего targetUser
     let referralsSet = new Set();
     for (const [id, cell] of Object.entries(treeStorage)) {
         if (cell && cell.parentId && cell.user) {
             const parentCell = treeStorage[cell.parentId];
             if (parentCell && parentCell.user && parentCell.user.toLowerCase() === targetUser.toLowerCase()) {
-                // Исключаем самоциклирование (если юзер встал под самого себя)
                 if (cell.user.toLowerCase() !== targetUser.toLowerCase()) {
                     referralsSet.add(cell.user);
                 }
@@ -129,7 +132,6 @@ app.post('/api/register', (req, res) => {
         return res.status(400).json({ success: false, error: "Не указан username или parentCellId" });
     }
 
-    // Логика автоматического поиска свободного места (стековый обход)
     let queue = [parentCellId];
     let targetCellId = null;
 
@@ -145,7 +147,6 @@ app.post('/api/register', (req, res) => {
         const parsed = parseCellId(currentId);
         if (!parsed) continue;
 
-        // Вычисляем буквы следующего уровня (для плеч)
         let i = parsed.letter.length - 1;
         let nextLetter = "";
         while (i >= 0) {
@@ -168,10 +169,8 @@ app.post('/api/register', (req, res) => {
         return res.json({ success: false, error: "Не удалось найти свободное место в дереве" });
     }
 
-    // Сохраняем новую ячейку в дерево
     const parsedTarget = parseCellId(targetCellId);
     
-    // Определяем родительскую ячейку для связи
     let calculatedParentId = null;
     if (targetCellId !== "A1") {
         let prevLetter = "";
