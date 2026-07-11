@@ -7,7 +7,7 @@ const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const refTableBody = document.getElementById('refTableBody');
 
-// --- НОВЫЕ ЭЛЕМЕНТЫ УПРАВЛЕНИЯ ---
+// --- ЭЛЕМЕНТЫ УПРАВЛЕНИЯ ---
 const menuToggleBtn = document.getElementById('menuToggleBtn');
 const menuContent = document.getElementById('menuContent');
 const openTableBtn = document.getElementById('openTableBtn');
@@ -17,7 +17,10 @@ const interactiveRefTableBody = document.getElementById('interactiveRefTableBody
 
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
-let globalTreeCached = null; // Кэшируем данные дерева для таблицы
+let globalTreeCached = null; 
+
+// ГЛОБАЛЬНОЕ ХРАНИЛИЩЕ СОСТОЯНИЯ: помнит, какие ветки РАЗВЕРНУЛ пользователь
+let expandedNodes = new Set(); 
 
 // --- ЛОГИКА МЕНЮ И ОВЕРЛЕЯ ---
 if (menuToggleBtn && menuContent) {
@@ -32,7 +35,7 @@ if (openTableBtn && tableOverlay && menuContent) {
         e.stopPropagation();
         tableOverlay.classList.add('show');
         menuContent.classList.remove('show');
-        buildInteractiveRefTable(); // Заполняем таблицу при открытии
+        buildInteractiveRefTable(); 
     });
 }
 
@@ -105,7 +108,7 @@ async function fetchTree() {
     try {
         const res = await fetch(`${API_URL}/tree`);
         const data = await res.json();
-        globalTreeCached = data; // Записываем в кэш
+        globalTreeCached = data; 
         renderDynamicSplitting(data);
         renderTableList(data);
         
@@ -358,7 +361,7 @@ function renderTableList(tree) {
     refTableBody.innerHTML = html || '<tr><td colspan="2" style="text-align:center;">База пуста</td></tr>';
 }
 
-// --- СКОМПАКТИЗИРОВАННАЯ ИНТЕРАКТИВНАЯ ТАБЛИЦА С ВЫВОДОМ ВПРАВО ---
+// --- ИНТЕРАКТИВНАЯ ТАБЛИЦА С КОНТРОЛЕМ ВИДИМОСТИ ВЕТОК ---
 async function buildInteractiveRefTable() {
     if (!interactiveRefTableBody) return;
 
@@ -378,17 +381,20 @@ async function buildInteractiveRefTable() {
 
             let hasChildren = children.length > 0;
             let currentColumn = refTree[username] ? refTree[username].calculatedColumn : 1;
+            
+            // Проверяем, развернул ли админ эту ветку руками
+            let isExpanded = expandedNodes.has(username); 
 
             let html = `
                 <div class="ref-node" style="display: flex; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
                     <div class="user-card" style="background: #1f4068; border: 1px solid #00fff0; padding: 4px 6px; border-radius: 4px; min-width: 90px; max-width: 100px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); box-sizing: border-box;">
                         <div style="font-weight: bold; color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
                         <div style="font-size: 9px; color: #ffd700;">Уровень: ${currentColumn}</div>
-                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 3px; background: #00fff0; border: none; color: #111; font-size: 9px; padding: 1px 4px; border-radius: 3px; cursor: pointer; font-weight: bold; width: 100%; display: block; text-align: center;">▲</button>` : ''}
+                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 3px; background: #00fff0; border: none; color: #111; font-size: 9px; padding: 1px 4px; border-radius: 3px; cursor: pointer; font-weight: bold; width: 100%; display: block; text-align: center;">${isExpanded ? '▲' : '▼'}</button>` : ''}
                     </div>
                     
                     ${hasChildren ? `
-                        <div id="children_of_${username}" class="children-container" style="display: flex; flex-direction: column; border-left: 1px dashed #00fff0; padding-left: 8px; gap: 4px;">
+                        <div id="children_of_${username}" class="children-container" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; border-left: 1px dashed #00fff0; padding-left: 8px; gap: 4px;">
                             ${children.map(child => buildUserNodeHTML(child.username)).join('')}
                         </div>
                     ` : ''}
@@ -417,6 +423,7 @@ async function buildInteractiveRefTable() {
     }
 }
 
+// ПЕРЕКЛЮЧЕНИЕ С ПАМЯТЬЮ КЛИКА (сохраняем выбор в expandedNodes)
 window.toggleRefBranch = function(username, btn) {
     const container = document.getElementById(`children_of_${username}`);
     if (!container) return;
@@ -424,9 +431,11 @@ window.toggleRefBranch = function(username, btn) {
     if (container.style.display === 'none') {
         container.style.display = 'flex';
         btn.innerHTML = '▲';
+        expandedNodes.add(username); // Запомнили, что ветка открыта
     } else {
         container.style.display = 'none';
         btn.innerHTML = '▼';
+        expandedNodes.delete(username); // Запомнили, что ветка закрыта
     }
 };
 
@@ -439,11 +448,12 @@ resetBtn.addEventListener('click', async () => {
             alert('База успешно сброшена!');
             currentRootId = 'A1';
             searchTargetUser = '';
+            expandedNodes.clear(); // Сброс памяти веток
             setZoom(0.8);
             fetchTree();
         }
     } catch (err) {
-        alert('Ошибка при сбросе');
+        alert('Ошибка при входе');
     }
 });
 
