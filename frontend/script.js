@@ -148,18 +148,26 @@ function scrollToFocusedCell() {
     }, 100);
 }
 
-// Плавный скролл к найденному пользователю внутри Таблицы Рефералов
+// НАДЕЖНЫЙ РУЧНОЙ СКРОЛЛ ПО ЦЕНТРУ ДЛЯ ТАБЛИЦЫ РЕФЕРАЛОВ ВНУТРИ ОВЕРЛЕЯ
 function scrollToFocusedReferal() {
     setTimeout(() => {
         const focusedCard = document.querySelector('.ref-node-focused');
-        if (focusedCard) {
-            focusedCard.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-                inline: 'nearest'
+        const overlay = document.getElementById('tableOverlay');
+        
+        if (focusedCard && overlay) {
+            // Вычисляем абсолютный Y элемента относительно начала страницы
+            const cardTop = focusedCard.getBoundingClientRect().top + overlay.scrollTop;
+            // Вычисляем высоту карточки и высоту самого оверлея
+            const cardHeight = focusedCard.offsetHeight;
+            const overlayHeight = overlay.clientHeight;
+            
+            // Математически скроллим контейнер оверлея ровно по центру экрана
+            overlay.scrollTo({
+                top: cardTop - (overlayHeight / 2) + (cardHeight / 2),
+                behavior: 'smooth'
             });
         }
-    }, 300); // Даем время дереву рефералов полностью отрисоваться в DOM
+    }, 350); // Небольшой запас времени, чтобы дерево гарантированно отрисовалось
 }
 
 async function fetchTree(forceRender = false) {
