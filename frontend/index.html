@@ -217,7 +217,7 @@
 </head>
 <body>
 
-    <h1>Панель Управления Админа</h1>
+    <h1>Панель Управления Admin</h1>
 
     <div class="control-panel">
         <button class="menu-btn" id="menuToggleBtn">☰ Меню Управления <span>▼</span></button>
@@ -226,7 +226,7 @@
         </div>
 
         <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Введите логин пользователя...">
+            <input type="text" id="searchInput" placeholder="Поиск в Матрицах (логин)...">
             <button id="searchBtn">Найти</button>
         </div>
         <div class="slider-zone">
@@ -256,9 +256,18 @@
 
     <div class="overlay" id="tableOverlay">
         <div class="overlay-header">
-            <div class="overlay-title">📋 ИНТЕРАКТИВНАЯ ТАБЛИЦА</div>
+            <div class="overlay-title">📋 ИНТЕРАКТИВНАЯ ТАБЛИЦА РЕФЕРАЛОВ</div>
             <button class="close-overlay-btn" id="closeOverlayBtn">Закрыть ✖</button>
         </div>
+
+        <div class="control-panel" style="max-width: 100%; margin-bottom: 15px; background: #162447;">
+            <div class="search-box" style="margin-bottom: 0;">
+                <input type="text" id="refSearchInput" placeholder="Поиск в Таблице Рефералов (логин)...">
+                <button id="refSearchBtn" style="background: #00fff0; color: #111;">Найти</button>
+                <button id="refSearchResetBtn" style="background: #444; color: #fff;">Сброс</button>
+            </div>
+        </div>
+
         <div class="table-container" style="max-width: 100%; margin-top: 0;">
             <table class="ref-table">
                 <thead>
