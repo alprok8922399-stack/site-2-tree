@@ -50,7 +50,7 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Создаем HTML-структуру для всплывающего окна информации (если её еще нет на странице)
+// Создаем HTML-структуру для всплывающего окна информации
 let modal = document.getElementById('infoModal');
 if (!modal) {
     modal = document.createElement('div');
@@ -109,7 +109,6 @@ async function fetchTree() {
         renderDynamicSplitting(data);
         renderTableList(data);
         
-        // Обновляем оверлей, если он открыт
         if (tableOverlay && tableOverlay.classList.contains('show')) {
             buildInteractiveRefTable();
         }
@@ -171,11 +170,9 @@ function findUserAndFocus(username) {
         });
 }
 
-// Функция клика пальцем по заполненной ячейке — вызывает модальное окно с деталями и цепочкой
 window.showUserDetails = async function(username, cellId, event) {
-    if (event) event.stopPropagation(); // Чтобы не срабатывал зум контейнера
+    if (event) event.stopPropagation(); 
     
-    // Если ячейка пустая, просто переключаем фокус
     if (!username || username === '-') {
         currentRootId = cellId;
         setZoom(0.8);
@@ -197,7 +194,6 @@ window.showUserDetails = async function(username, cellId, event) {
         
         if (data.success) {
             const cellsList = data.cells.join(', ');
-            // Формируем красивую визуальную линию спонсоров: Спонсор -> Главный -> Корень
             const chainLine = data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Корневой аккаунт';
             
             modalBody.innerHTML = `
@@ -210,7 +206,6 @@ window.showUserDetails = async function(username, cellId, event) {
                 </div>
             `;
             
-            // Смещаем фокус матрицы на кликнутую ячейку на фоне
             currentRootId = cellId;
             searchTargetUser = username;
             renderDynamicSplitting(globalTreeCached);
@@ -230,7 +225,6 @@ function getCellHTML(cell, roleClass, fallbackId = '-') {
     const displayUser = cell.user ? cell.user : '-';
     const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
 
-    // При клике вызываем детальную карточку
     return `
         <div class="cell ${roleClass} ${isOccupied} ${isFocused}" onclick="showUserDetails('${displayUser}', '${cell.id}', event)">
             <div class="cell-id">${cell.id}</div>
@@ -364,7 +358,7 @@ function renderTableList(tree) {
     refTableBody.innerHTML = html || '<tr><td colspan="2" style="text-align:center;">База пуста</td></tr>';
 }
 
-// --- ЛОГИКА НОВОЙ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ С ГОРИЗОНТАЛЬНЫМ НАСЛЕДОВАНИЕМ ВПРАВО ---
+// --- СКОМПАКТИЗИРОВАННАЯ ИНТЕРАКТИВНАЯ ТАБЛИЦА С ВЫВОДОМ ВПРАВО ---
 async function buildInteractiveRefTable() {
     if (!interactiveRefTableBody) return;
 
@@ -372,15 +366,13 @@ async function buildInteractiveRefTable() {
         const res = await fetch(`${API_URL}/referals-tree`);
         const data = await res.json();
         if (!data.success || !data.tree) {
-            interactiveRefTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Ошибка структуры</td></tr>';
+            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Ошибка структуры</td></tr>';
             return;
         }
 
         const refTree = data.tree;
         
-        // Рекурсивная функция сборки дерева личников, уходящих вправо (колонки)
         function buildUserNodeHTML(username) {
-            // Ищем всех прямых личников для этого пользователя
             let children = Object.values(refTree).filter(node => node.sponsor === username);
             children.sort((a, b) => a.username.localeCompare(b.username));
 
@@ -388,15 +380,15 @@ async function buildInteractiveRefTable() {
             let currentColumn = refTree[username] ? refTree[username].calculatedColumn : 1;
 
             let html = `
-                <div class="ref-node" style="display: flex; align-items: flex-start; margin-bottom: 10px; gap: 15px;">
-                    <div class="user-card" style="background: #1f4068; border: 1px solid #00fff0; padding: 8px 12px; border-radius: 6px; min-width: 140px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
-                        <div style="font-weight: bold; color: #fff; font-size: 14px;">${username}</div>
-                        <div style="font-size: 11px; color: #ffd700;">Уровень: ${currentColumn}</div>
-                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 5px; background: #00fff0; border: none; color: #111; font-size: 10px; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-weight: bold;">Скрыть личников ▲</button>` : ''}
+                <div class="ref-node" style="display: flex; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
+                    <div class="user-card" style="background: #1f4068; border: 1px solid #00fff0; padding: 4px 6px; border-radius: 4px; min-width: 90px; max-width: 100px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); box-sizing: border-box;">
+                        <div style="font-weight: bold; color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
+                        <div style="font-size: 9px; color: #ffd700;">Уровень: ${currentColumn}</div>
+                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 3px; background: #00fff0; border: none; color: #111; font-size: 9px; padding: 1px 4px; border-radius: 3px; cursor: pointer; font-weight: bold; width: 100%; display: block; text-align: center;">▲</button>` : ''}
                     </div>
                     
                     ${hasChildren ? `
-                        <div id="children_of_${username}" class="children-container" style="display: flex; flex-direction: column; border-left: 2px dashed #00fff0; padding-left: 15px;">
+                        <div id="children_of_${username}" class="children-container" style="display: flex; flex-direction: column; border-left: 1px dashed #00fff0; padding-left: 8px; gap: 4px;">
                             ${children.map(child => buildUserNodeHTML(child.username)).join('')}
                         </div>
                     ` : ''}
@@ -405,11 +397,10 @@ async function buildInteractiveRefTable() {
             return html;
         }
 
-        // Рендерим от корня SYSTEM_ROOT, если он есть в базе рефералов
         if (refTree['SYSTEM_ROOT']) {
             let fullTreeHTML = `
                 <tr>
-                    <td colspan="3" style="padding: 20px; overflow-x: auto;">
+                    <td colspan="2" style="padding: 10px; overflow-x: auto;">
                         <div style="display: flex; min-width: max-content;">
                             ${buildUserNodeHTML('SYSTEM_ROOT')}
                         </div>
@@ -418,28 +409,26 @@ async function buildInteractiveRefTable() {
             `;
             interactiveRefTableBody.innerHTML = fullTreeHTML;
         } else {
-            interactiveRefTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">SYSTEM_ROOT не найден</td></tr>';
+            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">SYSTEM_ROOT не найден</td></tr>';
         }
 
     } catch (e) {
-        interactiveRefTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: #e43f5a;">Не удалось загрузить реферальное дерево</td></tr>';
+        interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center; color: #e43f5a;">Не удалось загрузить реферальное дерево</td></tr>';
     }
 }
 
-// Переключение видимости ветки личников (вправо)
 window.toggleRefBranch = function(username, btn) {
     const container = document.getElementById(`children_of_${username}`);
     if (!container) return;
 
     if (container.style.display === 'none') {
         container.style.display = 'flex';
-        btn.innerHTML = 'Скрыть личников ▲';
+        btn.innerHTML = '▲';
     } else {
         container.style.display = 'none';
-        btn.innerHTML = 'Показать личников ▼';
+        btn.innerHTML = '▼';
     }
 };
-// ------------------------------------------
 
 resetBtn.addEventListener('click', async () => {
     if (!confirm('Очистить базу данных дерева?')) return;
