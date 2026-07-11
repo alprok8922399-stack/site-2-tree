@@ -148,26 +148,19 @@ function scrollToFocusedCell() {
     }, 100);
 }
 
-// НАДЕЖНЫЙ РУЧНОЙ СКРОЛЛ ПО ЦЕНТРУ ДЛЯ ТАБЛИЦЫ РЕФЕРАЛОВ ВНУТРИ ОВЕРЛЕЯ
+// НАДЕЖНЫЙ СКРОЛЛ ДЛЯ ТАБЛИЦЫ РЕФЕРАЛОВ С ЗАДЕРЖКОЙ НА ОТРИСОВКУ
 function scrollToFocusedReferal() {
+    // Даем телефону полсекунды (500мс) полностью собрать и показать дерево в DOM
     setTimeout(() => {
         const focusedCard = document.querySelector('.ref-node-focused');
-        const overlay = document.getElementById('tableOverlay');
-        
-        if (focusedCard && overlay) {
-            // Вычисляем абсолютный Y элемента относительно начала страницы
-            const cardTop = focusedCard.getBoundingClientRect().top + overlay.scrollTop;
-            // Вычисляем высоту карточки и высоту самого оверлея
-            const cardHeight = focusedCard.offsetHeight;
-            const overlayHeight = overlay.clientHeight;
-            
-            // Математически скроллим контейнер оверлея ровно по центру экрана
-            overlay.scrollTo({
-                top: cardTop - (overlayHeight / 2) + (cardHeight / 2),
-                behavior: 'smooth'
+        if (focusedCard) {
+            focusedCard.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+                inline: 'nearest'
             });
         }
-    }, 350); // Небольшой запас времени, чтобы дерево гарантированно отрисовалось
+    }, 500); 
 }
 
 async function fetchTree(forceRender = false) {
