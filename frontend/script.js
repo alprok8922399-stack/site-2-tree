@@ -145,7 +145,7 @@ function scrollToFocusedCell() {
                 inline: 'center'
             });
         }
-    }, 100);
+    }, 300);
 }
 
 async function fetchTree(forceRender = false) {
