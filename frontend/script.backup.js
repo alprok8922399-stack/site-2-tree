@@ -7,10 +7,53 @@ const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const refTableBody = document.getElementById('refTableBody');
 
+// --- ЭЛЕМЕНТЫ УПРАВЛЕНИЯ ---
+const menuToggleBtn = document.getElementById('menuToggleBtn');
+const menuContent = document.getElementById('menuContent');
+const openTableBtn = document.getElementById('openTableBtn');
+const tableOverlay = document.getElementById('tableOverlay');
+const closeOverlayBtn = document.getElementById('closeOverlayBtn');
+const interactiveRefTableBody = document.getElementById('interactiveRefTableBody');
+
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; 
+let globalTreeCached = null; 
 
-// Создаем HTML-структуру для всплывающего окна информации (если её еще нет на странице)
+// ГЛОБАЛЬНОЕ ХРАНИЛИЩЕ СОСТОЯНИЯ: помнит, какие ветки РАЗВЕРНУЛ пользователь
+let expandedNodes = new Set(); 
+
+// --- ЛОГИКА МЕНЮ И ОВЕРЛЕЯ ---
+if (menuToggleBtn && menuContent) {
+    menuToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menuContent.classList.toggle('show');
+    });
+}
+
+if (openTableBtn && tableOverlay && menuContent) {
+    openTableBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        tableOverlay.classList.add('show');
+        menuContent.classList.remove('show');
+        buildInteractiveRefTable(); 
+    });
+}
+
+if (closeOverlayBtn && tableOverlay) {
+    closeOverlayBtn.addEventListener('click', () => {
+        tableOverlay.classList.remove('show');
+    });
+}
+
+document.addEventListener('click', (e) => {
+    if (menuContent && menuContent.classList.contains('show')) {
+        if (!menuContent.contains(e.target) && e.target !== menuToggleBtn) {
+            menuContent.classList.remove('show');
+        }
+    }
+});
+
+// Создаем HTML-структуру для всплывающего окна информации
 let modal = document.getElementById('infoModal');
 if (!modal) {
     modal = document.createElement('div');
@@ -65,8 +108,13 @@ async function fetchTree() {
     try {
         const res = await fetch(`${API_URL}/tree`);
         const data = await res.json();
+        globalTreeCached = data; 
         renderDynamicSplitting(data);
         renderTableList(data);
+        
+        if (tableOverlay && tableOverlay.classList.contains('show')) {
+            buildInteractiveRefTable();
+        }
     } catch (err) {
         console.error('Ошибка загрузки данных:', err);
     }
@@ -120,16 +168,14 @@ function findUserAndFocus(username) {
                 renderDynamicSplitting(tree);
                 renderTableList(tree);
             } else {
-                alert(`Пользователь ${username} не найден в текущей структуру`);
+                alert(`Пользователь ${username} не найден в текущей структуре`);
             }
         });
 }
 
-// Функция клика пальцем по заполненной ячейке — вызывает модальное окно с деталями и цепочкой
 window.showUserDetails = async function(username, cellId, event) {
-    if (event) event.stopPropagation(); // Чтобы не срабатывал зум контейнера
+    if (event) event.stopPropagation(); 
     
-    // Если ячейка пустая, просто переключаем фокус
     if (!username || username === '-') {
         currentRootId = cellId;
         setZoom(0.8);
@@ -151,7 +197,6 @@ window.showUserDetails = async function(username, cellId, event) {
         
         if (data.success) {
             const cellsList = data.cells.join(', ');
-            // Формируем красивую визуальную линию спонсоров: Спонсор -> Главный -> Корень
             const chainLine = data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Корневой аккаунт';
             
             modalBody.innerHTML = `
@@ -164,7 +209,6 @@ window.showUserDetails = async function(username, cellId, event) {
                 </div>
             `;
             
-            // Смещаем фокус матрицы на кликнутую ячейку на фоне
             currentRootId = cellId;
             searchTargetUser = username;
             renderDynamicSplitting(globalTreeCached);
@@ -184,7 +228,6 @@ function getCellHTML(cell, roleClass, fallbackId = '-') {
     const displayUser = cell.user ? cell.user : '-';
     const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
 
-    // При клике вызываем детальную карточку
     return `
         <div class="cell ${roleClass} ${isOccupied} ${isFocused}" onclick="showUserDetails('${displayUser}', '${cell.id}', event)">
             <div class="cell-id">${cell.id}</div>
@@ -233,8 +276,6 @@ function getNextLevelLetter(letter) {
     }
     return 'A'.repeat(letter.length + 1);
 }
-
-let globalTreeCached = {}; // Кэш для плавной работы интерфейса
 
 function renderDynamicSplitting(tree) {
     globalTreeCached = tree;
@@ -309,7 +350,6 @@ function renderTableList(tree) {
 
     list.forEach(item => {
         const isCurrentSearch = (item.user === searchTargetUser) ? 'style="background: #ff3366; color: white; font-weight:bold;"' : '';
-        // Клик по строке таблицы теперь тоже открывает детальное окно спонсоров
         html += `
             <tr ${isCurrentSearch} onclick="showUserDetails('${item.user}', '${item.id}', event)">
                 <td><strong>${item.user}</strong></td>
@@ -321,6 +361,84 @@ function renderTableList(tree) {
     refTableBody.innerHTML = html || '<tr><td colspan="2" style="text-align:center;">База пуста</td></tr>';
 }
 
+// --- ИНТЕРАКТИВНАЯ ТАБЛИЦА С КОНТРОЛЕМ ВИДИМОСТИ ВЕТОК ---
+async function buildInteractiveRefTable() {
+    if (!interactiveRefTableBody) return;
+
+    try {
+        const res = await fetch(`${API_URL}/referals-tree`);
+        const data = await res.json();
+        if (!data.success || !data.tree) {
+            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Ошибка структуры</td></tr>';
+            return;
+        }
+
+        const refTree = data.tree;
+        
+        function buildUserNodeHTML(username) {
+            let children = Object.values(refTree).filter(node => node.sponsor === username);
+            children.sort((a, b) => a.username.localeCompare(b.username));
+
+            let hasChildren = children.length > 0;
+            let currentColumn = refTree[username] ? refTree[username].calculatedColumn : 1;
+            
+            // Проверяем, развернул ли админ эту ветку руками
+            let isExpanded = expandedNodes.has(username); 
+
+            let html = `
+                <div class="ref-node" style="display: flex; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
+                    <div class="user-card" style="background: #1f4068; border: 1px solid #00fff0; padding: 4px 6px; border-radius: 4px; min-width: 90px; max-width: 100px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); box-sizing: border-box;">
+                        <div style="font-weight: bold; color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
+                        <div style="font-size: 9px; color: #ffd700;">Уровень: ${currentColumn}</div>
+                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 3px; background: #00fff0; border: none; color: #111; font-size: 9px; padding: 1px 4px; border-radius: 3px; cursor: pointer; font-weight: bold; width: 100%; display: block; text-align: center;">${isExpanded ? '▲' : '▼'}</button>` : ''}
+                    </div>
+                    
+                    ${hasChildren ? `
+                        <div id="children_of_${username}" class="children-container" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; border-left: 1px dashed #00fff0; padding-left: 8px; gap: 4px;">
+                            ${children.map(child => buildUserNodeHTML(child.username)).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            return html;
+        }
+
+        if (refTree['SYSTEM_ROOT']) {
+            let fullTreeHTML = `
+                <tr>
+                    <td colspan="2" style="padding: 10px; overflow-x: auto;">
+                        <div style="display: flex; min-width: max-content;">
+                            ${buildUserNodeHTML('SYSTEM_ROOT')}
+                        </div>
+                    </td>
+                </tr>
+            `;
+            interactiveRefTableBody.innerHTML = fullTreeHTML;
+        } else {
+            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">SYSTEM_ROOT не найден</td></tr>';
+        }
+
+    } catch (e) {
+        interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center; color: #e43f5a;">Не удалось загрузить реферальное дерево</td></tr>';
+    }
+}
+
+// ПЕРЕКЛЮЧЕНИЕ С ПАМЯТЬЮ КЛИКА (сохраняем выбор в expandedNodes)
+window.toggleRefBranch = function(username, btn) {
+    const container = document.getElementById(`children_of_${username}`);
+    if (!container) return;
+
+    if (container.style.display === 'none') {
+        container.style.display = 'flex';
+        btn.innerHTML = '▲';
+        expandedNodes.add(username); // Запомнили, что ветка открыта
+    } else {
+        container.style.display = 'none';
+        btn.innerHTML = '▼';
+        expandedNodes.delete(username); // Запомнили, что ветка закрыта
+    }
+};
+
 resetBtn.addEventListener('click', async () => {
     if (!confirm('Очистить базу данных дерева?')) return;
     try {
@@ -330,11 +448,12 @@ resetBtn.addEventListener('click', async () => {
             alert('База успешно сброшена!');
             currentRootId = 'A1';
             searchTargetUser = '';
+            expandedNodes.clear(); // Сброс памяти веток
             setZoom(0.8);
             fetchTree();
         }
     } catch (err) {
-        alert('Ошибка при сбросе');
+        alert('Ошибка при входе');
     }
 });
 
