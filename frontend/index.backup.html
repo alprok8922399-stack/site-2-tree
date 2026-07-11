@@ -87,6 +87,7 @@
             background: #1f4068;
             color: #fff;
             font-size: 16px;
+            min-width: 0; /* Позволяет инпуту уменьшаться на мобильных */
         }
         .search-box button {
             padding: 8px 15px;
@@ -96,6 +97,7 @@
             border-radius: 5px;
             cursor: pointer;
             font-weight: bold;
+            white-space: nowrap; /* Защита текста кнопки от переноса */
         }
         .slider-zone {
             display: flex;
@@ -240,20 +242,6 @@
         <div id="mainTreeDisplay"></div>
     </div>
 
-    <div class="table-container">
-        <h2>Реестр участников В СТОЛБИК («Таблица Пользователей»)</h2>
-        <table class="ref-table">
-            <thead>
-                <tr>
-                    <th>Логин партнера</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody id="refTableBody">
-            </tbody>
-        </table>
-    </div>
-
     <div class="overlay" id="tableOverlay">
         <div class="overlay-header">
             <div class="overlay-title">📋 ИНТЕРАКТИВНАЯ ТАБЛИЦА РЕФЕРАЛОВ</div>
@@ -261,22 +249,17 @@
         </div>
 
         <div class="control-panel" style="max-width: 100%; margin-bottom: 15px; background: #162447;">
-            <div class="search-box" style="margin-bottom: 0;">
-                <input type="text" id="refSearchInput" placeholder="Поиск в Таблице Рефералов (логин)...">
-                <button id="refSearchBtn" style="background: #00fff0; color: #111;">Найти</button>
-                <button id="refSearchResetBtn" style="background: #444; color: #fff;">Сброс</button>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <input type="text" id="refSearchInput" placeholder="Поиск в Таблице Рефералов (логин)..." style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #0f4c81; background: #1f4068; color: #fff; font-size: 16px; box-sizing: border-box;">
+                <div style="display: flex; gap: 10px; width: 100%;">
+                    <button id="refSearchBtn" style="flex: 1; padding: 8px; background: #00fff0; color: #111; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; white-space: nowrap;">Найти</button>
+                    <button id="refSearchResetBtn" style="flex: 1; padding: 8px; background: #444; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; white-space: nowrap;">Сброс</button>
+                </div>
             </div>
         </div>
 
         <div class="table-container" style="max-width: 100%; margin-top: 0;">
             <table class="ref-table">
-                <thead>
-                    <tr>
-                        <th style="width: 40px;">Действие</th>
-                        <th>Логин партнера</th>
-                        <th></th>
-                    </tr>
-                </thead>
                 <tbody id="interactiveRefTableBody">
                 </tbody>
             </table>
