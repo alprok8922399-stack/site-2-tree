@@ -148,8 +148,9 @@ function scrollToFocusedCell() {
     }, 100);
 }
 
-// Плавный скролл к найденному пользователю внутри Таблицы Рефералов
+// НАДЕЖНЫЙ СКРОЛЛ ДЛЯ ТАБЛИЦЫ РЕФЕРАЛОВ С ЗАДЕРЖКОЙ НА ОТРИСОВКУ
 function scrollToFocusedReferal() {
+    // Даем телефону полсекунды (500мс) полностью собрать и показать дерево в DOM
     setTimeout(() => {
         const focusedCard = document.querySelector('.ref-node-focused');
         if (focusedCard) {
@@ -159,7 +160,7 @@ function scrollToFocusedReferal() {
                 inline: 'nearest'
             });
         }
-    }, 300); // Даем время дереву рефералов полностью отрисоваться в DOM
+    }, 500); 
 }
 
 async function fetchTree(forceRender = false) {
