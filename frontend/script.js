@@ -134,7 +134,7 @@ if (refSearchResetBtn) {
     });
 }
 
-// Плавный скролл к найденной целевой ячейке
+// Плавный скролл к найденной целевой ячейке в Матрицах
 function scrollToFocusedCell() {
     setTimeout(() => {
         const focusedCell = document.querySelector('.focused-cell');
@@ -145,7 +145,21 @@ function scrollToFocusedCell() {
                 inline: 'center'
             });
         }
-    }, 300);
+    }, 100);
+}
+
+// Плавный скролл к найденному пользователю внутри Таблицы Рефералов
+function scrollToFocusedReferal() {
+    setTimeout(() => {
+        const focusedCard = document.querySelector('.ref-node-focused');
+        if (focusedCard) {
+            focusedCard.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+                inline: 'nearest'
+            });
+        }
+    }, 300); // Даем время дереву рефералов полностью отрисоваться в DOM
 }
 
 async function fetchTree(forceRender = false) {
@@ -229,7 +243,7 @@ function findUserAndFocus(username) {
                 setZoom(0.8); 
                 fetchTree(true); // Вызываем принудительный рендер изменений
                 
-                // Делаем мягкую доводку камеры к найденной ноде
+                // Делаем мягкую доводку камеры к найденной ноде в Матрицах
                 scrollToFocusedCell();
             } else {
                 alert(`Пользователь "${username}" не найден в матричной структуре`);
@@ -261,6 +275,9 @@ async function findReferalAndExpand(username) {
             
             // Перестраиваем таблицу принудительно
             buildInteractiveRefTable(true);
+
+            // Вызываем автоматический скролл к найденной карточке в таблице рефералов
+            scrollToFocusedReferal();
         } else {
             alert(`Реферал "${username}" не найден в структуре таблицы`);
         }
@@ -496,13 +513,16 @@ async function buildInteractiveRefTable(forceRender = false) {
             // Проверяем, развернута ли ветка
             let isExpanded = expandedNodes.has(username); 
 
-            // Подсветка найденного реферала
-            let isFoundTargetStyle = (username.toLowerCase() === refSearchTargetUser.toLowerCase()) 
+            // Проверяем, является ли текущий юзер целью нашего поиска в таблице рефералов
+            const isTarget = username.toLowerCase() === refSearchTargetUser.toLowerCase();
+
+            // Подсветка найденного реферала и добавление класса-маркера для авто-скролла
+            let isFoundTargetStyle = isTarget 
                 ? 'border: 2px solid #ff3366; box-shadow: 0 0 15px #ff3366; background: #ff3366;' 
                 : 'border: 1px solid #00fff0; background: #1f4068; box-shadow: 0 1px 3px rgba(0,0,0,0.2);';
 
             let html = `
-                <div class="ref-node" style="display: flex; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
+                <div class="ref-node ${isTarget ? 'ref-node-focused' : ''}" style="display: flex; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
                     <div class="user-card" style="padding: 4px 6px; border-radius: 4px; min-width: 100px; max-width: 120px; box-sizing: border-box; ${isFoundTargetStyle}">
                         <div style="font-weight: bold; color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
                         <div style="font-size: 9px; color: #ffd700;">Уровень: ${currentColumn}</div>
