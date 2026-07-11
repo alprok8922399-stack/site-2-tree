@@ -15,8 +15,14 @@ const tableOverlay = document.getElementById('tableOverlay');
 const closeOverlayBtn = document.getElementById('closeOverlayBtn');
 const interactiveRefTableBody = document.getElementById('interactiveRefTableBody');
 
+// Новые элементы поиска внутри таблицы рефералов
+const refSearchInput = document.getElementById('refSearchInput');
+const refSearchBtn = document.getElementById('refSearchBtn');
+const refSearchResetBtn = document.getElementById('refSearchResetBtn');
+
 let currentRootId = 'A1'; 
-let searchTargetUser = ''; 
+let searchTargetUser = ''; // Цель для подсветки в Матрицах
+let refSearchTargetUser = ''; // Цель для подсветки в Таблице рефералов
 let globalTreeCached = null; 
 
 // ГЛОБАЛЬНОЕ ХРАНИЛИЩЕ СОСТОЯНИЯ: помнит, какие ветки РАЗВЕРНУЛ пользователь
@@ -91,10 +97,10 @@ if (screenContainer) {
     });
 }
 
+// --- КНОПКА: ПОИСК В МАТРИЦАХ ---
 searchBtn.addEventListener('click', () => {
     const val = searchInput.value.trim();
     if (val) {
-        searchTargetUser = val;
         findUserAndFocus(val);
     } else {
         currentRootId = 'A1';
@@ -103,6 +109,26 @@ searchBtn.addEventListener('click', () => {
         fetchTree();
     }
 });
+
+// --- КНОПКА: ПОИСК В ТАБЛИЦЕ РЕФЕРАЛОВ ---
+if (refSearchBtn) {
+    refSearchBtn.addEventListener('click', () => {
+        const val = refSearchInput.value.trim();
+        if (val) {
+            findReferalAndExpand(val);
+        }
+    });
+}
+
+// --- КНОПКА: СБРОС ПОИСКА В ТАБЛИЦЕ РЕФЕРАЛОВ ---
+if (refSearchResetBtn) {
+    refSearchResetBtn.addEventListener('click', () => {
+        refSearchInput.value = '';
+        refSearchTargetUser = '';
+        expandedNodes.clear(); // Сворачиваем всё обратно до корня
+        buildInteractiveRefTable();
+    });
+}
 
 async function fetchTree() {
     try {
@@ -120,14 +146,18 @@ async function fetchTree() {
     }
 }
 
+// --- 1. ИСПРАВЛЕННЫЙ ПОИСК В МАТРИЦАХ (ПОЛНЫЙ СКАНЕР С ФИКСАЦИЕЙ ПОДСВЕТКИ) ---
 function findUserAndFocus(username) {
     fetch(`${API_URL}/tree`)
         .then(res => res.json())
         .then(tree => {
             let foundCellId = null;
+            let exactUsername = '';
+
             for (const [id, cell] of Object.entries(tree)) {
                 if (cell && cell.user && cell.user.toLowerCase() === username.toLowerCase()) {
                     foundCellId = id;
+                    exactUsername = cell.user;
                     break;
                 }
             }
@@ -162,15 +192,49 @@ function findUserAndFocus(username) {
                 
                 if (parsed.letter === 'A') rootId = 'A1';
 
+                // Жестко фиксируем глобальные переменные состояния
                 currentRootId = rootId;
-                searchTargetUser = username; 
+                searchTargetUser = exactUsername; 
+                
                 setZoom(0.8); 
                 renderDynamicSplitting(tree);
                 renderTableList(tree);
             } else {
-                alert(`Пользователь ${username} не найден в текущей структуре`);
+                alert(`Пользователь "${username}" не найден в матричной структуре`);
             }
         });
+}
+
+// --- 2. НОВЫЙ АВТОНОМНЫЙ ПОИСК В ТАБЛИЦЕ РЕФЕРАЛОВ (РАСКРЫВАЕТ ВЕТКУ СПОНСОРОВ) ---
+async function findReferalAndExpand(username) {
+    try {
+        const res = await fetch(`${API_URL}/referals-tree`);
+        const data = await res.json();
+        if (!data.success || !data.tree) return;
+
+        const refTree = data.tree;
+        
+        // Ищем реферала по логину во всей базе рефералов
+        let targetNode = Object.values(refTree).find(node => node.username.toLowerCase() === username.toLowerCase());
+        
+        if (targetNode) {
+            refSearchTargetUser = targetNode.username; // Запоминаем для подсветки в дереве таблице
+            
+            // Раскручиваем всю цепочку спонсоров снизу вверх до SYSTEM_ROOT
+            let currentSponsor = targetNode.sponsor;
+            while (currentSponsor && refTree[currentSponsor]) {
+                expandedNodes.add(currentSponsor); // Разворачиваем каждого родителя на пути
+                currentSponsor = refTree[currentSponsor].sponsor;
+            }
+            
+            // Перестраиваем таблицу — она сразу отобразит открытый путь к юзеру
+            buildInteractiveRefTable();
+        } else {
+            alert(`Реферал "${username}" не найден в структуре таблицы`);
+        }
+    } catch (err) {
+        console.error('Ошибка поиска реферала:', err);
+    }
 }
 
 window.showUserDetails = async function(username, cellId, event) {
@@ -226,6 +290,8 @@ function getCellHTML(cell, roleClass, fallbackId = '-') {
     }
     const isOccupied = cell.user ? 'occupied' : '';
     const displayUser = cell.user ? cell.user : '-';
+    
+    // Подсветка активна только если имя совпадает с поисковой целью в матрицах
     const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
 
     return `
@@ -382,12 +448,17 @@ async function buildInteractiveRefTable() {
             let hasChildren = children.length > 0;
             let currentColumn = refTree[username] ? refTree[username].calculatedColumn : 1;
             
-            // Проверяем, развернул ли админ эту ветку руками
+            // Проверяем, развернута ли ветка
             let isExpanded = expandedNodes.has(username); 
+
+            // Если карточка совпадает с тем, что искали в Таблице рефералов — вешаем на нее жирную красную рамку и пульсацию
+            let isFoundTargetStyle = (username.toLowerCase() === refSearchTargetUser.toLowerCase()) 
+                ? 'border: 2px solid #ff3366; box-shadow: 0 0 15px #ff3366; background: #ff3366;' 
+                : 'border: 1px solid #00fff0; background: #1f4068; box-shadow: 0 1px 3px rgba(0,0,0,0.2);';
 
             let html = `
                 <div class="ref-node" style="display: flex; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
-                    <div class="user-card" style="background: #1f4068; border: 1px solid #00fff0; padding: 4px 6px; border-radius: 4px; min-width: 90px; max-width: 100px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); box-sizing: border-box;">
+                    <div class="user-card" style="padding: 4px 6px; border-radius: 4px; min-width: 90px; max-width: 100px; box-sizing: border-box; ${isFoundTargetStyle}">
                         <div style="font-weight: bold; color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
                         <div style="font-size: 9px; color: #ffd700;">Уровень: ${currentColumn}</div>
                         ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 3px; background: #00fff0; border: none; color: #111; font-size: 9px; padding: 1px 4px; border-radius: 3px; cursor: pointer; font-weight: bold; width: 100%; display: block; text-align: center;">${isExpanded ? '▲' : '▼'}</button>` : ''}
@@ -423,7 +494,7 @@ async function buildInteractiveRefTable() {
     }
 }
 
-// ПЕРЕКЛЮЧЕНИЕ С ПАМЯТЬЮ КЛИКА (сохраняем выбор в expandedNodes)
+// ПЕРЕКЛЮЧЕНИЕ С ПАМЯТЬЮ КЛИКА
 window.toggleRefBranch = function(username, btn) {
     const container = document.getElementById(`children_of_${username}`);
     if (!container) return;
@@ -431,11 +502,11 @@ window.toggleRefBranch = function(username, btn) {
     if (container.style.display === 'none') {
         container.style.display = 'flex';
         btn.innerHTML = '▲';
-        expandedNodes.add(username); // Запомнили, что ветка открыта
+        expandedNodes.add(username); 
     } else {
         container.style.display = 'none';
         btn.innerHTML = '▼';
-        expandedNodes.delete(username); // Запомнили, что ветка закрыта
+        expandedNodes.delete(username); 
     }
 };
 
@@ -448,12 +519,13 @@ resetBtn.addEventListener('click', async () => {
             alert('База успешно сброшена!');
             currentRootId = 'A1';
             searchTargetUser = '';
-            expandedNodes.clear(); // Сброс памяти веток
+            refSearchTargetUser = '';
+            expandedNodes.clear(); 
             setZoom(0.8);
             fetchTree();
         }
     } catch (err) {
-        alert('Ошибка при входе');
+        alert('Ошибка при сбросе');
     }
 });
 
