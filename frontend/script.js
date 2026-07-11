@@ -166,7 +166,7 @@ function findUserAndFocus(username) {
                 renderDynamicSplitting(tree);
                 renderTableList(tree);
             } else {
-                alert(`Пользователь ${username} не найден в текущей структуру`);
+                alert(`Пользователь ${username} не найден в текущей структуре`);
             }
         });
 }
@@ -353,7 +353,6 @@ function renderTableList(tree) {
 
     list.forEach(item => {
         const isCurrentSearch = (item.user === searchTargetUser) ? 'style="background: #ff3366; color: white; font-weight:bold;"' : '';
-        // Клик по строке таблицы теперь тоже открывает детальное окно спонсоров
         html += `
             <tr ${isCurrentSearch} onclick="showUserDetails('${item.user}', '${item.id}', event)">
                 <td><strong>${item.user}</strong></td>
@@ -365,70 +364,79 @@ function renderTableList(tree) {
     refTableBody.innerHTML = html || '<tr><td colspan="2" style="text-align:center;">База пуста</td></tr>';
 }
 
-// --- ЛОГИКА НОВОЙ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ ---
-function buildInteractiveRefTable() {
-    if (!interactiveRefTableBody || !globalTreeCached) return;
+// --- ЛОГИКА НОВОЙ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ С ГОРИЗОНТАЛЬНЫМ НАСЛЕДОВАНИЕМ ВПРАВО ---
+async function buildInteractiveRefTable() {
+    if (!interactiveRefTableBody) return;
 
-    let html = '';
-    let counter = 1;
-    let list = Object.entries(globalTreeCached).filter(([id, cell]) => cell && cell.user);
-    list.sort((a, b) => a[0].localeCompare(b[0], undefined, {numeric: true, sensitivity: 'base'}));
+    try {
+        const res = await fetch(`${API_URL}/referals-tree`);
+        const data = await res.json();
+        if (!data.success || !data.tree) {
+            interactiveRefTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Ошибка структуры</td></tr>';
+            return;
+        }
 
-    list.forEach(([id, cell]) => {
-        const rowId = 'detail_row_' + counter;
-        html += `
-            <tr style="border-bottom: 1px solid #1f4068;">
-                <td style="text-align: center;">
-                    <button class="row-toggle-btn" onclick="toggleRefRow('${rowId}', this, '${cell.user}')">▼</button>
-                </td>
-                <td><strong>${cell.user}</strong></td>
-                <td>${id}</td>
-            </tr>
-            <tr id="${rowId}" style="display: none; background-color: #112233;">
-                <td colspan="3" style="padding: 10px; border-left: 3px solid #00fff0;">
-                    <div id="content_${rowId}" style="color: #ccc; font-size: 13px;">
-                        <em>Загрузка данных...</em>
+        const refTree = data.tree;
+        
+        // Рекурсивная функция сборки дерева личников, уходящих вправо (колонки)
+        function buildUserNodeHTML(username) {
+            // Ищем всех прямых личников для этого пользователя
+            let children = Object.values(refTree).filter(node => node.sponsor === username);
+            children.sort((a, b) => a.username.localeCompare(b.username));
+
+            let hasChildren = children.length > 0;
+            let currentColumn = refTree[username] ? refTree[username].calculatedColumn : 1;
+
+            let html = `
+                <div class="ref-node" style="display: flex; align-items: flex-start; margin-bottom: 10px; gap: 15px;">
+                    <div class="user-card" style="background: #1f4068; border: 1px solid #00fff0; padding: 8px 12px; border-radius: 6px; min-width: 140px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+                        <div style="font-weight: bold; color: #fff; font-size: 14px;">${username}</div>
+                        <div style="font-size: 11px; color: #ffd700;">Уровень: ${currentColumn}</div>
+                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 5px; background: #00fff0; border: none; color: #111; font-size: 10px; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-weight: bold;">Скрыть личников ▲</button>` : ''}
                     </div>
-                </td>
-            </tr>
-        `;
-        counter++;
-    });
+                    
+                    ${hasChildren ? `
+                        <div id="children_of_${username}" class="children-container" style="display: flex; flex-direction: column; border-left: 2px dashed #00fff0; padding-left: 15px;">
+                            ${children.map(child => buildUserNodeHTML(child.username)).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            return html;
+        }
 
-    interactiveRefTableBody.innerHTML = html || '<tr><td colspan="3" style="text-align:center;">База пуста</td></tr>';
+        // Рендерим от корня SYSTEM_ROOT, если он есть в базе рефералов
+        if (refTree['SYSTEM_ROOT']) {
+            let fullTreeHTML = `
+                <tr>
+                    <td colspan="3" style="padding: 20px; overflow-x: auto;">
+                        <div style="display: flex; min-width: max-content;">
+                            ${buildUserNodeHTML('SYSTEM_ROOT')}
+                        </div>
+                    </td>
+                </tr>
+            `;
+            interactiveRefTableBody.innerHTML = fullTreeHTML;
+        } else {
+            interactiveRefTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">SYSTEM_ROOT не найден</td></tr>';
+        }
+
+    } catch (e) {
+        interactiveRefTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: #e43f5a;">Не удалось загрузить реферальное дерево</td></tr>';
+    }
 }
 
-window.toggleRefRow = async function(rowId, btn, username) {
-    const detailRow = document.getElementById(rowId);
-    const contentDiv = document.getElementById('content_' + rowId);
+// Переключение видимости ветки личников (вправо)
+window.toggleRefBranch = function(username, btn) {
+    const container = document.getElementById(`children_of_${username}`);
+    if (!container) return;
 
-    if (detailRow.style.display === 'table-row') {
-        detailRow.style.display = 'none';
-        btn.innerHTML = '▼';
+    if (container.style.display === 'none') {
+        container.style.display = 'flex';
+        btn.innerHTML = 'Скрыть личников ▲';
     } else {
-        detailRow.style.display = 'table-row';
-        btn.innerHTML = '▲';
-
-        // Подгружаем данные с бэкенда при раскрытии
-        if (contentDiv.innerHTML.includes('Загрузка данных...')) {
-            try {
-                const res = await fetch(`${API_URL}/user-details/${encodeURIComponent(username)}`);
-                const data = await res.json();
-                if (data.success) {
-                    const chainLine = data.chain && data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Корневой аккаунт';
-                    const sponsor = data.sponsor || 'Нет спонсора';
-                    contentDiv.innerHTML = `
-                        <div style="margin-bottom: 5px;"><strong style="color: #fff;">Прямой спонсор:</strong> <span style="color: #ffd700;">${sponsor}</span></div>
-                        <div style="margin-bottom: 5px;"><strong style="color: #fff;">Занятые ячейки:</strong> ${data.cells.join(', ')}</div>
-                        <div><strong style="color: #00fff0;">Линия спонсоров вверх:</strong><br><span style="color: #e2e2e2; word-break: break-all;">${chainLine}</span></div>
-                    `;
-                } else {
-                    contentDiv.innerHTML = `<span style="color:#e43f5a;">Ошибка: ${data.error || 'Нет данных'}</span>`;
-                }
-            } catch (e) {
-                contentDiv.innerHTML = `<span style="color:#e43f5a;">Не удалось загрузить данные. Проверьте сервер.</span>`;
-            }
-        }
+        container.style.display = 'none';
+        btn.innerHTML = 'Показать личников ▼';
     }
 };
 // ------------------------------------------
