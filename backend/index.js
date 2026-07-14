@@ -3,46 +3,35 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Импортируем утилиты, константы и структуры данных из static.js
+const {
+    getLevelLetter,
+    cellIdToGlobalIndex,
+    createNewUserCard,
+    createInitialWallets
+} = require('./static');
+
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static('../frontend'));
 
+// === ИНИЦИАЛИЗАЦИЯ БАЗ ДАННЫХ ===
+
+// Наша обновленная карточка покупателей (теперь хранит балансы, статусы и счетчики)
 let shopUsersDB = {};
+
+// Инициализируем наш трехконтурный сейф кошельков
+let walletsDB = createInitialWallets();
+
 // База данных реферальных связей (кто кого пригласил): { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
     'SYSTEM_ROOT': null,
     'LEADER_1': 'SYSTEM_ROOT',
     'LEADER_2': 'SYSTEM_ROOT'
 };
+
 // Храним имя последнего зарегистрированного бота для создания автоматической цепочки
 let lastRegisteredBot = null;
-
-function getLevelLetter(levelIndex) {
-    let letter = '';
-    let temp = levelIndex;
-    while (temp >= 0) {
-        letter = String.fromCharCode((temp % 26) + 65) + letter;
-        temp = Math.floor(temp / 26) - 1;
-    }
-    return letter;
-}
-
-function cellIdToGlobalIndex(id) {
-    const match = id.match(/^([A-Z]+)(\d+)$/);
-    if (!match) return 0;
-    const letter = match[1];
-    const num = parseInt(match[2], 10);
-    
-    let levelIndex = 0;
-    let temp = 0;
-    for (let i = 0; i < letter.length; i++) {
-        levelIndex = levelIndex * 26 + (letter.charCodeAt(i) - 64);
-    }
-    levelIndex -= 1;
-    
-    const levelStartGlobalIndex = (1 << levelIndex) - 1;
-    return levelStartGlobalIndex + (num - 1);
-}
 
 function createInitialTree() {
     return {
@@ -95,9 +84,6 @@ function findNextEmptyCell(tree) {
                     }
                 }
             }
-
-            // Если мы вышли из циклов позиций и не вернули id, значит вся текущая порция из 32 матриц забита.
-            // Только в этом случае цикл перейдет к следующей порции chunkStart (следующим 32 матрицам этого же уровня).
         }
 
         // Если абсолютно весь буквенный уровень закрылся по порциям, спускаемся на букву ниже
@@ -153,6 +139,7 @@ app.post('/api/register', (req, res) => {
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
     shopUsersDB = {};
+    walletsDB = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
         'LEADER_1': 'SYSTEM_ROOT',
@@ -222,7 +209,8 @@ app.post('/api/shop/register', (req, res) => {
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     if (shopUsersDB[username]) return res.status(400).json({ error: 'Такой покупатель уже зарегистрирован' });
     
-    shopUsersDB[username] = { username, isPaid: false, balance: 0 };
+    // Создаем карточку с помощью функции-инициализатора из static.js
+    shopUsersDB[username] = createNewUserCard(username);
     
     // Запоминаем спонсора. Если робот регистрирует пачку ботов, связываем их цепочкой друг за другом
     if (sponsor) {
@@ -236,13 +224,29 @@ app.post('/api/shop/register', (req, res) => {
 });
 
 app.post('/api/shop/pay', (req, res) => {
-    const { username, amount } = req.body;
+    const { username, amount } = req.body; // amount ожидается в размере 1000 Митронов
     if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Покупатель не найден' });
     
+    const payAmount = amount || 1000;
     const cellId = findNextEmptyCell(treeDB);
 
+    // Обновляем карточку покупателя
     shopUsersDB[username].isPaid = true;
-    shopUsersDB[username].balance += 3000;
+    shopUsersDB[username].paymentDate = new Date();
+    shopUsersDB[username].matrixPosition.currentCellId = cellId;
+    shopUsersDB[username].matrixPosition.status = 'active';
+
+    // Мгновенное расщепление платежа на уровне кошельков по ТЗ:
+    // 45% (450 Митронов) идет напрямую Создателю
+    // 55% (550 Митронов) идет в неприкосновенный Выплатной резерв
+    const creatorShare = 450;
+    const payoutShare = 550;
+
+    walletsDB.myWallet.balanceMitrons += creatorShare;
+    walletsDB.payoutReserveWallet.balanceMitrons += payoutShare;
+
+    // Наполняем баланс пользователя внутри карточки для отображения (3000 в старой логике, оставляем ее пока на месте)
+    shopUsersDB[username].balances.mitrons += 3000;
 
     treeDB[cellId].user = username;
     checkAndGenerateChildren(treeDB, cellId);
@@ -251,10 +255,11 @@ app.post('/api/shop/pay', (req, res) => {
         success: true,
         shopUserStatus: shopUsersDB[username],
         cellId,
+        wallets: walletsDB, // Возвращаем текущие балансы трех кошельков
         split: {
-            total: amount,
-            marketplace: 7000,
-            myWallet: 3000
+            total: payAmount,
+            creatorShare: creatorShare,
+            payoutReserveShare: payoutShare
         }
     });
 });
