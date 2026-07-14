@@ -193,6 +193,29 @@ app.get('/api/user-details/:username', (req, res) => {
     });
 });
 
+// Новый API для построения реферальной структуры с расчетом колонок (ручное наследование)
+app.get('/api/referals-tree', (req, res) => {
+    let structure = {};
+    
+    // Вычисляем уровень (колонку) для каждого зарегистрированного пользователя динамически
+    function getCalculatedLevel(user) {
+        if (user === 'SYSTEM_ROOT') return 1;
+        let sponsor = referalsDB[user];
+        if (!sponsor) return 2;
+        return getCalculatedLevel(sponsor) + 1;
+    }
+
+    Object.keys(referalsDB).forEach(username => {
+        structure[username] = {
+            username: username,
+            sponsor: referalsDB[username],
+            calculatedColumn: getCalculatedLevel(username)
+        };
+    });
+
+    res.json({ success: true, tree: structure });
+});
+
 // === API МАРКЕТПЛЕЙСА (ДЛЯ САЙТА №1) ===
 app.post('/api/shop/register', (req, res) => {
     const { username, sponsor } = req.body;
