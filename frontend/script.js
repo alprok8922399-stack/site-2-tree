@@ -150,7 +150,6 @@ function scrollToFocusedCell() {
 
 // НАДЕЖНЫЙ СКРОЛЛ ДЛЯ ТАБЛИЦЫ РЕФЕРАЛОВ С ЗАДЕРЖКОЙ НА ОТРИСОВКУ
 function scrollToFocusedReferal() {
-    // Даем телефону полсекунды (500мс) полностью собрать и показать дерево в DOM
     setTimeout(() => {
         const focusedCard = document.querySelector('.ref-node-focused');
         if (focusedCard) {
@@ -160,7 +159,7 @@ function scrollToFocusedReferal() {
                 inline: 'nearest'
             });
         }
-    }, 500); 
+    }, 400); 
 }
 
 async function fetchTree(forceRender = false) {
@@ -478,7 +477,41 @@ function renderTableList(tree) {
     refTableBody.innerHTML = html || '<tr><td colspan="2" style="text-align:center;">База пуста</td></tr>';
 }
 
-// --- ИНТЕРАКТИВНАЯ ТАБЛИЦА С ОПТИМИЗАЦИЕЙ СЕТИ И СЧЁТЧИКОМ ПРИГЛАШЕННЫХ ---
+// --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ВЫНЕСЕНА ИЗ ТЕЛА buildInteractiveRefTable ДЛЯ СТАБИЛЬНОСТИ ---
+function buildUserNodeHTML(username, refTree) {
+    let children = Object.values(refTree).filter(node => node.sponsor === username);
+    children.sort((a, b) => a.username.localeCompare(b.username));
+
+    let hasChildren = children.length > 0;
+    let currentColumn = refTree[username] ? refTree[username].calculatedColumn : 1;
+    let directRefCount = children.length;
+    let isExpanded = expandedNodes.has(username); 
+    const isTarget = username.toLowerCase() === refSearchTargetUser.toLowerCase();
+
+    let isFoundTargetStyle = isTarget 
+        ? 'border: 2px solid #ff3366; box-shadow: 0 0 15px #ff3366; background: #ff3366;' 
+        : 'border: 1px solid #00fff0; background: #1f4068; box-shadow: 0 1px 3px rgba(0,0,0,0.2);';
+
+    let html = `
+        <div class="ref-node ${isTarget ? 'ref-node-focused' : ''}" style="display: flex; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
+            <div class="user-card" style="padding: 4px 6px; border-radius: 4px; min-width: 100px; max-width: 120px; box-sizing: border-box; ${isFoundTargetStyle}">
+                <div style="font-weight: bold; color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
+                <div style="font-size: 9px; color: #ffd700;">Уровень: ${currentColumn}</div>
+                <div style="font-size: 9px; color: #a2e8dd; margin-top: 1px;">👥 Рефы: <strong>${directRefCount}</strong></div>
+                ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 4px; background: #00fff0; border: none; color: #111; font-size: 9px; padding: 1px 4px; border-radius: 3px; cursor: pointer; font-weight: bold; width: 100%; display: block; text-align: center;">${isExpanded ? '▲' : '▼'}</button>` : ''}
+            </div>
+            
+            ${hasChildren ? `
+                <div id="children_of_${username}" class="children-container" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; border-left: 1px dashed #00fff0; padding-left: 8px; gap: 4px;">
+                    ${children.map(child => buildUserNodeHTML(child.username, refTree)).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+    return html;
+}
+
+// --- ИНТЕРАКТИВНАЯ ТАБЛИЦА БЕЗ ЛИШНЕЙ ПЕРЕРИСОВКИ ---
 async function buildInteractiveRefTable(forceRender = false) {
     if (!interactiveRefTableBody) return;
 
@@ -492,61 +525,21 @@ async function buildInteractiveRefTable(forceRender = false) {
 
         const refTree = data.tree;
         
-        // Генерируем хэш состояния для реферального дерева (состав + развернутые ветки + подсвеченный юзер)
+        // Генерируем хэш состояния для реферального дерева
         const currentRefTreeStr = JSON.stringify(data) + `_expanded:${Array.from(expandedNodes).join(',')}_target:${refSearchTargetUser}`;
         
-        // Оптимизация сети: отмена мерцания DOM
+        // Оптимизация сети и борьба с мерцанием: не перерисовываем DOM если нет изменений
         if (currentRefTreeStr === lastRefTreeJsonString && !forceRender) {
             return; 
         }
         lastRefTreeJsonString = currentRefTreeStr;
-        
-        function buildUserNodeHTML(username) {
-            let children = Object.values(refTree).filter(node => node.sponsor === username);
-            children.sort((a, b) => a.username.localeCompare(b.username));
-
-            let hasChildren = children.length > 0;
-            let currentColumn = refTree[username] ? refTree[username].calculatedColumn : 1;
-            
-            // Вычисляем количество лично приглашённых (размер первой линии)
-            let directRefCount = children.length;
-            
-            // Проверяем, развернута ли ветка
-            let isExpanded = expandedNodes.has(username); 
-
-            // Проверяем, является ли текущий юзер целью нашего поиска в таблице рефералов
-            const isTarget = username.toLowerCase() === refSearchTargetUser.toLowerCase();
-
-            // Подсветка найденного реферала и добавление класса-маркера для авто-скролла
-            let isFoundTargetStyle = isTarget 
-                ? 'border: 2px solid #ff3366; box-shadow: 0 0 15px #ff3366; background: #ff3366;' 
-                : 'border: 1px solid #00fff0; background: #1f4068; box-shadow: 0 1px 3px rgba(0,0,0,0.2);';
-
-            let html = `
-                <div class="ref-node ${isTarget ? 'ref-node-focused' : ''}" style="display: flex; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
-                    <div class="user-card" style="padding: 4px 6px; border-radius: 4px; min-width: 100px; max-width: 120px; box-sizing: border-box; ${isFoundTargetStyle}">
-                        <div style="font-weight: bold; color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
-                        <div style="font-size: 9px; color: #ffd700;">Уровень: ${currentColumn}</div>
-                        <div style="font-size: 9px; color: #a2e8dd; margin-top: 1px;">👥 Рефы: <strong>${directRefCount}</strong></div>
-                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 4px; background: #00fff0; border: none; color: #111; font-size: 9px; padding: 1px 4px; border-radius: 3px; cursor: pointer; font-weight: bold; width: 100%; display: block; text-align: center;">${isExpanded ? '▲' : '▼'}</button>` : ''}
-                    </div>
-                    
-                    ${hasChildren ? `
-                        <div id="children_of_${username}" class="children-container" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; border-left: 1px dashed #00fff0; padding-left: 8px; gap: 4px;">
-                            ${children.map(child => buildUserNodeHTML(child.username)).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-            return html;
-        }
 
         if (refTree['SYSTEM_ROOT']) {
             let fullTreeHTML = `
                 <tr>
                     <td colspan="2" style="padding: 10px; overflow-x: auto;">
                         <div style="display: flex; min-width: max-content;">
-                            ${buildUserNodeHTML('SYSTEM_ROOT')}
+                            ${buildUserNodeHTML('SYSTEM_ROOT', refTree)}
                         </div>
                     </td>
                 </tr>
@@ -561,7 +554,7 @@ async function buildInteractiveRefTable(forceRender = false) {
     }
 }
 
-// ПЕРЕКЛЮЧЕНИЕ С ПАМЯТЬЮ КЛИКА
+// ПЕРЕКЛЮЧЕНИЕ СПОЙЛЕРА (ИСПРАВЛЕННОЕ — БЕЗ RE-RENDER LOOP)
 window.toggleRefBranch = function(username, btn) {
     const container = document.getElementById(`children_of_${username}`);
     if (!container) return;
@@ -575,7 +568,10 @@ window.toggleRefBranch = function(username, btn) {
         btn.innerHTML = '▼';
         expandedNodes.delete(username); 
     }
-    buildInteractiveRefTable(true); // Форсируем перерисовку под новое состояние развернутых веток
+    
+    // Вместо полной перерисовки всего DOM дерева через buildInteractiveRefTable(true)
+    // мы просто обновляем глобальный хэш состояния втихую, чтобы предотвратить конфликт при следующем setInterval
+    lastRefTreeJsonString = ''; 
 };
 
 resetBtn.addEventListener('click', async () => {
