@@ -55,6 +55,7 @@
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            margin-bottom: 20px;
         }
 
         .form-group {
@@ -149,8 +150,7 @@
 
         /* Интерактивная таблица рефералов */
         .referral-board {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            display: flex;
             gap: 15px;
             overflow-x: auto;
             padding: 10px 0;
@@ -160,7 +160,9 @@
             background: #0f172a;
             border-radius: 8px;
             padding: 15px;
-            min-height: 400px;
+            min-height: 250px;
+            min-width: 220px;
+            flex: 1;
             border: 1px dashed var(--border-color);
         }
 
@@ -192,6 +194,23 @@
             background: linear-gradient(135deg, var(--card-bg) 0%, #2e2a14 100%);
         }
 
+        /* Отрисовка Бесконечной Матрицы (Дерева) */
+        .tree-viewport {
+            width: 100%;
+            height: 500px;
+            background-color: #0b0f19;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            position: relative;
+            overflow: auto;
+            margin-top: 15px;
+        }
+
+        #tree-canvas {
+            display: block;
+            background-color: #0b0f19;
+        }
+
         .badge {
             display: inline-block;
             font-size: 10px;
@@ -209,12 +228,6 @@
         .badge.real {
             background: rgba(245, 158, 11, 0.2);
             color: var(--accent-gold);
-        }
-
-        .badge.silver {
-            background: rgba(148, 163, 184, 0.2);
-            color: #cbd5e1;
-            border: 1px solid #cbd5e1;
         }
 
         /* Лог начислений */
@@ -257,6 +270,16 @@
                 <div class="wallet-title">Буферный кошелек (Транзит)</div>
                 <div class="wallet-val" id="wallet-buffer">0/000 Митронов</div>
             </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Живая Бинарная Матрица (Очередь до бесконечности)</h2>
+        <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 10px;">
+            Вся глубина рассчитывается динамически. Матрица рисуется налету, показывая, как именно логин покупателя заполняет ячейки (A, B, C, D и далее).
+        </p>
+        <div class="tree-viewport">
+            <canvas id="tree-canvas" width="2000" height="800"></canvas>
         </div>
     </div>
 
@@ -325,8 +348,7 @@
         <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 20px;">
             Распределение по колонкам рассчитывается динамически в зависимости от глубины реферальной связи от SYSTEM_ROOT.
         </p>
-        <div class="referral-board" id="referral-board">
-            </div>
+        <div class="referral-board" id="referral-board"></div>
     </div>
 </div>
 
@@ -368,7 +390,6 @@
             logMessage(`Пользователь ${username} успешно зарегистрирован. Спонсор: ${sponsor || 'Авто-цепочка'}`);
             document.getElementById('reg-username').value = '';
             document.getElementById('reg-sponsor').value = '';
-            // Автоматически подставляем зарегистрированного в поле оплаты для удобства теста
             document.getElementById('pay-username').value = username;
             updateDashboard();
         } else {
@@ -394,9 +415,8 @@
                 data.referralLog.forEach(l => logMessage(l));
             }
             document.getElementById('pay-username').value = '';
-            document.getElementById('confirm-username').value = username; // подставляем в поле "Реальный"
+            document.getElementById('confirm-username').value = username;
             
-            // Обновляем кошельки напрямую из ответа сервера
             if (data.wallets) {
                 document.getElementById('wallet-creator').innerText = `${data.wallets.myWallet.balanceMitrons} Митронов`;
                 document.getElementById('wallet-reserve').innerText = `${data.wallets.payoutReserveWallet.balanceMitrons} Митронов`;
@@ -430,7 +450,7 @@
         }
     }
 
-    // Загрузка детального профиля пользователя с его балансами и статусом серебра
+    // Загрузка детального профиля
     async function loadUserProfile() {
         const username = document.getElementById('search-username').value.trim();
         const profileDiv = document.getElementById('user-profile-data');
@@ -446,14 +466,128 @@
         }
 
         const data = await res.json();
-        
-        // Рендерим расширенную карточку пользователя
         profileDiv.innerHTML = `
             <strong>Покупатель:</strong> ${data.username}<br>
-            <strong>Прямой спонсор:</strong> ${data.sponsor}<br>
+            <strong>Прямой спонсор:</strong> ${data.sponsor || 'SYSTEM_ROOT'}<br>
             <strong>Ветка вверх:</strong> <span style="color: #60a5fa;">${data.chain.join(' → ') || 'Корень'}</span><br>
-            <strong>Текущая ячейка в бинаре:</strong> ${data.cells.join(', ') || 'Ожидает оплаты'}<br>
+            <strong>Текущая ячейка в бинаре:</strong> <span style="color: #f59e0b; font-weight: bold;">${data.cells.join(', ') || 'Ожидает оплаты'}</span><br>
         `;
+    }
+
+    // Алгоритм бесконечной отрисовки бинарного дерева на Canvas
+    function drawBinaryTree(users) {
+        const canvas = document.getElementById('tree-canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!users || Object.keys(users).length === 0) {
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '16px sans-serif';
+            ctx.fillText('Матрица пуста. Зарегистрируйте и оплатите первого участника.', 50, 50);
+            return;
+        }
+
+        // Превращаем плоскую структуру в карту ячеек
+        const cellToUser = {};
+        Object.values(users).forEach(u => {
+            if (u.cells && u.cells.length > 0) {
+                u.cells.forEach(cellName => {
+                    cellToUser[cellName] = u;
+                });
+            }
+        });
+
+        // Функция для парсинга имени ячейки (например, "A1" -> level:0, index:0, "D5" -> level:3, index:4)
+        function parseCell(cellName) {
+            const letter = cellName.charAt(0).toUpperCase();
+            const index = parseInt(cellName.slice(1)) - 1;
+            const level = letter.charCodeAt(0) - 65; // A=0, B=1, C=2, D=3...
+            return { level, index };
+        }
+
+        // Автоматически определяем максимальный уровень в системе, чтобы подстроить высоту
+        let maxLevel = 3; // По умолчанию рисуем минимум до D (уровень 3)
+        Object.keys(cellToUser).forEach(cell => {
+            const parsed = parseCell(cell);
+            if (parsed.level > maxLevel) maxLevel = parsed.level;
+        });
+
+        // Подстраиваем ширину холста динамически под количество элементов на максимальном уровне
+        const leavesCount = Math.pow(2, maxLevel);
+        const cellWidth = 90;
+        const minWidth = Math.max(2000, leavesCount * cellWidth);
+        if (canvas.width !== minWidth) {
+            canvas.width = minWidth;
+        }
+        canvas.height = (maxLevel + 1.5) * 120;
+
+        const width = canvas.width;
+
+        // Рисуем связи и кружочки ячеек
+        for (let lvl = 0; lvl <= maxLevel; lvl++) {
+            const numNodes = Math.pow(2, lvl);
+            const levelY = 60 + lvl * 120;
+
+            for (let idx = 0; idx < numNodes; idx++) {
+                // Вычисление координаты X для любого бесконечного уровня
+                const segmentWidth = width / numNodes;
+                const nodeX = segmentWidth * idx + segmentWidth / 2;
+
+                // Буквенное имя ячейки (A1, B2, C4, D8...)
+                const cellLetter = String.fromCharCode(65 + lvl);
+                const cellName = `${cellLetter}${idx + 1}`;
+                const userData = cellToUser[cellName];
+
+                // Отрисовка соединительных линий к родительской ячейке
+                if (lvl > 0) {
+                    const parentIdx = Math.floor(idx / 2);
+                    const parentSegment = width / Math.pow(2, lvl - 1);
+                    const parentX = parentSegment * parentIdx + parentSegment / 2;
+                    const parentY = 60 + (lvl - 1) * 120;
+
+                    ctx.beginPath();
+                    ctx.moveTo(nodeX, levelY);
+                    ctx.lineTo(parentX, parentY);
+                    ctx.strokeStyle = userData ? '#3b82f6' : '#1e293b';
+                    ctx.lineWidth = userData ? 2 : 1;
+                    ctx.stroke();
+                }
+
+                // Рисуем сам кружок ячейки
+                ctx.beginPath();
+                ctx.arc(nodeX, levelY, 32, 0, 2 * Math.PI);
+                
+                // Стилизуем в зависимости от статуса покупателя в этой ячейке
+                if (userData) {
+                    if (userData.isReal) {
+                        ctx.fillStyle = '#1e2019'; // Реальный (золотистый отлив)
+                        ctx.strokeStyle = '#f59e0b';
+                    } else {
+                        ctx.fillStyle = '#111e1c'; // Оплаченный
+                        ctx.strokeStyle = '#10b981';
+                    }
+                } else {
+                    ctx.fillStyle = '#1e293b'; // Пустая ячейка
+                    ctx.strokeStyle = '#334155';
+                }
+                
+                ctx.lineWidth = 3;
+                ctx.fill();
+                ctx.stroke();
+
+                // Имя ячейки по центру (A1, B1...)
+                ctx.fillStyle = userData ? '#94a3b8' : '#f8fafc';
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(cellName, nodeX, levelY - 12);
+
+                // Логин пользователя внутри кружка
+                ctx.fillStyle = userData ? (userData.isReal ? '#f59e0b' : '#10b981') : '#475569';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillText(userData ? userData.username : 'пусто', nodeX, levelY + 10);
+            }
+        }
     }
 
     // Обновление всей доски, кошельков системы и статусов пользователей
@@ -463,10 +597,21 @@
         const dataTree = await resTree.json();
         
         if (dataTree.success) {
+            // Отрисовываем бинарную бесконечную матрицу на Canvas
+            drawBinaryTree(dataTree.tree);
+
+            // Отрисовываем линейную интерактивную таблицу ("Кто-за-кем")
             const board = document.getElementById('referral-board');
             board.innerHTML = '';
 
-            const maxCols = 5; 
+            // Рассчитываем, сколько реально поколений пришло от сервера
+            let maxCols = 5;
+            Object.values(dataTree.tree).forEach(u => {
+                if (u.calculatedColumn && u.calculatedColumn > maxCols) {
+                    maxCols = u.calculatedColumn;
+                }
+            });
+
             for (let col = 1; col <= maxCols; col++) {
                 const columnDiv = document.createElement('div');
                 columnDiv.className = 'column';
@@ -476,11 +621,21 @@
                 
                 usersInCol.forEach(user => {
                     const node = document.createElement('div');
-                    node.className = 'user-node';
+                    node.className = `user-node ${user.isPaid ? 'paid' : ''} ${user.isReal ? 'real' : ''}`;
                     
+                    // Собираем статус в красивый бейдж
+                    let badgeHTML = '';
+                    if (user.isReal) {
+                        badgeHTML = '<span class="badge real">Реальный покупатель</span>';
+                    } else if (user.isPaid) {
+                        badgeHTML = '<span class="badge paid">Оплачено</span>';
+                    }
+
                     node.innerHTML = `
                         <strong>${user.username}</strong>
                         <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">Пригласитель: ${user.sponsor || 'SYSTEM_ROOT'}</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Ячейка: <span style="color:#f59e0b">${user.cells ? user.cells.join(', ') : 'нет'}</span></div>
+                        ${badgeHTML}
                     `;
                     columnDiv.appendChild(node);
                 });
