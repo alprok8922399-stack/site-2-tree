@@ -247,15 +247,15 @@
         <div class="wallets-container">
             <div class="wallet-card creator">
                 <div class="wallet-title">Холодный сейф Создателя (45%)</div>
-                <div class="wallet-val" id="wallet-creator">0 Митронов</div>
+                <div class="wallet-val" id="wallet-creator">0/000 Митронов</div>
             </div>
             <div class="wallet-card reserve">
                 <div class="wallet-title">Выплатной резерв (55%)</div>
-                <div class="wallet-val" id="wallet-reserve">0 Митронов</div>
+                <div class="wallet-val" id="wallet-reserve">0/000 Митронов</div>
             </div>
             <div class="wallet-card buffer">
                 <div class="wallet-title">Буферный кошелек (Транзит)</div>
-                <div class="wallet-val" id="wallet-buffer">0 Митронов</div>
+                <div class="wallet-val" id="wallet-buffer">0/000 Митронов</div>
             </div>
         </div>
     </div>
@@ -345,11 +345,13 @@
         const res = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
         if (res.ok) {
             logMessage('Вся база данных успешно сброшена к начальному состоянию!');
+            document.getElementById('search-username').value = '';
+            document.getElementById('user-profile-data').innerHTML = 'База очищена. Введите имя нового юзера для отслеживания.';
             updateDashboard();
         }
     }
 
-    // Регистрация нового покупателя
+    // Регистрация нового покупателя в Маркетплейс
     async function registerUser() {
         const username = document.getElementById('reg-username').value.trim();
         const sponsor = document.getElementById('reg-sponsor').value.trim();
@@ -363,9 +365,11 @@
 
         const data = await res.json();
         if (data.success) {
-            logMessage(`Пользователь ${username} успешно зарегистрирован с пригласителем: ${sponsor || 'Авто-цепочка'}`);
+            logMessage(`Пользователь ${username} успешно зарегистрирован. Спонсор: ${sponsor || 'Авто-цепочка'}`);
             document.getElementById('reg-username').value = '';
             document.getElementById('reg-sponsor').value = '';
+            // Автоматически подставляем зарегистрированного в поле оплаты для удобства теста
+            document.getElementById('pay-username').value = username;
             updateDashboard();
         } else {
             alert('Ошибка: ' + data.error);
@@ -385,11 +389,19 @@
 
         const data = await res.json();
         if (data.success) {
-            logMessage(`Оплата 1000 Митронов от ${username} прошла успешно!`);
+            logMessage(`Оплата 1000 Митронов от ${username} прошла успешно! Покупателю начислено 3000 Митронов.`);
             if (data.referralLog && data.referralLog.length > 0) {
                 data.referralLog.forEach(l => logMessage(l));
             }
             document.getElementById('pay-username').value = '';
+            document.getElementById('confirm-username').value = username; // подставляем в поле "Реальный"
+            
+            // Обновляем кошельки напрямую из ответа сервера
+            if (data.wallets) {
+                document.getElementById('wallet-creator').innerText = `${data.wallets.myWallet.balanceMitrons} Митронов`;
+                document.getElementById('wallet-reserve').innerText = `${data.wallets.payoutReserveWallet.balanceMitrons} Митронов`;
+                document.getElementById('wallet-buffer').innerText = `${data.wallets.bufferWallet.balanceMitrons} Митронов`;
+            }
             updateDashboard();
         } else {
             alert('Ошибка: ' + data.error);
@@ -418,7 +430,7 @@
         }
     }
 
-    // Загрузка детального профиля пользователя
+    // Загрузка детального профиля пользователя с его балансами и статусом серебра
     async function loadUserProfile() {
         const username = document.getElementById('search-username').value.trim();
         const profileDiv = document.getElementById('user-profile-data');
@@ -429,25 +441,24 @@
 
         const res = await fetch(`${API_URL}/api/user-details/${username}`);
         if (!res.ok) {
-            profileDiv.innerHTML = `<span style="color: #ef4444;">Пользователь ${username} не найден в структуре.</span>`;
+            profileDiv.innerHTML = `<span style="color: #ef4444;">Пользователь ${username} не найден.</span>`;
             return;
         }
 
         const data = await res.json();
         
-        // Получаем карточку магазина, если она есть
-        // Для этого мы можем просто составить HTML на основе полученных из API цепочек
+        // Рендерим расширенную карточку пользователя
         profileDiv.innerHTML = `
             <strong>Покупатель:</strong> ${data.username}<br>
-            <strong>Прямой Спонсор:</strong> ${data.sponsor}<br>
-            <strong>Ветка вверх:</strong> ${data.chain.join(' → ') || 'Корень'}<br>
-            <strong>Места в бинаре:</strong> ${data.cells.join(', ') || 'Нет мест'}
+            <strong>Прямой спонсор:</strong> ${data.sponsor}<br>
+            <strong>Ветка вверх:</strong> <span style="color: #60a5fa;">${data.chain.join(' → ') || 'Корень'}</span><br>
+            <strong>Текущая ячейка в бинаре:</strong> ${data.cells.join(', ') || 'Ожидает оплаты'}<br>
         `;
     }
 
-    // Обновление всей доски и кошельков
+    // Обновление всей доски, кошельков системы и статусов пользователей
     async function updateDashboard() {
-        // 1. Получаем структуру реферальной сети
+        // 1. Получаем структуру реферальной сети ("Кто-за-кем")
         const resTree = await fetch(`${API_URL}/api/referals-tree`);
         const dataTree = await resTree.json();
         
@@ -455,14 +466,12 @@
             const board = document.getElementById('referral-board');
             board.innerHTML = '';
 
-            // Группируем пользователей по рассчитанным колонкам (глубине спонсорства)
             const maxCols = 5; 
             for (let col = 1; col <= maxCols; col++) {
                 const columnDiv = document.createElement('div');
                 columnDiv.className = 'column';
                 columnDiv.innerHTML = `<div class="column-header">Поколение ${col}</div>`;
 
-                // Фильтруем пользователей, попадающих в эту колонку
                 const usersInCol = Object.values(dataTree.tree).filter(u => u.calculatedColumn === col);
                 
                 usersInCol.forEach(user => {
@@ -479,9 +488,15 @@
                 board.appendChild(columnDiv);
             }
         }
+        
+        // Автоматически обновляем открытый профиль, если имя введено
+        const currentSearch = document.getElementById('search-username').value.trim();
+        if (currentSearch) {
+            loadUserProfile();
+        }
     }
 
-    // Запуск при старте страницы
+    // Запуск первичного рендеринга при старте страницы
     updateDashboard();
 </script>
 </body>
