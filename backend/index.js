@@ -237,9 +237,6 @@ app.post('/api/shop/pay', (req, res) => {
     // Начисляем линейные бонусы (50, 10, 10) вверх по интерактивной таблице
     const bonusLogs = distributeLinearBonus(username, referalsDB, shopUsersDB);
 
-    // Дополнительно начисляем стартовые 3000 Митронов на баланс самого покупателя
-    shopUsersDB[username].balances.mitrons += 3000;
-
     treeDB[cellId].user = username;
     checkAndGenerateChildren(treeDB, cellId);
 
@@ -258,7 +255,6 @@ app.post('/api/shop/pay', (req, res) => {
 });
 
 // Эндпоинт для подтверждения статуса "Реального покупателя" (имитация доставки товара / прошествия 31 дня)
-// При получении этого статуса обновляется счетчик спонсора, проверяется Серебряный статус и выплачивается глубинный бонус!
 app.post('/api/shop/confirm-real', (req, res) => {
     const { username } = req.body;
     if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Покупатель не найден' });
