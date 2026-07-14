@@ -7,6 +7,8 @@ const PORT = process.env.PORT || 5000;
 const {
     getLevelLetter,
     cellIdToGlobalIndex,
+    distributeLinearBonus,
+    distributeSilverBonus,
     createNewUserCard,
     createInitialWallets
 } = require('./static');
@@ -17,13 +19,13 @@ app.use(express.static('../frontend'));
 
 // === ИНИЦИАЛИЗАЦИЯ БАЗ ДАННЫХ ===
 
-// Наша обновленная карточка покупателей (теперь хранит балансы, статусы и счетчики)
+// Наша карточка покупателей (хранит балансы, статусы и счетчики)
 let shopUsersDB = {};
 
 // Инициализируем наш трехконтурный сейф кошельков
 let walletsDB = createInitialWallets();
 
-// База данных реферальных связей (кто кого пригласил): { 'логин_пользователя': 'логин_спонсора' }
+// База данных реферальных связей (интерактивная таблица): { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
     'SYSTEM_ROOT': null,
     'LEADER_1': 'SYSTEM_ROOT',
@@ -48,28 +50,21 @@ function createInitialTree() {
 let treeDB = createInitialTree();
 
 function findNextEmptyCell(tree) {
-    // Начальные фиксированные уровни A, B, C
     const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    let levelIndex = 3; // Начинаем с уровня D (индекс 3)
+    let levelIndex = 3; // Начинаем с уровня D
     while (true) {
         const letter = getLevelLetter(levelIndex);
-        const countInLevel = 1 << levelIndex; // Всего ячеек на данном буквенном уровне
-        const totalQuadsInLevel = countInLevel / 4; // Всего матриц ("четверок") на уровне
-
-        // Дробим матрицы уровня на порции строго по 32 матрицы (128 ячеек)
+        const countInLevel = 1 << levelIndex;
+        const totalQuadsInLevel = countInLevel / 4;
         const CHUNK_SIZE = 32;
 
         for (let chunkStart = 0; chunkStart < totalQuadsInLevel; chunkStart += CHUNK_SIZE) {
             const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalQuadsInLevel);
             
-            // Флаг: проверяем, закрыта ли текущая порция из 32 матриц полностью
-            let isChunkFull = true;
-
-            // Запускаем фирменный круговой обход ("гребёнку") строго ВНУТРИ текущей порции матриц
             for (let position = 0; position < 4; position++) {
                 for (let quad = chunkStart; quad < chunkEnd; quad++) {
                     const num = (quad * 4) + position + 1;
@@ -80,13 +75,11 @@ function findNextEmptyCell(tree) {
                     }
                     
                     if (!tree[id].user) {
-                        return id; // Нашли свободную ячейку по правилу гребёнки внутри этих 32 матриц!
+                        return id;
                     }
                 }
             }
         }
-
-        // Если абсолютно весь буквенный уровень закрылся по порциям, спускаемся на букву ниже
         levelIndex++; 
     }
 }
@@ -129,7 +122,6 @@ app.post('/api/register', (req, res) => {
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = username;
     
-    // Привязываем спонсора. Если не указан — привязываем к SYSTEM_ROOT
     referalsDB[username] = sponsor ? sponsor : 'SYSTEM_ROOT';
     
     checkAndGenerateChildren(treeDB, cellId);
@@ -149,11 +141,9 @@ app.post('/api/reset', (req, res) => {
     res.json({ success: true });
 });
 
-// Новый API эндпоинт для получения полных данных реферальной цепочки вверх («Кто-за-кем»)
 app.get('/api/user-details/:username', (req, res) => {
     const username = req.params.username;
     
-    // Находим все ячейки, которые занимает данный пользователь
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase())
         .map(cell => cell.id);
@@ -162,7 +152,6 @@ app.get('/api/user-details/:username', (req, res) => {
         return res.status(404).json({ error: 'Пользователь не найден' });
     }
     
-    // Выстраиваем спонсорскую линию вверх до SYSTEM_ROOT
     let sponsorChain = [];
     let currentSponsor = referalsDB[username] || 'SYSTEM_ROOT';
     
@@ -180,11 +169,9 @@ app.get('/api/user-details/:username', (req, res) => {
     });
 });
 
-// Новый API для построения реферальной структуры с расчетом колонок (ручное наследование)
 app.get('/api/referals-tree', (req, res) => {
     let structure = {};
     
-    // Вычисляем уровень (колонку) для каждого зарегистрированного пользователя динамически
     function getCalculatedLevel(user) {
         if (user === 'SYSTEM_ROOT') return 1;
         let sponsor = referalsDB[user];
@@ -203,22 +190,20 @@ app.get('/api/referals-tree', (req, res) => {
     res.json({ success: true, tree: structure });
 });
 
-// === API МАРКЕТПЛЕЙСА (ДЛЯ САЙТА №1) ===
+// === API МАРКЕТПЛЕЙСА (ИНТЕРАКТИВНАЯ ТАБЛИЦА) ===
 app.post('/api/shop/register', (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     if (shopUsersDB[username]) return res.status(400).json({ error: 'Такой покупатель уже зарегистрирован' });
     
-    // Создаем карточку с помощью функции-инициализатора из static.js
     shopUsersDB[username] = createNewUserCard(username);
     
-    // Запоминаем спонсора. Если робот регистрирует пачку ботов, связываем их цепочкой друг за другом
     if (sponsor) {
         referalsDB[username] = sponsor;
     } else {
         referalsDB[username] = lastRegisteredBot ? lastRegisteredBot : 'SYSTEM_ROOT';
     }
-    lastRegisteredBot = username; // Текущий бот становится спонсором для следующего
+    lastRegisteredBot = username;
     
     res.json({ success: true, shopUserStatus: shopUsersDB[username] });
 });
@@ -236,16 +221,17 @@ app.post('/api/shop/pay', (req, res) => {
     shopUsersDB[username].matrixPosition.currentCellId = cellId;
     shopUsersDB[username].matrixPosition.status = 'active';
 
-    // Мгновенное расщепление платежа на уровне кошельков по ТЗ:
-    // 45% (450 Митронов) идет напрямую Создателю
-    // 55% (550 Митронов) идет в неприкосновенный Выплатной резерв
+    // Расщепление входящего платежа: 450 Создателю, 550 в Резерв
     const creatorShare = 450;
     const payoutShare = 550;
 
     walletsDB.myWallet.balanceMitrons += creatorShare;
     walletsDB.payoutReserveWallet.balanceMitrons += payoutShare;
 
-    // Наполняем баланс пользователя внутри карточки для отображения (3000 в старой логике, оставляем ее пока на месте)
+    // Начисляем линейные бонусы (50, 10, 10) вверх по интерактивной таблице
+    const bonusLogs = distributeLinearBonus(username, referalsDB, shopUsersDB);
+
+    // Дополнительно начисляем стартовые 3000 Митронов на баланс самого покупателя
     shopUsersDB[username].balances.mitrons += 3000;
 
     treeDB[cellId].user = username;
@@ -255,12 +241,54 @@ app.post('/api/shop/pay', (req, res) => {
         success: true,
         shopUserStatus: shopUsersDB[username],
         cellId,
-        wallets: walletsDB, // Возвращаем текущие балансы трех кошельков
+        wallets: walletsDB,
         split: {
             total: payAmount,
             creatorShare: creatorShare,
             payoutReserveShare: payoutShare
+        },
+        referralLog: bonusLogs
+    });
+});
+
+// Эндпоинт для подтверждения статуса "Реального покупателя" (имитация доставки товара / прошествия 31 дня)
+// При получении этого статуса обновляется счетчик спонсора, проверяется Серебряный статус и выплачивается глубинный бонус!
+app.post('/api/shop/confirm-real', (req, res) => {
+    const { username } = req.body;
+    if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Покупатель не найден' });
+    
+    const userCard = shopUsersDB[username];
+    if (userCard.isRealBuyer) {
+        return res.status(400).json({ error: 'Пользователь уже является Реальным покупателем' });
+    }
+
+    // 1. Активируем статус "Реального" у самого покупателя
+    userCard.isRealBuyer = true;
+
+    let silverBonusLog = "Серебряный бонус не начислялся.";
+    const sponsor = referalsDB[username];
+
+    if (sponsor && shopUsersDB[sponsor]) {
+        const sponsorCard = shopUsersDB[sponsor];
+        
+        // 2. Увеличиваем счетчик Реальных лично приглашенных у спонсора
+        sponsorCard.silverStatus.realDirectReferralsCount += 1;
+
+        // 3. Если счетчик достиг 10 — автоматически открываем Серебряное место спонсору
+        if (sponsorCard.silverStatus.realDirectReferralsCount >= 10 && !sponsorCard.silverStatus.isActive) {
+            sponsorCard.silverStatus.isActive = true;
+            sponsorCard.silverStatus.activatedAt = new Date();
         }
+
+        // 4. Начисляем глубинный Серебряный бонус (10 Митронов) первому активному Серебру по цепочке выше
+        silverBonusLog = distributeSilverBonus(username, referalsDB, shopUsersDB);
+    }
+
+    res.json({
+        success: true,
+        userStatus: userCard,
+        sponsorStatus: sponsor ? shopUsersDB[sponsor] : null,
+        silverBonusLog
     });
 });
 
