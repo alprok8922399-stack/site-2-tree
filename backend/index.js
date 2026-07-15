@@ -56,34 +56,41 @@ function createInitialTree() {
 let treeDB = createInitialTree();
 
 function findNextEmptyCell(tree) {
+    // 1. Сначала жестко проверяем базовые уровни A, B, C
     const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
 
     let levelIndex = 3; // Начинаем с уровня D
+    
     while (true) {
         const letter = getLevelLetter(levelIndex);
-        const countInLevel = 1 << levelIndex;
-        const totalQuadsInLevel = countInLevel / 4;
-        const CHUNK_SIZE = 32;
-
-        for (let chunkStart = 0; chunkStart < totalQuadsInLevel; chunkStart += CHUNK_SIZE) {
-            const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalQuadsInLevel);
+        const countInLevel = 1 << levelIndex; // Количество ячеек на уровне (8, 16, 32...)
+        
+        const levelOrderIDs = [];
+        const cellsPerChunk = 32 * 4; // 32 матрицы по 4 ячейки
+        
+        for (let chunkStart = 0; chunkStart < countInLevel; chunkStart += cellsPerChunk) {
+            const currentChunkLimit = Math.min(chunkStart + cellsPerChunk, countInLevel);
+            const totalQuadsInChunk = (currentChunkLimit - chunkStart) / 4;
             
+            // Собираем правильный веерный порядок ID для уровня
             for (let position = 0; position < 4; position++) {
-                for (let quad = chunkStart; quad < chunkEnd; quad++) {
-                    const num = (quad * 4) + position + 1;
-                    const id = `${letter}${num}`;
-                    
-                    if (!tree[id]) {
-                        tree[id] = { id, level: letter, user: null };
-                    }
-                    
-                    if (!tree[id].user) {
-                        return id;
-                    }
+                for (let quad = 0; quad < totalQuadsInChunk; quad++) {
+                    const num = chunkStart + (quad * 4) + position + 1;
+                    levelOrderIDs.push(`${letter}${num}`);
                 }
+            }
+        }
+        
+        // Перебираем собранные ID в веерном порядке
+        for (const id of levelOrderIDs) {
+            if (!tree[id]) {
+                tree[id] = { id, level: letter, user: null };
+            }
+            if (!tree[id].user) {
+                return id;
             }
         }
         levelIndex++; 
