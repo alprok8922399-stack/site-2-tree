@@ -14,6 +14,7 @@
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
             --border-color: #334155;
+            --accent-reward: #ec4899;
         }
 
         body {
@@ -108,7 +109,6 @@
             background-color: #ef4444;
         }
 
-        /* Системные кошельки */
         .wallets-container {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -123,17 +123,9 @@
             border-left: 4px solid var(--accent-color);
         }
 
-        .wallet-card.creator {
-            border-left-color: #ef4444;
-        }
-
-        .wallet-card.reserve {
-            border-left-color: var(--accent-success);
-        }
-
-        .wallet-card.buffer {
-            border-left-color: var(--accent-gold);
-        }
+        .wallet-card.creator { border-left-color: #ef4444; }
+        .wallet-card.reserve { border-left-color: var(--accent-success); }
+        .wallet-card.buffer { border-left-color: var(--accent-gold); }
 
         .wallet-title {
             font-size: 12px;
@@ -148,7 +140,6 @@
             margin-top: 5px;
         }
 
-        /* Интерактивная таблица рефералов */
         .referral-board {
             display: flex;
             gap: 15px;
@@ -185,19 +176,15 @@
             box-shadow: 0 2px 4px rgb(0 0 0 / 0.1);
         }
 
-        .user-node.paid {
-            border-color: var(--accent-success);
-        }
-
+        .user-node.paid { border-color: var(--accent-success); }
         .user-node.real {
             border-color: var(--accent-gold);
             background: linear-gradient(135deg, var(--card-bg) 0%, #2e2a14 100%);
         }
 
-        /* Отрисовка Бесконечной Матрицы (Дерева) */
         .tree-viewport {
             width: 100%;
-            height: 500px;
+            height: 600px;
             background-color: #0b0f19;
             border: 1px solid var(--border-color);
             border-radius: 12px;
@@ -220,17 +207,9 @@
             margin-top: 5px;
         }
 
-        .badge.paid {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--accent-success);
-        }
+        .badge.paid { background: rgba(16, 185, 129, 0.2); color: var(--accent-success); }
+        .badge.real { background: rgba(245, 158, 11, 0.2); color: var(--accent-gold); }
 
-        .badge.real {
-            background: rgba(245, 158, 11, 0.2);
-            color: var(--accent-gold);
-        }
-
-        /* Лог начислений */
         .log-box {
             background: #0f172a;
             border: 1px solid var(--border-color);
@@ -250,7 +229,7 @@
     <header>
         <div>
             <h1>Панель Управления Проектом</h1>
-            <p style="color: var(--text-muted); margin: 0;">Интерактивный тест линейного маркетинга, Серебряных мест и разделения кассы</p>
+            <p style="color: var(--text-muted); margin: 0;">Интерактивный тест линейного маркетинга, Серебряных мест и веерного разделения кассы</p>
         </div>
         <button class="danger" style="width: auto; padding: 10px 20px;" onclick="resetSystem()">Сбросить систему</button>
     </header>
@@ -260,26 +239,26 @@
         <div class="wallets-container">
             <div class="wallet-card creator">
                 <div class="wallet-title">Холодный сейф Создателя (45%)</div>
-                <div class="wallet-val" id="wallet-creator">0/000 Митронов</div>
+                <div class="wallet-val" id="wallet-creator">0 Митронов</div>
             </div>
             <div class="wallet-card reserve">
                 <div class="wallet-title">Выплатной резерв (55%)</div>
-                <div class="wallet-val" id="wallet-reserve">0/000 Митронов</div>
+                <div class="wallet-val" id="wallet-reserve">0 Митронов</div>
             </div>
             <div class="wallet-card buffer">
                 <div class="wallet-title">Буферный кошелек (Транзит)</div>
-                <div class="wallet-val" id="wallet-buffer">0/000 Митронов</div>
+                <div class="wallet-val" id="wallet-buffer">0 Митронов</div>
             </div>
         </div>
     </div>
 
     <div class="card">
-        <h2>Живая Бинарная Матрица (Очередь до бесконечности)</h2>
+        <h2>Живая Веерная Матрица (A, B, C -> Динамический D, E)</h2>
         <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 10px;">
-            Вся глубина рассчитывается динамически. Матрица рисуется налету, показывая, как именно логин покупателя заполняет ячейки (A, B, C, D и далее).
+            Заполнение начинается с ряда C (C1-C4). При заполнении рядов матрица делится, переводя родительские ячейки на вознаграждение и открывая новые уровни веерным методом (D1, D5, D2, D6...).
         </p>
         <div class="tree-viewport">
-            <canvas id="tree-canvas" width="2000" height="800"></canvas>
+            <canvas id="tree-canvas" width="2200" height="750"></canvas>
         </div>
     </div>
 
@@ -355,13 +334,11 @@
 <script>
     const API_URL = '';
 
-    // Логирование событий на экран
     function logMessage(msg) {
         const container = document.getElementById('log-container');
         container.innerHTML = `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>` + container.innerHTML;
     }
 
-    // Сброс всей базы данных
     async function resetSystem() {
         if (!confirm('Вы действительно хотите очистить всю базу данных?')) return;
         const res = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
@@ -373,7 +350,6 @@
         }
     }
 
-    // Регистрация нового покупателя в Маркетплейс
     async function registerUser() {
         const username = document.getElementById('reg-username').value.trim();
         const sponsor = document.getElementById('reg-sponsor').value.trim();
@@ -397,7 +373,6 @@
         }
     }
 
-    // Оплата сертификата (1000 Митронов)
     async function payCertificate() {
         const username = document.getElementById('pay-username').value.trim();
         if (!username) return alert('Укажите имя для оплаты!');
@@ -424,235 +399,4 @@
             }
             updateDashboard();
         } else {
-            alert('Ошибка: ' + data.error);
-        }
-    }
-
-    // Подтверждение статуса "Реальный"
-    async function confirmReal() {
-        const username = document.getElementById('confirm-username').value.trim();
-        if (!username) return alert('Укажите имя!');
-
-        const res = await fetch(`${API_URL}/api/shop/confirm-real`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username })
-        });
-
-        const data = await res.json();
-        if (data.success) {
-            logMessage(`Покупатель ${username} подтвердил доставку и стал РЕАЛЬНЫМ!`);
-            logMessage(`Лог Серебра: ${data.silverBonusLog}`);
-            document.getElementById('confirm-username').value = '';
-            updateDashboard();
-        } else {
-            alert('Ошибка: ' + data.error);
-        }
-    }
-
-    // Загрузка детального профиля
-    async function loadUserProfile() {
-        const username = document.getElementById('search-username').value.trim();
-        const profileDiv = document.getElementById('user-profile-data');
-        if (!username) {
-            profileDiv.innerHTML = 'Введите имя пользователя выше, чтобы увидеть его балансы.';
-            return;
-        }
-
-        const res = await fetch(`${API_URL}/api/user-details/${username}`);
-        if (!res.ok) {
-            profileDiv.innerHTML = `<span style="color: #ef4444;">Пользователь ${username} не найден.</span>`;
-            return;
-        }
-
-        const data = await res.json();
-        profileDiv.innerHTML = `
-            <strong>Покупатель:</strong> ${data.username}<br>
-            <strong>Прямой спонсор:</strong> ${data.sponsor || 'SYSTEM_ROOT'}<br>
-            <strong>Ветка вверх:</strong> <span style="color: #60a5fa;">${data.chain.join(' → ') || 'Корень'}</span><br>
-            <strong>Текущая ячейка в бинаре:</strong> <span style="color: #f59e0b; font-weight: bold;">${data.cells.join(', ') || 'Ожидает оплаты'}</span><br>
-        `;
-    }
-
-    // Алгоритм бесконечной отрисовки бинарного дерева на Canvas
-    function drawBinaryTree(users) {
-        const canvas = document.getElementById('tree-canvas');
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        if (!users || Object.keys(users).length === 0) {
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '16px sans-serif';
-            ctx.fillText('Матрица пуста. Зарегистрируйте и оплатите первого участника.', 50, 50);
-            return;
-        }
-
-        // Превращаем плоскую структуру в карту ячеек
-        const cellToUser = {};
-        Object.values(users).forEach(u => {
-            if (u.cells && u.cells.length > 0) {
-                u.cells.forEach(cellName => {
-                    cellToUser[cellName] = u;
-                });
-            }
-        });
-
-        // Функция для парсинга имени ячейки (например, "A1" -> level:0, index:0, "D5" -> level:3, index:4)
-        function parseCell(cellName) {
-            const letter = cellName.charAt(0).toUpperCase();
-            const index = parseInt(cellName.slice(1)) - 1;
-            const level = letter.charCodeAt(0) - 65; // A=0, B=1, C=2, D=3...
-            return { level, index };
-        }
-
-        // Автоматически определяем максимальный уровень в системе, чтобы подстроить высоту
-        let maxLevel = 3; // По умолчанию рисуем минимум до D (уровень 3)
-        Object.keys(cellToUser).forEach(cell => {
-            const parsed = parseCell(cell);
-            if (parsed.level > maxLevel) maxLevel = parsed.level;
-        });
-
-        // Подстраиваем ширину холста динамически под количество элементов на максимальном уровне
-        const leavesCount = Math.pow(2, maxLevel);
-        const cellWidth = 90;
-        const minWidth = Math.max(2000, leavesCount * cellWidth);
-        if (canvas.width !== minWidth) {
-            canvas.width = minWidth;
-        }
-        canvas.height = (maxLevel + 1.5) * 120;
-
-        const width = canvas.width;
-
-        // Рисуем связи и кружочки ячеек
-        for (let lvl = 0; lvl <= maxLevel; lvl++) {
-            const numNodes = Math.pow(2, lvl);
-            const levelY = 60 + lvl * 120;
-
-            for (let idx = 0; idx < numNodes; idx++) {
-                // Вычисление координаты X для любого бесконечного уровня
-                const segmentWidth = width / numNodes;
-                const nodeX = segmentWidth * idx + segmentWidth / 2;
-
-                // Буквенное имя ячейки (A1, B2, C4, D8...)
-                const cellLetter = String.fromCharCode(65 + lvl);
-                const cellName = `${cellLetter}${idx + 1}`;
-                const userData = cellToUser[cellName];
-
-                // Отрисовка соединительных линий к родительской ячейке
-                if (lvl > 0) {
-                    const parentIdx = Math.floor(idx / 2);
-                    const parentSegment = width / Math.pow(2, lvl - 1);
-                    const parentX = parentSegment * parentIdx + parentSegment / 2;
-                    const parentY = 60 + (lvl - 1) * 120;
-
-                    ctx.beginPath();
-                    ctx.moveTo(nodeX, levelY);
-                    ctx.lineTo(parentX, parentY);
-                    ctx.strokeStyle = userData ? '#3b82f6' : '#1e293b';
-                    ctx.lineWidth = userData ? 2 : 1;
-                    ctx.stroke();
-                }
-
-                // Рисуем сам кружок ячейки
-                ctx.beginPath();
-                ctx.arc(nodeX, levelY, 32, 0, 2 * Math.PI);
-                
-                // Стилизуем в зависимости от статуса покупателя в этой ячейке
-                if (userData) {
-                    if (userData.isReal) {
-                        ctx.fillStyle = '#1e2019'; // Реальный (золотистый отлив)
-                        ctx.strokeStyle = '#f59e0b';
-                    } else {
-                        ctx.fillStyle = '#111e1c'; // Оплаченный
-                        ctx.strokeStyle = '#10b981';
-                    }
-                } else {
-                    ctx.fillStyle = '#1e293b'; // Пустая ячейка
-                    ctx.strokeStyle = '#334155';
-                }
-                
-                ctx.lineWidth = 3;
-                ctx.fill();
-                ctx.stroke();
-
-                // Имя ячейки по центру (A1, B1...)
-                ctx.fillStyle = userData ? '#94a3b8' : '#f8fafc';
-                ctx.font = 'bold 11px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(cellName, nodeX, levelY - 12);
-
-                // Логин пользователя внутри кружка
-                ctx.fillStyle = userData ? (userData.isReal ? '#f59e0b' : '#10b981') : '#475569';
-                ctx.font = 'bold 12px sans-serif';
-                ctx.fillText(userData ? userData.username : 'пусто', nodeX, levelY + 10);
-            }
-        }
-    }
-
-    // Обновление всей доски, кошельков системы и статусов пользователей
-    async function updateDashboard() {
-        // 1. Получаем структуру реферальной сети ("Кто-за-кем")
-        const resTree = await fetch(`${API_URL}/api/referals-tree`);
-        const dataTree = await resTree.json();
-        
-        if (dataTree.success) {
-            // Отрисовываем бинарную бесконечную матрицу на Canvas
-            drawBinaryTree(dataTree.tree);
-
-            // Отрисовываем линейную интерактивную таблицу ("Кто-за-кем")
-            const board = document.getElementById('referral-board');
-            board.innerHTML = '';
-
-            // Рассчитываем, сколько реально поколений пришло от сервера
-            let maxCols = 5;
-            Object.values(dataTree.tree).forEach(u => {
-                if (u.calculatedColumn && u.calculatedColumn > maxCols) {
-                    maxCols = u.calculatedColumn;
-                }
-            });
-
-            for (let col = 1; col <= maxCols; col++) {
-                const columnDiv = document.createElement('div');
-                columnDiv.className = 'column';
-                columnDiv.innerHTML = `<div class="column-header">Поколение ${col}</div>`;
-
-                const usersInCol = Object.values(dataTree.tree).filter(u => u.calculatedColumn === col);
-                
-                usersInCol.forEach(user => {
-                    const node = document.createElement('div');
-                    node.className = `user-node ${user.isPaid ? 'paid' : ''} ${user.isReal ? 'real' : ''}`;
-                    
-                    // Собираем статус в красивый бейдж
-                    let badgeHTML = '';
-                    if (user.isReal) {
-                        badgeHTML = '<span class="badge real">Реальный покупатель</span>';
-                    } else if (user.isPaid) {
-                        badgeHTML = '<span class="badge paid">Оплачено</span>';
-                    }
-
-                    node.innerHTML = `
-                        <strong>${user.username}</strong>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">Пригласитель: ${user.sponsor || 'SYSTEM_ROOT'}</div>
-                        <div style="font-size: 11px; color: var(--text-muted);">Ячейка: <span style="color:#f59e0b">${user.cells ? user.cells.join(', ') : 'нет'}</span></div>
-                        ${badgeHTML}
-                    `;
-                    columnDiv.appendChild(node);
-                });
-
-                board.appendChild(columnDiv);
-            }
-        }
-        
-        // Автоматически обновляем открытый профиль, если имя введено
-        const currentSearch = document.getElementById('search-username').value.trim();
-        if (currentSearch) {
-            loadUserProfile();
-        }
-    }
-
-    // Запуск первичного рендеринга при старте страницы
-    updateDashboard();
-</script>
-</body>
-</html>
+            alert('Ошибка: '
