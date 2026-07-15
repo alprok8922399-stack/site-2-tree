@@ -34,7 +34,8 @@ function cellIdToGlobalIndex(id) {
     }
     levelIndex -= 1;
     
-    const levelStartGlobalIndex = (1 << levelIndex) - 1;
+    // Используем безопасное Math.pow вместо побитового сдвига для стабильности на любых уровнях
+    const levelStartGlobalIndex = Math.pow(2, levelIndex) - 1;
     return levelStartGlobalIndex + (num - 1);
 }
 
