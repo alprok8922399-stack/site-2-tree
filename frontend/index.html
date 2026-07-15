@@ -228,8 +228,8 @@
 <div class="container">
     <header>
         <div>
-            <h1>Панель Управления Проектом</h1>
-            <p style="color: var(--text-muted); margin: 0;">Интерактивный тест линейного маркетинга, Серебряных мест и веерного разделения кассы</p>
+            <h1>Панель Управления Проектом (Приватная)</h1>
+            <p style="color: var(--text-muted); margin: 0;">Интерактивная аналитика, кошельки, веерная матрица и структура</p>
         </div>
         <button class="danger" style="width: auto; padding: 10px 20px;" onclick="resetSystem()">Сбросить систему</button>
     </header>
@@ -239,11 +239,11 @@
         <div class="wallets-container">
             <div class="wallet-card creator">
                 <div class="wallet-title">Холодный сейф Создателя (45%)</div>
-                <div class="wallet-val" id="wallet-creator">0 Митронов</div>
+                <div class="wallet-val" id="wallet-creator">0/450 Митронов</div>
             </div>
             <div class="wallet-card reserve">
                 <div class="wallet-title">Выплатной резерв (55%)</div>
-                <div class="wallet-val" id="wallet-reserve">0 Митронов</div>
+                <div class="wallet-val" id="wallet-reserve">0/550 Митронов</div>
             </div>
             <div class="wallet-card buffer">
                 <div class="wallet-title">Буферный кошелек (Транзит)</div>
@@ -255,7 +255,7 @@
     <div class="card">
         <h2>Живая Веерная Матрица (A, B, C -> Динамический D, E)</h2>
         <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 10px;">
-            Заполнение начинается с ряда C (C1-C4). При заполнении рядов матрица делится, переводя родительские ячейки на вознаграждение и открывая новые уровни веерным методом (D1, D5, D2, D6...).
+            Вся регистрация и оплаты происходят через Гостевой Сайт №1. Здесь отображается итоговая структура.
         </p>
         <div class="tree-viewport">
             <canvas id="tree-canvas" width="2200" height="750"></canvas>
@@ -264,32 +264,10 @@
 
     <div class="grid">
         <div class="card">
-            <h2>Действия</h2>
+            <h2>Действия на Бэкенде</h2>
             
-            <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 20px;">
-                <h3>1. Регистрация в Таблицу</h3>
-                <div class="form-group">
-                    <label>Логин нового покупателя</label>
-                    <input type="text" id="reg-username" placeholder="Например, ivan_99">
-                </div>
-                <div class="form-group">
-                    <label>Логин Спонсора (необязательно)</label>
-                    <input type="text" id="reg-sponsor" placeholder="Спонсор">
-                </div>
-                <button onclick="registerUser()">Зарегистрировать</button>
-            </div>
-
-            <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 20px;">
-                <h3>2. Покупка Сертификата</h3>
-                <div class="form-group">
-                    <label>Логин покупателя для оплаты</label>
-                    <input type="text" id="pay-username" placeholder="ivan_99">
-                </div>
-                <button class="success" onclick="payCertificate()">Оплатить 1000 Митронов</button>
-            </div>
-
             <div>
-                <h3>3. Подтверждение получения товара</h3>
+                <h3>Подтверждение получения товара</h3>
                 <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">
                     Имитирует прошествие 31 дня. Делает покупателя «Реальным», начисляет +1 к счетчику спонсора и запускает Серебряные бонусы.
                 </p>
@@ -305,7 +283,7 @@
             <div>
                 <h2>Финансовый отчет транзакции</h2>
                 <div class="log-box" id="log-container" style="margin-bottom: 20px;">
-                    Система готова к работе. Зарегистрируйте и оплатите первого пользователя.
+                    Система готова к работе. Все регистрации и покупки проводятся на Сайте №1.
                 </div>
             </div>
 
@@ -350,53 +328,204 @@
         }
     }
 
-    async function registerUser() {
-        const username = document.getElementById('reg-username').value.trim();
-        const sponsor = document.getElementById('reg-sponsor').value.trim();
-        if (!username) return alert('Введите имя!');
+    async function confirmReal() {
+        const username = document.getElementById('confirm-username').value.trim();
+        if (!username) return alert('Укажите имя!');
 
-        const res = await fetch(`${API_URL}/api/shop/register`, {
+        const res = await fetch(`${API_URL}/api/shop/confirm-real`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, sponsor })
+            body: JSON.stringify({ username })
         });
 
         const data = await res.json();
         if (data.success) {
-            logMessage(`Пользователь ${username} успешно зарегистрирован. Спонсор: ${sponsor || 'Авто-цепочка'}`);
-            document.getElementById('reg-username').value = '';
-            document.getElementById('reg-sponsor').value = '';
-            document.getElementById('pay-username').value = username;
+            logMessage(`Покупатель ${username} подтвержден как РЕАЛЬНЫЙ!`);
+            if (data.silverBonusLog) {
+                logMessage(data.silverBonusLog);
+            }
+            document.getElementById('confirm-username').value = '';
             updateDashboard();
+            loadUserProfile();
         } else {
             alert('Ошибка: ' + data.error);
         }
     }
 
-    async function payCertificate() {
-        const username = document.getElementById('pay-username').value.trim();
-        if (!username) return alert('Укажите имя для оплаты!');
+    async function loadUserProfile() {
+        const username = document.getElementById('search-username').value.trim();
+        const profileBox = document.getElementById('user-profile-data');
+        if (!username) {
+            profileBox.innerHTML = 'Введите имя пользователя выше, чтобы увидеть балансы...';
+            return;
+        }
 
-        const res = await fetch(`${API_URL}/api/shop/pay`, {
+        const res = await fetch(`${API_URL}/api/user-details/${username}`);
+        if (!res.ok) {
+            profileBox.innerHTML = `<span style="color:#ef4444">Пользователь не найден в системе</span>`;
+            return;
+        }
+        
+        const details = await res.json();
+        const shopRes = await fetch(`${API_URL}/api/shop/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, amount: 1000 })
+            body: JSON.stringify({ username })
+        }).catch(() => {});
+        
+        profileBox.innerHTML = `
+            <strong>Пользователь:</strong> ${details.username}<br>
+            <strong>Спонсор:</strong> ${details.sponsor}<br>
+            <strong>Ветка вверх:</strong> ${details.chain ? details.chain.join(' -> ') : 'нет'}<br>
+            <strong>Ячейки в матрице:</strong> ${details.cells && details.cells.length > 0 ? details.cells.join(', ') : 'нет места'}<br>
+        `;
+    }
+
+    async function updateDashboard() {
+        try {
+            const treeRes = await fetch(`${API_URL}/api/tree`);
+            const tree = await treeRes.json();
+            drawTree(tree);
+
+            const refRes = await fetch(`${API_URL}/api/referals-tree`);
+            const refData = await refRes.json();
+            if (refData.success) {
+                renderReferralBoard(refData.tree);
+            }
+        } catch (e) {
+            console.error('Ошибка обновления дашборда', e);
+        }
+    }
+
+    function renderReferralBoard(tree) {
+        const board = document.getElementById('referral-board');
+        board.innerHTML = '';
+        
+        const cols = {};
+        Object.values(tree).forEach(node => {
+            const colNum = node.calculatedColumn;
+            if (!cols[colNum]) cols[colNum] = [];
+            cols[colNum].push(node);
         });
 
-        const data = await res.json();
-        if (data.success) {
-            logMessage(`Оплата 1000 Митронов от ${username} прошла успешно! Покупателю начислено 3000 Митронов.`);
-            if (data.referralLog && data.referralLog.length > 0) {
-                data.referralLog.forEach(l => logMessage(l));
-            }
-            document.getElementById('pay-username').value = '';
-            document.getElementById('confirm-username').value = username;
+        const sortedColKeys = Object.keys(cols).sort((a,b) => a-b);
+        sortedColKeys.forEach(key => {
+            const colDiv = document.createElement('div');
+            colDiv.className = 'column';
+            colDiv.innerHTML = `<div class="column-header">Уровень ${key}</div>`;
             
-            if (data.wallets) {
-                document.getElementById('wallet-creator').innerText = `${data.wallets.myWallet.balanceMitrons} Митронов`;
-                document.getElementById('wallet-reserve').innerText = `${data.wallets.payoutReserveWallet.balanceMitrons} Митронов`;
-                document.getElementById('wallet-buffer').innerText = `${data.wallets.bufferWallet.balanceMitrons} Митронов`;
-            }
-            updateDashboard();
-        } else {
-            alert('Ошибка: '
+            cols[key].forEach(u => {
+                const nodeDiv = document.createElement('div');
+                nodeDiv.className = 'user-node';
+                nodeDiv.innerHTML = `
+                    <div><strong>${u.username}</strong></div>
+                    <div style="font-size:11px; color:var(--text-muted)">Спонсор: ${u.sponsor || 'SYSTEM_ROOT'}</div>
+                `;
+                colDiv.appendChild(nodeDiv);
+            });
+            board.appendChild(colDiv);
+        });
+    }
+
+    function drawTree(tree) {
+        const canvas = document.getElementById('tree-canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const nodes = {};
+        
+        function parseId(id) {
+            const match = id.match(/^([A-Z]+)(\d+)$/);
+            if (!match) return { letter: 'A', num: 1 };
+            return { letter: match[1], num: parseInt(match[2], 10) };
+        }
+
+        Object.keys(tree).forEach(id => {
+            const info = parseId(id);
+            const level = info.letter.charCodeAt(0) - 65; 
+            const num = info.num;
+
+            if (!nodes[level]) nodes[level] = [];
+            nodes[level].push({ id, user: tree[id].user, num });
+        });
+
+        const levelsCount = Object.keys(nodes).length;
+        const levelHeight = 120;
+
+        Object.keys(nodes).forEach(levelStr => {
+            const level = parseInt(levelStr, 10);
+            const levelNodes = nodes[level].sort((a,b) => a.num - b.num);
+            const count = levelNodes.length;
+            
+            const segmentWidth = canvas.width / count;
+
+            levelNodes.forEach((node, index) => {
+                const x = (index * segmentWidth) + (segmentWidth / 2);
+                const y = 50 + (level * levelHeight);
+                node.x = x;
+                node.y = y;
+            });
+        });
+
+        Object.keys(nodes).forEach(levelStr => {
+            const level = parseInt(levelStr, 10);
+            nodes[level].forEach(node => {
+                const info = parseId(node.id);
+                const num = info.num;
+                
+                const leftChildNum = (num * 2) - 1;
+                const rightChildNum = num * 2;
+                
+                const nextLevelNodes = nodes[level + 1] || [];
+                
+                const leftChild = nextLevelNodes.find(n => parseId(n.id).num === leftChildNum);
+                const rightChild = nextLevelNodes.find(n => parseId(n.id).num === rightChildNum);
+
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 2;
+
+                if (leftChild) {
+                    ctx.beginPath();
+                    ctx.moveTo(node.x, node.y);
+                    ctx.lineTo(leftChild.x, leftChild.y);
+                    ctx.stroke();
+                }
+                if (rightChild) {
+                    ctx.beginPath();
+                    ctx.moveTo(node.x, node.y);
+                    ctx.lineTo(rightChild.x, rightChild.y);
+                    ctx.stroke();
+                }
+            });
+        });
+
+        Object.keys(nodes).forEach(levelStr => {
+            const level = parseInt(levelStr, 10);
+            nodes[level].forEach(node => {
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, 35, 0, 2 * Math.PI);
+                ctx.fillStyle = node.user ? '#1e293b' : '#0b0f19';
+                ctx.fill();
+                ctx.strokeStyle = node.user ? '#3b82f6' : '#334155';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.fillStyle = '#f8fafc';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.id, node.x, node.y - 10);
+
+                ctx.fillStyle = node.user ? '#10b981' : '#94a3b8';
+                ctx.font = '10px sans-serif';
+                const displayName = node.user ? (node.user.length > 8 ? node.user.substring(0,6)+'..' : node.user) : 'пусто';
+                ctx.fillText(displayName, node.x, node.y + 12);
+            });
+        });
+    }
+
+    setInterval(updateDashboard, 5000);
+    window.onload = updateDashboard;
+</script>
+
+</body>
+    </html>
