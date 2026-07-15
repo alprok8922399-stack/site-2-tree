@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Панель Управления Маркетплейса</title>
+    <title>Админ-Панель: Бинарное Дерево (Сайт №2)</title>
     <style>
         :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --accent-color: #3b82f6;
+            --bg-color: #0b0f19;
+            --card-bg: #111827;
             --accent-success: #10b981;
-            --accent-gold: #f59e0b;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #334155;
-            --accent-reward: #ec4899;
+            --accent-primary: #3b82f6;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #1f2937;
         }
 
         body {
@@ -36,190 +34,56 @@
             align-items: center;
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
         }
 
-        h1, h2, h3 {
-            margin: 0 0 10px 0;
+        h1 {
+            font-size: 22px;
+            margin: 0;
+            color: var(--text-main);
         }
 
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 20px;
-            margin-bottom: 30px;
+        .btn-reset {
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
         }
 
-        .card {
-            background-color: var(--card-bg);
+        .btn-reset:hover {
+            background-color: #dc2626;
+        }
+
+        .screen-container {
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: auto; 
+            overflow-y: auto; 
+            display: block; 
+            background: #0f172a;
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
 
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
+        canvas {
             display: block;
-            font-size: 14px;
-            color: var(--text-muted);
-            margin-bottom: 5px;
-        }
-
-        input, select {
-            width: 100%;
-            padding: 10px;
+            margin: 0 auto;
             background-color: #0f172a;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-main);
-            box-sizing: border-box;
         }
 
-        button {
-            width: 100%;
-            padding: 12px;
-            background-color: var(--accent-color);
-            border: none;
-            border-radius: 6px;
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.2s;
-            margin-bottom: 10px;
+        .user-node.paid {
+            border-color: var(--accent-success);
         }
 
-        button:hover {
-            opacity: 0.9;
-        }
-
-        button.success {
-            background-color: var(--accent-success);
-        }
-
-        button.gold {
-            background-color: var(--accent-gold);
-        }
-
-        button.danger {
-            background-color: #ef4444;
-        }
-
-        .wallets-container {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-            margin-top: 15px;
-        }
-
-        .wallet-card {
-            background: #0f172a;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid var(--accent-color);
-        }
-
-        .wallet-card.creator { border-left-color: #ef4444; }
-        .wallet-card.reserve { border-left-color: var(--accent-success); }
-        .wallet-card.buffer { border-left-color: var(--accent-gold); }
-
-        .wallet-title {
-            font-size: 12px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .wallet-val {
-            font-size: 18px;
-            font-weight: bold;
-            margin-top: 5px;
-        }
-
-        .referral-board {
-            display: flex;
-            gap: 15px;
-            overflow-x: auto;
-            padding: 10px 0;
-        }
-
-        .column {
-            background: #0f172a;
-            border-radius: 8px;
-            padding: 15px;
-            min-height: 250px;
-            min-width: 220px;
-            flex: 1;
-            border: 1px dashed var(--border-color);
-        }
-
-        .column-header {
-            text-align: center;
-            font-weight: bold;
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-            color: var(--accent-color);
-        }
-
-        .user-node {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            font-size: 14px;
-            box-shadow: 0 2px 4px rgb(0 0 0 / 0.1);
-        }
-
-        .user-node.paid { border-color: var(--accent-success); }
         .user-node.real {
-            border-color: var(--accent-gold);
-            background: linear-gradient(135deg, var(--card-bg) 0%, #2e2a14 100%);
-        }
-
-        .tree-viewport {
-            width: 100%;
-            height: 600px;
-            background-color: #0b0f19;
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            position: relative;
-            overflow: auto;
-            margin-top: 15px;
-        }
-
-        #tree-canvas {
-            display: block;
-            background-color: #0b0f19;
-        }
-
-        .badge {
-            display: inline-block;
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: bold;
-            margin-top: 5px;
-        }
-
-        .badge.paid { background: rgba(16, 185, 129, 0.2); color: var(--accent-success); }
-        .badge.real { background: rgba(245, 158, 11, 0.2); color: var(--accent-gold); }
-
-        .log-box {
-            background: #0f172a;
-            border: 1px solid var(--border-color);
-            padding: 15px;
-            border-radius: 8px;
-            height: 150px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 12px;
-            color: #10b981;
+            background-color: rgba(59, 130, 246, 0.2);
         }
     </style>
 </head>
@@ -228,304 +92,17 @@
 <div class="container">
     <header>
         <div>
-            <h1>Панель Управления Проектом (Приватная)</h1>
-            <p style="color: var(--text-muted); margin: 0;">Интерактивная аналитика, кошельки, веерная матрица и структура</p>
+            <h1>🌳 Мониторинг Бинарной Структуры</h1>
+            <p style="color: var(--text-muted); margin: 5px 0 0 0; font-size: 13px;">Панель управления матрицами (Сайт №2)</p>
         </div>
-        <button class="danger" style="width: auto; padding: 10px 20px;" onclick="resetSystem()">Сбросить систему</button>
+        <button class="btn-reset" id="resetBtn">Сбросить дерево (БД)</button>
     </header>
 
-    <div class="card" style="margin-bottom: 25px;">
-        <h3>Трехконтурный сейф кошельков системы</h3>
-        <div class="wallets-container">
-            <div class="wallet-card creator">
-                <div class="wallet-title">Холодный сейф Создателя (45%)</div>
-                <div class="wallet-val" id="wallet-creator">0/450 Митронов</div>
-            </div>
-            <div class="wallet-card reserve">
-                <div class="wallet-title">Выплатной резерв (55%)</div>
-                <div class="wallet-val" id="wallet-reserve">0/550 Митронов</div>
-            </div>
-            <div class="wallet-card buffer">
-                <div class="wallet-title">Буферный кошелек (Транзит)</div>
-                <div class="wallet-val" id="wallet-buffer">0 Митронов</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card">
-        <h2>Живая Веерная Матрица (A, B, C -> Динамический D, E)</h2>
-        <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 10px;">
-            Вся регистрация и оплаты происходят через Гостевой Сайт №1. Здесь отображается итоговая структура.
-        </p>
-        <div class="tree-viewport">
-            <canvas id="tree-canvas" width="2200" height="750"></canvas>
-        </div>
-    </div>
-
-    <div class="grid">
-        <div class="card">
-            <h2>Действия на Бэкенде</h2>
-            
-            <div>
-                <h3>Подтверждение получения товара</h3>
-                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">
-                    Имитирует прошествие 31 дня. Делает покупателя «Реальным», начисляет +1 к счетчику спонсора и запускает Серебряные бонусы.
-                </p>
-                <div class="form-group">
-                    <label>Логин покупателя</label>
-                    <input type="text" id="confirm-username" placeholder="ivan_99">
-                </div>
-                <button class="gold" onclick="confirmReal()">Сделать Реальным Покупателем</button>
-            </div>
-        </div>
-
-        <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
-            <div>
-                <h2>Финансовый отчет транзакции</h2>
-                <div class="log-box" id="log-container" style="margin-bottom: 20px;">
-                    Система готова к работе. Все регистрации и покупки проводятся на Сайте №1.
-                </div>
-            </div>
-
-            <div>
-                <h2>Карточка выбранного покупателя</h2>
-                <div class="form-group">
-                    <label>Введите логин для просмотра балансов</label>
-                    <input type="text" id="search-username" oninput="loadUserProfile()" placeholder="ivan_99">
-                </div>
-                <div id="user-profile-data" style="background: #0f172a; padding: 15px; border-radius: 8px; font-size: 14px;">
-                    Введите имя пользователя выше, чтобы увидеть его балансы в Митронах, USD, рублях, а также счетчик Серебряного статуса.
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card">
-        <h2>Интерактивная Таблица Покупателей («Кто-за-кем»)</h2>
-        <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 20px;">
-            Распределение по колонкам рассчитывается динамически в зависимости от глубины реферальной связи от SYSTEM_ROOT.
-        </p>
-        <div class="referral-board" id="referral-board"></div>
+    <div class="screen-container">
+        <canvas id="treeCanvas" width="1200" height="750"></canvas>
     </div>
 </div>
 
-<script>
-    const API_URL = '';
-
-    function logMessage(msg) {
-        const container = document.getElementById('log-container');
-        container.innerHTML = `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>` + container.innerHTML;
-    }
-
-    async function resetSystem() {
-        if (!confirm('Вы действительно хотите очистить всю базу данных?')) return;
-        const res = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
-        if (res.ok) {
-            logMessage('Вся база данных успешно сброшена к начальному состоянию!');
-            document.getElementById('search-username').value = '';
-            document.getElementById('user-profile-data').innerHTML = 'База очищена. Введите имя нового юзера для отслеживания.';
-            updateDashboard();
-        }
-    }
-
-    async function confirmReal() {
-        const username = document.getElementById('confirm-username').value.trim();
-        if (!username) return alert('Укажите имя!');
-
-        const res = await fetch(`${API_URL}/api/shop/confirm-real`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username })
-        });
-
-        const data = await res.json();
-        if (data.success) {
-            logMessage(`Покупатель ${username} подтвержден как РЕАЛЬНЫЙ!`);
-            if (data.silverBonusLog) {
-                logMessage(data.silverBonusLog);
-            }
-            document.getElementById('confirm-username').value = '';
-            updateDashboard();
-            loadUserProfile();
-        } else {
-            alert('Ошибка: ' + data.error);
-        }
-    }
-
-    async function loadUserProfile() {
-        const username = document.getElementById('search-username').value.trim();
-        const profileBox = document.getElementById('user-profile-data');
-        if (!username) {
-            profileBox.innerHTML = 'Введите имя пользователя выше, чтобы увидеть балансы...';
-            return;
-        }
-
-        const res = await fetch(`${API_URL}/api/user-details/${username}`);
-        if (!res.ok) {
-            profileBox.innerHTML = `<span style="color:#ef4444">Пользователь не найден в системе</span>`;
-            return;
-        }
-        
-        const details = await res.json();
-        const shopRes = await fetch(`${API_URL}/api/shop/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username })
-        }).catch(() => {});
-        
-        profileBox.innerHTML = `
-            <strong>Пользователь:</strong> ${details.username}<br>
-            <strong>Спонсор:</strong> ${details.sponsor}<br>
-            <strong>Ветка вверх:</strong> ${details.chain ? details.chain.join(' -> ') : 'нет'}<br>
-            <strong>Ячейки в матрице:</strong> ${details.cells && details.cells.length > 0 ? details.cells.join(', ') : 'нет места'}<br>
-        `;
-    }
-
-    async function updateDashboard() {
-        try {
-            const treeRes = await fetch(`${API_URL}/api/tree`);
-            const tree = await treeRes.json();
-            drawTree(tree);
-
-            const refRes = await fetch(`${API_URL}/api/referals-tree`);
-            const refData = await refRes.json();
-            if (refData.success) {
-                renderReferralBoard(refData.tree);
-            }
-        } catch (e) {
-            console.error('Ошибка обновления дашборда', e);
-        }
-    }
-
-    function renderReferralBoard(tree) {
-        const board = document.getElementById('referral-board');
-        board.innerHTML = '';
-        
-        const cols = {};
-        Object.values(tree).forEach(node => {
-            const colNum = node.calculatedColumn;
-            if (!cols[colNum]) cols[colNum] = [];
-            cols[colNum].push(node);
-        });
-
-        const sortedColKeys = Object.keys(cols).sort((a,b) => a-b);
-        sortedColKeys.forEach(key => {
-            const colDiv = document.createElement('div');
-            colDiv.className = 'column';
-            colDiv.innerHTML = `<div class="column-header">Уровень ${key}</div>`;
-            
-            cols[key].forEach(u => {
-                const nodeDiv = document.createElement('div');
-                nodeDiv.className = 'user-node';
-                nodeDiv.innerHTML = `
-                    <div><strong>${u.username}</strong></div>
-                    <div style="font-size:11px; color:var(--text-muted)">Спонсор: ${u.sponsor || 'SYSTEM_ROOT'}</div>
-                `;
-                colDiv.appendChild(nodeDiv);
-            });
-            board.appendChild(colDiv);
-        });
-    }
-
-    function drawTree(tree) {
-        const canvas = document.getElementById('tree-canvas');
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        const nodes = {};
-        
-        function parseId(id) {
-            const match = id.match(/^([A-Z]+)(\d+)$/);
-            if (!match) return { letter: 'A', num: 1 };
-            return { letter: match[1], num: parseInt(match[2], 10) };
-        }
-
-        Object.keys(tree).forEach(id => {
-            const info = parseId(id);
-            const level = info.letter.charCodeAt(0) - 65; 
-            const num = info.num;
-
-            if (!nodes[level]) nodes[level] = [];
-            nodes[level].push({ id, user: tree[id].user, num });
-        });
-
-        const levelsCount = Object.keys(nodes).length;
-        const levelHeight = 120;
-
-        Object.keys(nodes).forEach(levelStr => {
-            const level = parseInt(levelStr, 10);
-            const levelNodes = nodes[level].sort((a,b) => a.num - b.num);
-            const count = levelNodes.length;
-            
-            const segmentWidth = canvas.width / count;
-
-            levelNodes.forEach((node, index) => {
-                const x = (index * segmentWidth) + (segmentWidth / 2);
-                const y = 50 + (level * levelHeight);
-                node.x = x;
-                node.y = y;
-            });
-        });
-
-        Object.keys(nodes).forEach(levelStr => {
-            const level = parseInt(levelStr, 10);
-            nodes[level].forEach(node => {
-                const info = parseId(node.id);
-                const num = info.num;
-                
-                const leftChildNum = (num * 2) - 1;
-                const rightChildNum = num * 2;
-                
-                const nextLevelNodes = nodes[level + 1] || [];
-                
-                const leftChild = nextLevelNodes.find(n => parseId(n.id).num === leftChildNum);
-                const rightChild = nextLevelNodes.find(n => parseId(n.id).num === rightChildNum);
-
-                ctx.strokeStyle = '#334155';
-                ctx.lineWidth = 2;
-
-                if (leftChild) {
-                    ctx.beginPath();
-                    ctx.moveTo(node.x, node.y);
-                    ctx.lineTo(leftChild.x, leftChild.y);
-                    ctx.stroke();
-                }
-                if (rightChild) {
-                    ctx.beginPath();
-                    ctx.moveTo(node.x, node.y);
-                    ctx.lineTo(rightChild.x, rightChild.y);
-                    ctx.stroke();
-                }
-            });
-        });
-
-        Object.keys(nodes).forEach(levelStr => {
-            const level = parseInt(levelStr, 10);
-            nodes[level].forEach(node => {
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, 35, 0, 2 * Math.PI);
-                ctx.fillStyle = node.user ? '#1e293b' : '#0b0f19';
-                ctx.fill();
-                ctx.strokeStyle = node.user ? '#3b82f6' : '#334155';
-                ctx.lineWidth = 3;
-                ctx.stroke();
-
-                ctx.fillStyle = '#f8fafc';
-                ctx.font = 'bold 12px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(node.id, node.x, node.y - 10);
-
-                ctx.fillStyle = node.user ? '#10b981' : '#94a3b8';
-                ctx.font = '10px sans-serif';
-                const displayName = node.user ? (node.user.length > 8 ? node.user.substring(0,6)+'..' : node.user) : 'пусто';
-                ctx.fillText(displayName, node.x, node.y + 12);
-            });
-        });
-    }
-
-    setInterval(updateDashboard, 5000);
-    window.onload = updateDashboard;
-</script>
-
+<script src="script.js"></script>
 </body>
-    </html>
+</html>
