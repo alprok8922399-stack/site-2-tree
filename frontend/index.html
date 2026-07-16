@@ -20,52 +20,91 @@
         /* Шапка */
         header {
             background-color: #1c2541;
-            padding: 10px 20px;
+            padding: 10px 15px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 10px;
             border-bottom: 2px solid #00fff0;
             box-shadow: 0 4px 15px rgba(0, 255, 240, 0.2);
             z-index: 10;
         }
 
+        /* Верхняя строка шапки */
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
         .logo {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
             color: #00fff0;
             text-shadow: 0 0 10px rgba(0, 255, 240, 0.5);
         }
 
-        /* Контейнер поиска и меню */
+        /* Нижняя строка шапки (Управление: поиск, зум, меню) */
         .controls-wrapper {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 10px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+
+        /* Зум в шапке */
+        .zoom-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(11, 19, 43, 0.6);
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 240, 0.4);
+        }
+
+        .zoom-container label {
+            font-size: 11px;
+            color: #00fff0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .zoom-container input[type="range"] {
+            width: 80px;
+            accent-color: #00fff0;
+            cursor: pointer;
         }
 
         .search-container {
             display: flex;
             gap: 5px;
+            flex: 1;
+            max-width: 200px;
         }
 
         .search-container input {
-            padding: 6px 12px;
+            width: 100%;
+            padding: 6px 10px;
             border: 1px solid #00fff0;
             background: #0b132b;
             color: white;
             border-radius: 4px;
             outline: none;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         .search-container button {
-            padding: 6px 12px;
+            padding: 6px 10px;
             background: #00fff0;
             color: #0b132b;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 13px;
             transition: 0.2s;
         }
 
@@ -83,8 +122,8 @@
             background: #1c2541;
             border: 1px solid #00fff0;
             color: #00fff0;
-            font-size: 20px;
-            padding: 4px 10px;
+            font-size: 18px;
+            padding: 4px 8px;
             border-radius: 4px;
             cursor: pointer;
         }
@@ -128,27 +167,25 @@
             position: relative;
             overflow: auto;
             display: flex;
-            justify-content: center;
-            align-items: center;
+            justify-content: flex-start;
+            align-items: flex-start;
             background: radial-gradient(circle, #1c2541 0%, #0b132b 100%);
+            padding: 20px;
+            box-sizing: border-box;
         }
 
         /* Полотно отрисовки матриц */
         #mainTreeDisplay {
-            transform-origin: center center;
+            transform-origin: top left;
             transition: transform 0.2s ease-out;
-            padding: 100px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-width: max-content;
+            display: inline-block;
+            margin: 0 auto;
         }
 
         .matrices-row {
             display: flex;
-            gap: 80px;
-            justify-content: center;
-            align-items: flex-start;
+            gap: 40px;
+            padding-bottom: 50px;
         }
 
         /* Стилизация Семерок */
@@ -156,9 +193,9 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 25px;
+            gap: 20px;
             background: rgba(28, 37, 65, 0.6);
-            padding: 20px;
+            padding: 15px;
             border-radius: 12px;
             border: 1px solid #3a506b;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
@@ -167,21 +204,21 @@
         .matrix-row {
             display: flex;
             justify-content: center;
-            gap: 30px;
+            gap: 15px;
             width: 100%;
         }
 
         /* Стилизация ячейки */
         .cell {
-            width: 85px;
-            height: 85px;
-            border-radius: 10px;
+            width: 70px;
+            height: 70px;
+            border-radius: 8px;
             border: 2px dashed #3a506b;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            font-size: 12px;
+            font-size: 10px;
             background-color: rgba(11, 19, 43, 0.8);
             transition: all 0.3s ease;
             cursor: pointer;
@@ -191,15 +228,15 @@
         }
 
         .cell-id {
-            font-size: 10px;
+            font-size: 9px;
             color: #6c7a89;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
 
         .cell-user {
             font-weight: bold;
             color: #fff;
-            max-width: 80px;
+            max-width: 65px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -231,36 +268,6 @@
             100% { transform: scale(1); }
         }
 
-        /* Нижний тулбар управления масштабом */
-        .toolbar {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(28, 37, 65, 0.9);
-            padding: 10px 20px;
-            border-radius: 30px;
-            border: 1px solid #00fff0;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            box-shadow: 0 4px 20px rgba(0, 255, 240, 0.3);
-            z-index: 10;
-        }
-
-        .toolbar label {
-            font-size: 12px;
-            color: #00fff0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .toolbar input[type="range"] {
-            width: 150px;
-            accent-color: #00fff0;
-            cursor: pointer;
-        }
-
         /* Стилизация полноэкранного оверлея таблицы */
         .overlay {
             position: fixed;
@@ -290,7 +297,7 @@
         }
 
         .overlay-title {
-            font-size: 20px;
+            font-size: 18px;
             color: #00fff0;
             font-weight: bold;
         }
@@ -299,7 +306,7 @@
             background: #e43f5a;
             color: white;
             border: none;
-            padding: 6px 15px;
+            padding: 6px 12px;
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
@@ -360,11 +367,19 @@
 <body>
 
     <header>
-        <div class="logo">Сайт 2: Матрицы</div>
+        <div class="header-top">
+            <div class="logo">Сайт 2: Матрицы (ТЕСТ ОБНОВЛЕНИЯ)</div>
+            <button id="resetBtn" style="padding: 4px 8px; background: #e43f5a; border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 11px;">Сброс БД</button>
+        </div>
         
         <div class="controls-wrapper">
+            <div class="zoom-container">
+                <label for="zoomSlider">Зум</label>
+                <input type="range" id="zoomSlider" min="0.2" max="1.5" step="0.05" value="0.8">
+            </div>
+
             <div class="search-container">
-                <input type="text" id="searchInput" placeholder="Поиск логина...">
+                <input type="text" id="searchInput" placeholder="Логин...">
                 <button id="searchBtn">Найти</button>
             </div>
 
@@ -379,12 +394,6 @@
 
     <div id="screenContainer">
         <div id="mainTreeDisplay"></div>
-    </div>
-
-    <div class="toolbar">
-        <label for="zoomSlider">Зум</label>
-        <input type="range" id="zoomSlider" min="0.2" max="1.5" step="0.05" value="0.8">
-        <button id="resetBtn" style="padding: 4px 10px; background: #e43f5a; border: none; color: white; border-radius: 4px; cursor: pointer;">Сброс БД</button>
     </div>
 
     <div id="tableOverlay" class="overlay">
@@ -412,7 +421,7 @@
         </div>
     </div>
 
-    <script src="matrix.js"></script>
-    <script src="table.js"></script>
+    <script src="matrix.js?v=2"></script>
+    <script src="table.js?v=2"></script>
 </body>
-                    </html>
+                </html>
