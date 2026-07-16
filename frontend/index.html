@@ -44,25 +44,64 @@
             text-shadow: 0 0 10px rgba(0, 255, 240, 0.5);
         }
 
-        /* Нижняя строка шапки (Управление: поиск, зум) */
-        .controls-wrapper {
+        /* Панель управления */
+        .controls-vertical {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 15px;
+            flex-direction: column;
+            gap: 10px;
             width: 100%;
-            flex-wrap: wrap;
+            max-width: 320px; /* Аккуратная ширина для мобильных устройств */
         }
 
-        /* Зум в шапке */
+        /* Строка поиска: Поле ввода + Кнопка справа */
+        .search-row {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .search-row input[type="text"] {
+            flex: 1;
+            padding: 8px 10px;
+            border: 1px solid #00fff0;
+            background: #0b132b;
+            color: white;
+            border-radius: 4px;
+            outline: none;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .search-btn {
+            padding: 8px 15px;
+            background: #00fff0;
+            color: #0b132b;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: 0.2s;
+            box-sizing: border-box;
+            white-space: nowrap;
+        }
+
+        .search-btn:hover {
+            background: #00b3a8;
+            box-shadow: 0 0 8px #00fff0;
+        }
+
+        /* Контейнер зума под поиском и кнопкой (на всю ширину) */
         .zoom-container {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             background: rgba(11, 19, 43, 0.6);
-            padding: 5px 12px;
-            border-radius: 20px;
-            border: 1px solid rgba(0, 255, 240, 0.4);
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 255, 240, 0.3);
+            box-sizing: border-box;
+            width: 100%;
         }
 
         .zoom-container label {
@@ -70,48 +109,13 @@
             color: #00fff0;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            white-space: nowrap;
         }
 
         .zoom-container input[type="range"] {
-            width: 90px;
+            flex: 1; /* Растягивается во всю ширину контейнера */
             accent-color: #00fff0;
             cursor: pointer;
-        }
-
-        /* Контейнер поиска */
-        .search-container {
-            display: flex;
-            gap: 5px;
-            flex: 1;
-            max-width: 250px;
-        }
-
-        .search-container input {
-            width: 100%;
-            padding: 6px 10px;
-            border: 1px solid #00fff0;
-            background: #0b132b;
-            color: white;
-            border-radius: 4px;
-            outline: none;
-            font-size: 13px;
-        }
-
-        .search-container button {
-            padding: 6px 12px;
-            background: #00fff0;
-            color: #0b132b;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 13px;
-            transition: 0.2s;
-        }
-
-        .search-container button:hover {
-            background: #00b3a8;
-            box-shadow: 0 0 8px #00fff0;
         }
 
         /* Главная рабочая область */
@@ -230,15 +234,15 @@
             <button id="resetBtn" style="padding: 4px 8px; background: #e43f5a; border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 11px;">Сброс БД</button>
         </div>
         
-        <div class="controls-wrapper">
+        <div class="controls-vertical">
+            <div class="search-row">
+                <input type="text" id="searchInput" placeholder="Логин для поиска...">
+                <button class="search-btn" id="searchBtn">Найти</button>
+            </div>
+            
             <div class="zoom-container">
                 <label for="zoomSlider">Зум</label>
-                <input type="range" id="zoomSlider" min="0.2" max="1.5" step="0.05" value="0.8">
-            </div>
-
-            <div class="search-container">
-                <input type="text" id="searchInput" placeholder="Логин...">
-                <button id="searchBtn">Найти</button>
+                <input type="range" id="zoomSlider" min="0.05" max="1.5" step="0.05" value="0.8">
             </div>
         </div>
     </header>
@@ -247,6 +251,6 @@
         <div id="mainTreeDisplay"></div>
     </div>
 
-    <script src="matrix.js?v=3"></script>
+    <script src="matrix.js?v=5"></script>
 </body>
 </html>
