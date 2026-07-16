@@ -202,7 +202,7 @@ window.showUserDetails = async function(username, cellId, event) {
                 <p>🏠 <strong>Занятые ячейки:</strong> ${cellsList}</p>
                 <p>🤝 <strong>Прямой Спонсор:</strong> <span style="color:#ffd700;">${data.sponsor}</span></p>
                 <div style="background:#1f4068; padding:10px; border-radius:6px; margin-top:15px; border:1px dashed #00fff0;">
-                    <strong style="color:#00fff0; display:block; margin-bottom:5px;">Линия спонсоров вверх («Кто-за-кем»):</strong>
+                    <strong style="color:#00fff0; display:block; margin-bottom:5px;">Линия спонсоров вверх:</strong>
                     <div style="word-break: break-all; font-size:14px; color:#e2e2e2;">${chainLine}</div>
                 </div>
             `;
@@ -219,7 +219,7 @@ window.showUserDetails = async function(username, cellId, event) {
     }
 };
 
-// Генерация HTML отдельной ячейки
+// --- ГЕНЕРАЦИЯ HTML ОТДЕЛЬНОЙ ЯЧЕЙКИ ---
 function getCellHTML(cell, roleClass, fallbackId = '-') {
     if (!cell) {
         return `<div class="cell ${roleClass}" onclick="switchFocus('${fallbackId}')"><div class="cell-id">${fallbackId}</div><div class="cell-user">-</div></div>`;
@@ -329,11 +329,26 @@ function renderDynamicSplitting(tree) {
     }
 
     if (mainTreeDisplay) {
-        mainTreeDisplay.innerHTML = `
-            <div class="matrices-row">
-                ${activeMatricesHTML.join('')}
-            </div>
-        `;
+        // Устанавливаем вертикальное отображение рядов для основного контейнера
+        mainTreeDisplay.style.display = 'flex';
+        mainTreeDisplay.style.flexDirection = 'column';
+        mainTreeDisplay.style.gap = '40px';
+
+        // Группируем матрицы по 32 штуки на один ряд (строку)
+        let rowsHTML = [];
+        const itemsPerRow = 32;
+
+        for (let i = 0; i < activeMatricesHTML.length; i += itemsPerRow) {
+            const chunk = activeMatricesHTML.slice(i, i + itemsPerRow);
+            rowsHTML.push(`
+                <div class="matrices-row" style="display: flex; gap: 40px;">
+                    ${chunk.join('')}
+                </div>
+            `);
+        }
+
+        mainTreeDisplay.innerHTML = rowsHTML.join('');
+
         const currentScale = zoomSlider ? zoomSlider.value : 0.8;
         mainTreeDisplay.style.transform = `scale(${currentScale})`;
         mainTreeDisplay.style.width = '100%';
