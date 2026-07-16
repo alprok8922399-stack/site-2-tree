@@ -363,4 +363,4 @@ if (resetBtn) {
 
 // Первичный запуск и автообновление матриц
 fetchTree(true);
-setInterval(fetchTree, 2000);
+setInterval(fetchTree, 2000); 
