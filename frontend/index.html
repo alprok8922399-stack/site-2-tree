@@ -44,12 +44,12 @@
             text-shadow: 0 0 10px rgba(0, 255, 240, 0.5);
         }
 
-        /* Нижняя строка шапки (Управление: поиск, зум, меню) */
+        /* Нижняя строка шапки (Управление: поиск, зум) */
         .controls-wrapper {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
+            gap: 15px;
             width: 100%;
             flex-wrap: wrap;
         }
@@ -60,7 +60,7 @@
             align-items: center;
             gap: 8px;
             background: rgba(11, 19, 43, 0.6);
-            padding: 4px 10px;
+            padding: 5px 12px;
             border-radius: 20px;
             border: 1px solid rgba(0, 255, 240, 0.4);
         }
@@ -73,16 +73,17 @@
         }
 
         .zoom-container input[type="range"] {
-            width: 80px;
+            width: 90px;
             accent-color: #00fff0;
             cursor: pointer;
         }
 
+        /* Контейнер поиска */
         .search-container {
             display: flex;
             gap: 5px;
             flex: 1;
-            max-width: 200px;
+            max-width: 250px;
         }
 
         .search-container input {
@@ -97,7 +98,7 @@
         }
 
         .search-container button {
-            padding: 6px 10px;
+            padding: 6px 12px;
             background: #00fff0;
             color: #0b132b;
             border: none;
@@ -111,54 +112,6 @@
         .search-container button:hover {
             background: #00b3a8;
             box-shadow: 0 0 8px #00fff0;
-        }
-
-        /* Бургер-меню */
-        .menu-container {
-            position: relative;
-        }
-
-        .menu-btn {
-            background: #1c2541;
-            border: 1px solid #00fff0;
-            color: #00fff0;
-            font-size: 18px;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .menu-content {
-            display: none;
-            position: absolute;
-            right: 0;
-            top: 35px;
-            background: #1c2541;
-            border: 1px solid #00fff0;
-            border-radius: 4px;
-            min-width: 180px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            z-index: 100;
-        }
-
-        .menu-content.show {
-            display: block;
-        }
-
-        .menu-content button {
-            width: 100%;
-            padding: 10px;
-            background: none;
-            border: none;
-            color: white;
-            text-align: left;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .menu-content button:hover {
-            background: #00fff0;
-            color: #0b132b;
         }
 
         /* Главная рабочая область */
@@ -267,101 +220,6 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-
-        /* Стилизация полноэкранного оверлея таблицы */
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(11, 19, 43, 0.95);
-            z-index: 1000;
-            display: none;
-            flex-direction: column;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-
-        .overlay.show {
-            display: flex;
-        }
-
-        .overlay-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #00fff0;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-        }
-
-        .overlay-title {
-            font-size: 18px;
-            color: #00fff0;
-            font-weight: bold;
-        }
-
-        .overlay-close {
-            background: #e43f5a;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        .table-container {
-            flex: 1;
-            overflow: auto;
-            background: #1c2541;
-            border-radius: 8px;
-            border: 1px solid #3a506b;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            border: 1px solid #3a506b;
-            padding: 10px;
-            text-align: left;
-        }
-
-        th {
-            background: #0b132b;
-            color: #00fff0;
-            position: sticky;
-            top: 0;
-        }
-
-        /* Стили реферального дерева внутри таблицы */
-        .ref-node {
-            display: flex;
-            align-items: flex-start;
-            margin-bottom: 6px;
-            gap: 8px;
-        }
-
-        .user-card {
-            padding: 6px;
-            border-radius: 4px;
-            min-width: 110px;
-            max-width: 130px;
-            box-sizing: border-box;
-            transition: all 0.2s;
-        }
-
-        .children-container {
-            display: flex;
-            flex-direction: column;
-            border-left: 1px dashed #00fff0;
-            padding-left: 8px;
-            gap: 4px;
-        }
     </style>
 </head>
 <body>
@@ -382,13 +240,6 @@
                 <input type="text" id="searchInput" placeholder="Логин...">
                 <button id="searchBtn">Найти</button>
             </div>
-
-            <div class="menu-container">
-                <button class="menu-btn" id="menuToggleBtn">☰</button>
-                <div class="menu-content" id="menuContent">
-                    <button id="openTableBtn">📊 Реферальная Таблица</button>
-                </div>
-            </div>
         </div>
     </header>
 
@@ -396,32 +247,6 @@
         <div id="mainTreeDisplay"></div>
     </div>
 
-    <div id="tableOverlay" class="overlay">
-        <div class="overlay-header">
-            <div class="overlay-title">Реферальное Дерево</div>
-            
-            <div class="search-container">
-                <input type="text" id="refSearchInput" placeholder="Искать реферала...">
-                <button id="refSearchBtn">Поиск</button>
-                <button id="refSearchResetBtn" style="background:#e43f5a; color:white;">Сброс</button>
-            </div>
-
-            <button class="overlay-close" id="closeOverlayBtn">Закрыть</button>
-        </div>
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 100%;">Интерактивная структура связей от SYSTEM_ROOT</th>
-                    </tr>
-                </thead>
-                <tbody id="interactiveRefTableBody">
-                    </tbody>
-            </table>
-        </div>
-    </div>
-
-    <script src="matrix.js?v=2"></script>
-    <script src="table.js?v=2"></script>
+    <script src="matrix.js?v=3"></script>
 </body>
-                                    </html>
+</html>
