@@ -1,5 +1,6 @@
 /* ==========================================================================
    📊 СКРИПТ УПРАВЛЕНИЯ ТАБЛИЦЕЙ РЕФЕРАЛОВ (ДЕРЕВО СВЯЗЕЙ)
+      ИЗМЕНЕНИЯ НЕ ВНОСИТЬ! ТОЛЬКО ЧТЕНИЕ!!!
    ========================================================================== */
 
 const TABLE_API_URL = '/api';
@@ -82,12 +83,26 @@ function renderUserRow(node, depth) {
         const isExpanded = expandedUsers.has(node.username);
         const paddingLeft = depth * 20 + 10;
 
+        // Количество рефералов первого уровня
+        const directRefsCount = hasChildren ? node.referrals.length : 0;
+
+        // Проверка бизнес-логики: Если рефералов первого уровня 10 или больше — пользователь считается Лидером
+        const isLeader = directRefsCount >= 10;
+
+        // Подсветка: корень дерева (depth === 0) — золотой, Лидеры — оранжевый, обычные — белый
+        let nameColor = '#fff';
+        if (depth === 0) {
+            nameColor = '#ffd700'; // Золотой для создателя
+        } else if (isLeader) {
+            nameColor = '#ff8c00'; // Темно-оранжевый статус Лидера для Серебра
+        }
+
         tr.innerHTML = `
-            <td style="padding-left: ${paddingLeft}px; font-weight: ${depth === 0 ? 'bold' : 'normal'}; color: ${depth === 0 ? '#ffd700' : '#fff'};">
-                ${hasChildren ? (isExpanded ? '▼ ' : '▶ ') : '• '} ${node.username}
+            <td style="padding-left: ${paddingLeft}px; font-weight: ${depth === 0 || isLeader ? 'bold' : 'normal'}; color: ${nameColor};">
+                ${hasChildren ? (isExpanded ? '▼ ' : '▶ ') : '• '} ${node.username} ${isLeader ? '★' : ''}
             </td>
             <td style="text-align: center; color: #00fff0; font-weight: bold;">
-                ${hasChildren ? node.referrals.length : 0}
+                ${directRefsCount}
             </td>
             <td style="text-align: center;">
                 ${hasChildren ? `<button class="row-toggle-btn" onclick="event.stopPropagation(); toggleUserRow('${node.username}')">${isExpanded ? 'Свернуть' : 'Развернуть'}</button>` : '—'}
@@ -98,7 +113,7 @@ function renderUserRow(node, depth) {
         tr.onclick = () => {
             if (tableOverlay) tableOverlay.classList.remove('show');
             document.body.style.overflow = '';
-            if (typeof typeof window.findUserAndFocus === 'function') {
+            if (typeof window.findUserAndFocus === 'function') {
                 window.findUserAndFocus(node.username);
             } else if (typeof findUserAndFocus === 'function') {
                 findUserAndFocus(node.username);
@@ -106,6 +121,11 @@ function renderUserRow(node, depth) {
         };
 
         interactiveRefTableBody.appendChild(tr);
+
+        // Передаем статус лидера в глобальное окно, чтобы matrix.js мог это использовать при отрисовке Серебра
+        if (isLeader && typeof window.registerLeaderStatus === 'function') {
+            window.registerLeaderStatus(node.username);
+        }
 
         // Если пользователь развернут или активен поиск, выводим дочерние строки
         if (hasChildren && (isExpanded || currentRefSearch !== '')) {
@@ -155,3 +175,6 @@ setInterval(() => {
         updateReferralTable();
     }
 }, 3000);
+
+// Экспортируем функцию обновления таблицы в глобальную область видимости
+window.updateReferralTable = updateReferralTable;
