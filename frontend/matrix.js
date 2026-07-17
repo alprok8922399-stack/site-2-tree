@@ -364,23 +364,3 @@ if (resetBtn) {
 // Первичный запуск и автообновление матриц
 fetchTree(true);
 setInterval(fetchTree, 2000); 
-
-// Функция отображения 5 Золотых матриц (статичные)
-function renderGoldMatrices() {
-    const goldZone = document.getElementById('goldMatricesZone');
-    if (!goldZone) return;
-
-    let html = '';
-    for (let i = 1; i <= 5; i++) {
-        html += `
-            <div class="gold-square">
-                <div>GOLD</div>
-                <div>ID: ${i}</div>
-            </div>
-        `;
-    }
-    goldZone.innerHTML = html;
-}
-
-// Запускаем при загрузке
-renderGoldMatrices();
