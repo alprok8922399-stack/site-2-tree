@@ -527,7 +527,11 @@ function renderDynamicSplitting(tree) {
     }
 
     if (mainTreeDisplay) {
-        mainTreeDisplay.style.display = 'flex';
+        // ПРОВЕРКА: Если открыта таблица, мы насильно НЕ переключаем mainTreeDisplay в flex!
+        const embeddedTable = document.getElementById('embeddedTableContainer');
+        const isTableVisible = embeddedTable && embeddedTable.style.display === 'block';
+        
+        mainTreeDisplay.style.display = isTableVisible ? 'none' : 'flex';
         mainTreeDisplay.style.flexDirection = 'column';
         mainTreeDisplay.style.gap = '40px';
 
@@ -610,4 +614,4 @@ if (tableBtn && embeddedTableContainer) {
             }
         }
     });
-}
+        }
