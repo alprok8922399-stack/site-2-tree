@@ -47,19 +47,23 @@ function scrollToFocusedReferal() {
 
 async function findReferalAndExpand(username) {
     try {
-        const res = await fetch(`${API_URL}/tree`);
-        const tree = await res.json();
+        const res = await fetch(`${API_URL}/referals-tree`);
+        const resData = await res.json();
         
-        let targetNode = Object.values(tree).find(node => node && node.user && node.user.toLowerCase() === username.toLowerCase());
+        if (!resData || !resData.tree) return;
+        const tree = resData.tree;
+        
+        let targetNode = Object.values(tree).find(node => node && node.username && node.username.toLowerCase() === username.toLowerCase());
         
         if (targetNode) {
-            refSearchTargetUser = targetNode.user; 
+            refSearchTargetUser = targetNode.username; 
             
+            // Раскрываем ветки вверх по цепочке спонсоров
             let currentSponsor = targetNode.sponsor;
             while (currentSponsor) {
-                const sponsorNode = Object.values(tree).find(n => n && n.user === currentSponsor);
+                const sponsorNode = Object.values(tree).find(n => n && n.username === currentSponsor);
                 if (sponsorNode) {
-                    expandedNodes.add(sponsorNode.user);
+                    expandedNodes.add(sponsorNode.username);
                     currentSponsor = sponsorNode.sponsor;
                 } else {
                     currentSponsor = null;
@@ -76,47 +80,45 @@ async function findReferalAndExpand(username) {
     }
 }
 
-// Построение реферального дерева
+// Построение реферального дерева строго по структуре бэкенда
 async function buildInteractiveRefTable(forceRender = false) {
     if (!interactiveRefTableBody) return;
 
     try {
-        const res = await fetch(`${API_URL}/tree`);
-        const tree = await res.json();
+        const res = await fetch(`${API_URL}/referals-tree`);
+        const resData = await res.json();
 
-        // Достаем всех реальных пользователей (игнорируем пустые ячейки "-" и технические GP-места)
-        const activeUsers = Object.values(tree).filter(node => node && node.user && node.user !== '-' && !node.id.startsWith('GP'));
-
-        if (activeUsers.length === 0) {
-            interactiveRefTableBody.innerHTML = '<div style="text-align:center; color:#ffd700; padding: 20px; font-size: 16px; background: rgba(28,37,65,0.6); border-radius:8px;">База данных пуста. Зарегистрируйте первого пользователя в матрицах!</div>';
+        if (!resData || !resData.tree) {
+            interactiveRefTableBody.innerHTML = '<div style="text-align:center; color:#e43f5a; padding: 20px;">Ошибка структуры данных от сервера</div>';
             return;
         }
 
-        const currentRefTreeStr = JSON.stringify(tree) + `_expanded:${Array.from(expandedNodes).join(',')}_target:${refSearchTargetUser}`;
+        const tree = resData.tree;
+        const activeUsers = Object.values(tree).filter(node => node && node.username && node.username !== 'null');
+
+        if (activeUsers.length === 0) {
+            interactiveRefTableBody.innerHTML = '<div style="text-align:center; color:#ffd700; padding: 20px; font-size: 16px; background: rgba(28,37,65,0.6); border-radius:8px;">Реферальная структура пуста.</div>';
+            return;
+        }
+
+        const currentRefTreeStr = JSON.stringify(resData) + `_expanded:${Array.from(expandedNodes).join(',')}_target:${refSearchTargetUser}`;
         
         if (currentRefTreeStr === lastRefTreeJsonString && !forceRender) {
             return; 
         }
         lastRefTreeJsonString = currentRefTreeStr;
 
-        // Рекурсивный рендеринг карточек
-        function buildUserNodeHTML(username) {
-            // Ищем рефералов, у которых этот юзер записан спонсором
-            let children = activeUsers.filter(node => node.sponsor === username);
-            
-            // Убираем клоны (если один логин занял несколько мест в матрице, в реф-дереве он один)
-            const uniqueChildrenMap = {};
-            children.forEach(child => {
-                uniqueChildrenMap[child.user] = child;
-            });
-            let uniqueChildren = Object.values(uniqueChildrenMap);
-            uniqueChildren.sort((a, b) => a.user.localeCompare(b.user));
+        // Рекурсивное построение дерева на DIV-блоках
+        function buildUserNodeHTML(userLogin) {
+            // Ищем детей, у которых поле sponsor равно текущему userLogin
+            let children = activeUsers.filter(node => node.sponsor === userLogin);
+            children.sort((a, b) => a.username.localeCompare(b.username));
 
-            let hasChildren = uniqueChildren.length > 0;
-            let directRefCount = uniqueChildren.length;
-            let isExpanded = expandedNodes.has(username); 
+            let hasChildren = children.length > 0;
+            let directRefCount = children.length;
+            let isExpanded = expandedNodes.has(userLogin); 
 
-            const isTarget = username.toLowerCase() === refSearchTargetUser.toLowerCase();
+            const isTarget = userLogin.toLowerCase() === refSearchTargetUser.toLowerCase();
 
             let isFoundTargetStyle = isTarget 
                 ? 'border: 2px solid #ff3366; box-shadow: 0 0 15px #ff3366; background: #ff3366;' 
@@ -125,14 +127,14 @@ async function buildInteractiveRefTable(forceRender = false) {
             let html = `
                 <div class="ref-node" style="display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 10px;">
                     <div class="user-card ${isTarget ? 'ref-node-focused' : ''}" style="padding: 10px; border-radius: 8px; min-width: 140px; box-sizing: border-box; ${isFoundTargetStyle}">
-                        <div style="font-weight: bold; color: #fff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
-                        <div style="font-size: 11px; color: #a2e8dd; margin-top: 5px;">👥 Рефералы: <strong>${directRefCount}</strong></div>
-                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)">${isExpanded ? 'Свернуть ▲' : 'Развернуть ▼'}</button>` : ''}
+                        <div style="font-weight: bold; color: #fff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${userLogin}">${userLogin}</div>
+                        <div style="font-size: 11px; color: #a2e8dd; margin-top: 5px;">👥 Рефы: <strong>${directRefCount}</strong></div>
+                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${userLogin}', this)">${isExpanded ? 'Свернуть ▲' : 'Развернуть ▼'}</button>` : ''}
                     </div>
                     
                     ${hasChildren ? `
-                        <div id="children_of_${username}" class="children-container" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; margin-top: 6px; padding-left: 15px; border-left: 2px dashed #00fff0; gap: 6px;">
-                            ${uniqueChildren.map(child => buildUserNodeHTML(child.user)).join('')}
+                        <div id="children_of_${userLogin}" class="children-container" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; margin-top: 6px; padding-left: 15px; border-left: 2px dashed #00fff0; gap: 6px;">
+                            ${children.map(child => buildUserNodeHTML(child.username)).join('')}
                         </div>
                     ` : ''}
                 </div>
@@ -140,22 +142,14 @@ async function buildInteractiveRefTable(forceRender = false) {
             return html;
         }
 
-        // ЖЕСТКАЯ СТРАХОВКА: Сначала ищем корень по логике отсутствия спонсора
-        let rootUsername = null;
-        let rootUserNode = activeUsers.find(node => !node.sponsor || node.sponsor === 'null' || node.sponsor === '-' || !activeUsers.some(u => u.user === node.sponsor));
-        
-        if (rootUserNode) {
-            rootUsername = rootUserNode.user;
-        }
+        // В твоей базе корнем всегда является SYSTEM_ROOT
+        let rootUsername = 'SYSTEM_ROOT';
 
-        // Если по спонсорам определить не вышло — железобетонно берем пользователя из ячейки A1
-        if (!rootUsername && tree['A1'] && tree['A1'].user && tree['A1'].user !== '-') {
-            rootUsername = tree['A1'].user;
-        }
-
-        // Если и в A1 пусто, берем самого первого активного юзера из массива
-        if (!rootUsername && activeUsers.length > 0) {
-            rootUsername = activeUsers[0].user;
+        // Проверяем, есть ли он вообще в пришедшей структуре
+        if (!tree[rootUsername]) {
+            // Если вдруг нет, берем того, у кого спонсор null или кто идет первым
+            let fallbackNode = activeUsers.find(node => !node.sponsor || node.sponsor === 'null') || activeUsers[0];
+            rootUsername = fallbackNode ? fallbackNode.username : null;
         }
 
         if (rootUsername) {
@@ -167,7 +161,7 @@ async function buildInteractiveRefTable(forceRender = false) {
                 </div>
             `;
         } else {
-            interactiveRefTableBody.innerHTML = '<div style="text-align:center; color:#ffd700; padding: 20px;">Зарегистрированные пользователи не найдены в системе.</div>';
+            interactiveRefTableBody.innerHTML = '<div style="text-align:center; color:#ffd700; padding: 20px;">Зарегистрированные пользователи не найдены.</div>';
         }
 
     } catch (e) {
