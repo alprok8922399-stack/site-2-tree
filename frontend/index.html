@@ -17,8 +17,8 @@
             flex-direction: column;
         }
 
-        /* Шапка */
-        header {
+        /* Главная шапка матриц */
+        #matrixHeader {
             background-color: #1c2541;
             padding: 10px 15px;
             display: flex;
@@ -29,7 +29,6 @@
             z-index: 10;
         }
 
-        /* Верхняя строка шапки */
         .header-top {
             display: flex;
             justify-content: space-between;
@@ -44,14 +43,12 @@
             text-shadow: 0 0 10px rgba(0, 255, 240, 0.5);
         }
 
-        /* Контейнер для кнопок в шапке */
         .header-buttons {
             display: flex;
             gap: 8px;
             align-items: center;
         }
 
-        /* Панель управления */
         .controls-vertical {
             display: flex;
             flex-direction: column;
@@ -60,7 +57,6 @@
             max-width: 320px;
         }
 
-        /* Строка поиска */
         .search-row {
             display: flex;
             gap: 8px;
@@ -88,17 +84,10 @@
             cursor: pointer;
             font-weight: bold;
             font-size: 14px;
-            transition: 0.2s;
             box-sizing: border-box;
             white-space: nowrap;
         }
 
-        .search-btn:hover {
-            background: #00b3a8;
-            box-shadow: 0 0 8px #00fff0;
-        }
-
-        /* Контейнер зума */
         .zoom-container {
             display: flex;
             align-items: center;
@@ -115,17 +104,15 @@
             font-size: 11px;
             color: #00fff0;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
             white-space: nowrap;
         }
 
         .zoom-container input[type="range"] {
             flex: 1;
             accent-color: #00fff0;
-            cursor: pointer;
         }
 
-        /* Главная рабочая область */
+        /* Рабочая зона */
         #screenContainer {
             flex: 1;
             position: relative;
@@ -138,100 +125,21 @@
             box-sizing: border-box;
         }
 
-        /* Полотно отрисовки матриц */
         #mainTreeDisplay {
             transform-origin: top left;
             transition: transform 0.2s ease-out;
             display: inline-block;
-            margin: 0 auto;
         }
 
-        .matrices-row {
-            display: flex;
-            gap: 40px;
-            padding-bottom: 50px;
+        /* Кнопка переключения режимов вне скрываемой шапки */
+        .floating-toggle-zone {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 999;
         }
 
-        /* Стилизация Семерок */
-        .semerka-matrix {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-            background: rgba(28, 37, 65, 0.6);
-            padding: 15px;
-            border-radius: 12px;
-            border: 1px solid #3a506b;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-
-        .matrix-row {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            width: 100%;
-        }
-
-        /* Стилизация ячейки */
-        .cell {
-            width: 70px;
-            height: 70px;
-            border-radius: 8px;
-            border: 2px dashed #3a506b;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            font-size: 10px;
-            background-color: rgba(11, 19, 43, 0.8);
-            transition: all 0.3s ease;
-            cursor: pointer;
-            user-select: none;
-            position: relative;
-            box-sizing: border-box;
-        }
-
-        .cell-id {
-            font-size: 9px;
-            color: #6c7a89;
-            margin-bottom: 2px;
-        }
-
-        .cell-user {
-            font-weight: bold;
-            color: #fff;
-            max-width: 65px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .level-1 { border-color: #ff007f; }
-        .level-2 { border-color: #00fff0; }
-        .level-3 { border-color: #39ff14; }
-
-        .cell.occupied {
-            border-style: solid;
-            background: linear-gradient(135deg, #1c2541 0%, #3a506b 100%);
-            box-shadow: 0 0 10px rgba(0, 255, 240, 0.2);
-        }
-
-        .cell.focused-cell {
-            border-color: #ff3366 !important;
-            box-shadow: 0 0 20px #ff3366 !important;
-            background: #ff3366 !important;
-            animation: pulse-border 1.5s infinite;
-        }
-
-        @keyframes pulse-border {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-
-        /* ==========================================================================
-           СТАРТ: СТИЛИ ДЛЯ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ РЕФЕРАЛОВ
-           ========================================================================== */
+        /* Стили для карточек реф-дерева */
         .ref-node {
             display: flex;
             align-items: flex-start;
@@ -240,13 +148,11 @@
         }
 
         .user-card {
-            padding: 6px 10px;
+            padding: 8px 12px;
             border-radius: 6px;
-            min-width: 120px;
-            max-width: 140px;
+            min-width: 130px;
+            max-width: 150px;
             box-sizing: border-box;
-            font-family: sans-serif;
-            text-align: left;
         }
 
         .tree-toggle-btn {
@@ -254,7 +160,7 @@
             background: #00fff0;
             border: none;
             color: #111;
-            font-size: 10px;
+            font-size: 11px;
             padding: 3px 6px;
             border-radius: 4px;
             cursor: pointer;
@@ -262,11 +168,6 @@
             width: 100%;
             display: block;
             text-align: center;
-            transition: 0.2s;
-        }
-
-        .tree-toggle-btn:hover {
-            background: #ffd700;
         }
 
         .children-container {
@@ -276,26 +177,16 @@
             padding-left: 12px;
             gap: 6px;
         }
-
-        .ref-node-focused {
-            animation: pulse-ref-border 1.5s infinite;
-        }
-
-        @keyframes pulse-ref-border {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.02); }
-            100% { transform: scale(1); }
-        }
     </style>
 </head>
 <body>
 
-    <header>
+    <header id="matrixHeader">
         <div class="header-top">
             <div class="logo">Сайт 2: Матрицы</div>
             <div class="header-buttons">
-                <button id="tableBtn" style="padding: 4px 8px; background: #00fff0; border: none; color: #0b132b; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">таблица</button>
-                <button id="resetBtn" style="padding: 4px 8px; background: #e43f5a; border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 11px;">Сброс БД</button>
+                <button id="tableBtn" style="padding: 6px 12px; background: #00fff0; border: none; color: #0b132b; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">таблица</button>
+                <button id="resetBtn" style="padding: 6px 10px; background: #e43f5a; border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 12px;">Сброс БД</button>
             </div>
         </div>
         
@@ -306,30 +197,35 @@
             </div>
             
             <div class="zoom-container">
-                <label for="zoomSlider">Зум</label>
+                <label>Зум</label>
                 <input type="range" id="zoomSlider" min="0.02" max="1.5" step="0.05" value="0.8">
             </div>
         </div>
     </header>
 
     <div id="screenContainer">
+        <div id="backToMatricesZone" class="floating-toggle-zone" style="display: none;">
+            <button id="tableBtnBack" style="padding: 8px 16px; background: #ffd700; border: none; color: #000; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 0 10px #ffd700;">← В МАТРИЦЫ</button>
+        </div>
+
         <div id="mainTreeDisplay"></div>
 
-        <div id="embeddedTableContainer" style="display: none; width: 100%; height: 100%; overflow: auto; padding: 10px; box-sizing: border-box;">
-            <div style="display: flex; gap: 8px; margin-bottom: 20px; max-width: 320px; width: 100%;">
-                <input type="text" id="refSearchInput" placeholder="Логин в таблице..." style="flex: 1; padding: 8px 10px; border: 1px solid #00fff0; background: #0b132b; color: white; border-radius: 4px; outline: none; font-size: 14px; box-sizing: border-box;">
-                <button id="refSearchBtn" style="padding: 8px 15px; background: #00fff0; color: #0b132b; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; box-sizing: border-box;">Найти</button>
-                <button id="refSearchResetBtn" style="padding: 8px 10px; background: #e43f5a; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; box-sizing: border-box;">❌</button>
+        <div id="embeddedTableContainer" style="display: none; width: 100%; height: 100%; overflow: auto; box-sizing: border-box;">
+            
+            <div style="margin-bottom: 25px; max-width: 100%;">
+                <h2 style="color: #ffd700; margin-top: 0; font-size: 20px; margin-bottom: 15px;">🌳 Реферальное Дерево Структуры</h2>
+                <div style="display: flex; gap: 8px; max-width: 320px; width: 100%;">
+                    <input type="text" id="refSearchInput" placeholder="Логин реферала..." style="flex: 1; padding: 10px; border: 1px solid #ffd700; background: #0b132b; color: white; border-radius: 6px; outline: none; font-size: 14px;">
+                    <button id="refSearchBtn" style="padding: 10px 15px; background: #ffd700; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px;">Найти</button>
+                    <button id="refSearchResetBtn" style="padding: 10px; background: #e43f5a; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">❌</button>
+                </div>
             </div>
             
-            <table style="width: 100%; border-collapse: collapse;">
-                <tbody id="interactiveRefTableBody">
-                    </tbody>
-            </table>
+            <div id="interactiveRefTableBody" style="display: flex; flex-direction: column; width: 100%;"></div>
         </div>
     </div>
 
-    <script src="matrix.js?v=6"></script>
-    <script src="table.js?v=6"></script>
+    <script src="matrix.js?v=7"></script>
+    <script src="table.js?v=7"></script>
 </body>
 </html>
