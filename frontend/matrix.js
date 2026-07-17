@@ -344,13 +344,14 @@ function renderDynamicSplitting(tree) {
     }
 
     // Рендерим 5 фиксированных золотых ячеек над общими матрицами
+    // Добавили: background: #ffd700, цвет текста #000, min-width для ширины
     let goldHeaderHTML = `
-        <div class="gold-static-row" style="display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; padding: 10px; background: rgba(255, 215, 0, 0.05); border-radius: 8px; border: 1px dashed #ffd700;">
-            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G1</div><div class="cell-user">GOLD_1</div></div>
-            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G2</div><div class="cell-user">GOLD_2</div></div>
-            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G3</div><div class="cell-user">GOLD_3</div></div>
-            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G4</div><div class="cell-user">GOLD_4</div></div>
-            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G5</div><div class="cell-user">GOLD_5</div></div>
+        <div class="gold-static-row" style="display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; padding: 20px; background: rgba(255, 215, 0, 0.1); border-radius: 12px; border: 2px dashed #ffd700;">
+            <div class="cell level-1 occupied" style="background: #ffd700 !important; color: #000 !important; min-width: 100px; font-weight: bold; cursor: default;"><div class="cell-id">G1</div><div class="cell-user">GOLD_1</div></div>
+            <div class="cell level-1 occupied" style="background: #ffd700 !important; color: #000 !important; min-width: 100px; font-weight: bold; cursor: default;"><div class="cell-id">G2</div><div class="cell-user">GOLD_2</div></div>
+            <div class="cell level-1 occupied" style="background: #ffd700 !important; color: #000 !important; min-width: 100px; font-weight: bold; cursor: default;"><div class="cell-id">G3</div><div class="cell-user">GOLD_3</div></div>
+            <div class="cell level-1 occupied" style="background: #ffd700 !important; color: #000 !important; min-width: 100px; font-weight: bold; cursor: default;"><div class="cell-id">G4</div><div class="cell-user">GOLD_4</div></div>
+            <div class="cell level-1 occupied" style="background: #ffd700 !important; color: #000 !important; min-width: 100px; font-weight: bold; cursor: default;"><div class="cell-id">G5</div><div class="cell-user">GOLD_5</div></div>
         </div>
     `;
 
@@ -366,28 +367,3 @@ function renderDynamicSplitting(tree) {
         mainTreeDisplay.style.width = '100%';
     }
 }
-
-// --- СБРОС СИСТЕМЫ ---
-if (resetBtn) {
-    resetBtn.addEventListener('click', async () => {
-        if (!confirm('Очистить базу данных дерева?')) return;
-        try {
-            const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                alert('База успешно сброшена!');
-                currentRootId = 'A1';
-                searchTargetUser = '';
-                lastTreeJsonString = ''; 
-                setZoom(0.8);
-                fetchTree(true);
-            }
-        } catch (err) {
-            alert('Ошибка при сбросе');
-        }
-    });
-}
-
-// Первичный запуск и автообновление матриц
-fetchTree(true);
-setInterval(fetchTree, 2000);
