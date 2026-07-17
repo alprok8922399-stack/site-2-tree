@@ -188,7 +188,7 @@ async function fetchTree(forceRender = false) {
     }
 }
 
-// --- 1. ПОИСК В МАТРИЦАХ + АВТО-СКРОЛЛ К ЦЕЛИ ---
+// --- ПОИСК В МАТРИЦАХ + АВТО-СКРОЛЛ К ЦЕЛИ ---
 function findUserAndFocus(username) {
     fetch(`${API_URL}/tree`)
         .then(res => res.json())
@@ -247,7 +247,7 @@ function findUserAndFocus(username) {
         });
 }
 
-// --- 2. АВТОНОМНЫЙ ПОИСК В ТАБЛИЦЕ РЕФЕРАЛОВ (С АВТОРАСКРЫТИЕМ РОДИТЕЛЕЙ) ---
+// --- АВТОНОМНЫЙ ПОИСК В ТАБЛИЦЕ РЕФЕРАЛОВ (С АВТОРАСКРЫТИЕМ РОДИТЕЛЕЙ) ---
 async function findReferalAndExpand(username) {
     try {
         const res = await fetch(`${API_URL}/referals-tree`);
@@ -293,7 +293,7 @@ window.showUserDetails = async function(username, cellId, event) {
     const modalBody = document.getElementById('modalBody');
     
     modalTitle.textContent = `Карточка: ${username}`;
-    modalBody.innerHTML = `<i>Загрузка связей...</i>`;
+    modalBody.innerHTML = `<i>Загрузка данных...</i>`;
     modalView.style.display = 'flex';
 
     try {
@@ -302,16 +302,11 @@ window.showUserDetails = async function(username, cellId, event) {
         
         if (data.success) {
             const cellsList = data.cells.join(', ');
-            const chainLine = data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Корневой аккаунт';
             
             modalBody.innerHTML = `
                 <p>👤 <strong>Логин:</strong> ${data.username}</p>
                 <p>🏠 <strong>Занятые ячейки:</strong> ${cellsList}</p>
                 <p>🤝 <strong>Прямой Спонсор:</strong> <span style="color:#ffd700;">${data.sponsor}</span></p>
-                <div style="background:#1f4068; padding:10px; border-radius:6px; margin-top:15px; border:1px dashed #00fff0;">
-                    <strong style="color:#00fff0; display:block; margin-bottom:5px;">Линия спонсоров вверх («Кто-за-кем»):</strong>
-                    <div style="word-break: break-all; font-size:14px; color:#e2e2e2;">${chainLine}</div>
-                </div>
             `;
             
             currentRootId = cellId;
@@ -334,9 +329,14 @@ function getCellHTML(cell, roleClass, fallbackId = '-') {
     const displayUser = cell.user ? cell.user : '-';
     
     const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
+    
+    // Новая логика статусов золотых и серебряных ячеек
+    let statusClass = '';
+    if (cell.isGold) statusClass = 'gold-cell';
+    else if (cell.isSilver) statusClass = 'silver-cell';
 
     return `
-        <div class="cell ${roleClass} ${isOccupied} ${isFocused}" onclick="showUserDetails('${displayUser}', '${cell.id}', event)">
+        <div class="cell ${roleClass} ${isOccupied} ${isFocused} ${statusClass}" onclick="showUserDetails('${displayUser}', '${cell.id}', event)">
             <div class="cell-id">${cell.id}</div>
             <div class="cell-user">${displayUser}</div>
         </div>
@@ -373,6 +373,7 @@ function parseCell(id) {
     return { letter: match[1], num: parseInt(match[2], 10) };
 }
 
+// Корректная прогрессия букв: A -> B -> C... -> Z -> AA -> AB
 function getNextLevelLetter(letter) {
     let i = letter.length - 1;
     while (i >= 0) {
