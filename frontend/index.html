@@ -44,7 +44,7 @@
             text-shadow: 0 0 10px rgba(0, 255, 240, 0.5);
         }
 
-        /* Контейнер, чтобы две кнопки стояли аккуратно в ряд */
+        /* Контейнер для кнопок в шапке */
         .header-buttons {
             display: flex;
             gap: 8px;
@@ -57,10 +57,10 @@
             flex-direction: column;
             gap: 10px;
             width: 100%;
-            max-width: 320px; /* Аккуратная ширина для мобильных устройств */
+            max-width: 320px;
         }
 
-        /* Строка поиска: Поле ввода + Кнопка справа */
+        /* Строка поиска */
         .search-row {
             display: flex;
             gap: 8px;
@@ -98,7 +98,7 @@
             box-shadow: 0 0 8px #00fff0;
         }
 
-        /* Контейнер зума под поиском и кнопкой (на всю ширину) */
+        /* Контейнер зума */
         .zoom-container {
             display: flex;
             align-items: center;
@@ -120,7 +120,7 @@
         }
 
         .zoom-container input[type="range"] {
-            flex: 1; /* Растягивается во всю ширину контейнера */
+            flex: 1;
             accent-color: #00fff0;
             cursor: pointer;
         }
@@ -206,19 +206,16 @@
             white-space: nowrap;
         }
 
-        /* Цвета ячеек по уровням */
         .level-1 { border-color: #ff007f; }
         .level-2 { border-color: #00fff0; }
         .level-3 { border-color: #39ff14; }
 
-        /* Заполненная ячейка */
         .cell.occupied {
             border-style: solid;
             background: linear-gradient(135deg, #1c2541 0%, #3a506b 100%);
             box-shadow: 0 0 10px rgba(0, 255, 240, 0.2);
         }
 
-        /* Ячейка в фокусе (найденная поиском) */
         .cell.focused-cell {
             border-color: #ff3366 !important;
             box-shadow: 0 0 20px #ff3366 !important;
@@ -231,6 +228,64 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
+
+        /* ==========================================================================
+           СТАРТ: СТИЛИ ДЛЯ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ РЕФЕРАЛОВ
+           ========================================================================== */
+        .ref-node {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 8px;
+            gap: 12px;
+        }
+
+        .user-card {
+            padding: 6px 10px;
+            border-radius: 6px;
+            min-width: 120px;
+            max-width: 140px;
+            box-sizing: border-box;
+            font-family: sans-serif;
+            text-align: left;
+        }
+
+        .tree-toggle-btn {
+            margin-top: 6px;
+            background: #00fff0;
+            border: none;
+            color: #111;
+            font-size: 10px;
+            padding: 3px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            display: block;
+            text-align: center;
+            transition: 0.2s;
+        }
+
+        .tree-toggle-btn:hover {
+            background: #ffd700;
+        }
+
+        .children-container {
+            display: flex;
+            flex-direction: column;
+            border-left: 1px dashed #00fff0;
+            padding-left: 12px;
+            gap: 6px;
+        }
+
+        .ref-node-focused {
+            animation: pulse-ref-border 1.5s infinite;
+        }
+
+        @keyframes pulse-ref-border {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
     </style>
 </head>
 <body>
@@ -240,7 +295,6 @@
             <div class="logo">Сайт 2: Матрицы</div>
             <div class="header-buttons">
                 <button id="tableBtn" style="padding: 4px 8px; background: #00fff0; border: none; color: #0b132b; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">таблица</button>
-                
                 <button id="resetBtn" style="padding: 4px 8px; background: #e43f5a; border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 11px;">Сброс БД</button>
             </div>
         </div>
@@ -261,11 +315,11 @@
     <div id="screenContainer">
         <div id="mainTreeDisplay"></div>
 
-        <div id="embeddedTableContainer" style="display: none; width: 100%; height: 100%; overflow: auto; padding: 10px;">
-            <div style="display: flex; gap: 8px; margin-bottom: 15px; max-width: 320px;">
-                <input type="text" id="refSearchInput" placeholder="Логин в таблице..." style="flex: 1; padding: 8px 10px; border: 1px solid #00fff0; background: #0b132b; color: white; border-radius: 4px; outline: none; font-size: 14px;">
-                <button id="refSearchBtn" style="padding: 8px 15px; background: #00fff0; color: #0b132b; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">Найти</button>
-                <button id="refSearchResetBtn" style="padding: 8px 10px; background: #e43f5a; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">❌</button>
+        <div id="embeddedTableContainer" style="display: none; width: 100%; height: 100%; overflow: auto; padding: 10px; box-sizing: border-box;">
+            <div style="display: flex; gap: 8px; margin-bottom: 20px; max-width: 320px; width: 100%;">
+                <input type="text" id="refSearchInput" placeholder="Логин в таблице..." style="flex: 1; padding: 8px 10px; border: 1px solid #00fff0; background: #0b132b; color: white; border-radius: 4px; outline: none; font-size: 14px; box-sizing: border-box;">
+                <button id="refSearchBtn" style="padding: 8px 15px; background: #00fff0; color: #0b132b; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; box-sizing: border-box;">Найти</button>
+                <button id="refSearchResetBtn" style="padding: 8px 10px; background: #e43f5a; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; box-sizing: border-box;">❌</button>
             </div>
             
             <table style="width: 100%; border-collapse: collapse;">
@@ -275,7 +329,7 @@
         </div>
     </div>
 
-    <script src="matrix.js?v=5"></script>
-    <script src="table.js?v=5"></script>
+    <script src="matrix.js?v=6"></script>
+    <script src="table.js?v=6"></script>
 </body>
 </html>
