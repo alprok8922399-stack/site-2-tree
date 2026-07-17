@@ -34,8 +34,7 @@ function cellIdToGlobalIndex(id) {
     }
     levelIndex -= 1;
     
-    // Используем безопасное Math.pow вместо побитового сдвига для стабильности на любых уровнях
-    const levelStartGlobalIndex = Math.pow(2, levelIndex) - 1;
+    const levelStartGlobalIndex = (1 << levelIndex) - 1;
     return levelStartGlobalIndex + (num - 1);
 }
 
@@ -54,98 +53,56 @@ function mitronsToRub(mitrons) {
     return (usd * USD_TO_RUB).toFixed(2);
 }
 
-// === 3. РАСЧЕТ И РАСПРЕДЕЛЕНИЕ БОНУСОВ ===
+// === 3. ИНИЦИАЛИЗАЦИЯ ДЕФОЛТНЫХ СУЩНОСТЕЙ (АРХИТЕКТУРА ДАННЫХ) ===
 
 /**
- * Начисляет линейный бонус на 3 уровня вверх
+ * Генерирует дефолтную карточку Покупателя со всеми новыми полями под ТЗ
  */
-function distributeLinearBonus(buyer, referalsDB, shopUsersDB) {
-    const log = [];
-    const levels = [50, 10, 10]; // 1-й, 2-й и 3-й уровни спонсорства
-    let current = buyer;
-
-    for (let i = 0; i < levels.length; i++) {
-        const sponsor = referalsDB[current];
-        if (!sponsor) {
-            log.push(`Уровень ${i + 1}: Спонсор отсутствует, бонус ${levels[i]} Митронов направлен системе.`);
-            break;
-        }
-
-        // Если спонсор зарегистрирован в магазине, начисляем ему баланс
-        if (shopUsersDB[sponsor]) {
-            shopUsersDB[sponsor].balances.mitrons += levels[i];
-            shopUsersDB[sponsor].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[sponsor].balances.mitrons));
-            shopUsersDB[sponsor].balances.rub = parseFloat(mitronsToRub(shopUsersDB[sponsor].balances.mitrons));
-            log.push(`Уровень ${i + 1}: Спонсор ${sponsor} получил ${levels[i]} Митронов.`);
-        } else {
-            log.push(`Уровень ${i + 1}: Спонсор ${sponsor} не имеет карточки покупателя. Бонус направлен системе.`);
-        }
-        current = sponsor;
-    }
-    return log;
-}
-
-/**
- * Распределяет глубинный Серебряный бонус (10 Митронов) первому активному Серебряному спонсору выше по ветке
- */
-function distributeSilverBonus(buyer, referalsDB, shopUsersDB) {
-    let current = referalsDB[buyer];
-    
-    // Пропускаем первого спонсора, так как премия идет со второго уровня структуры и глубже
-    if (!current) return "Нет спонсора для распределения Серебряного бонуса.";
-    current = referalsDB[current];
-
-    while (current) {
-        const sponsorCard = shopUsersDB[current];
-        if (sponsorCard && sponsorCard.silverStatus && sponsorCard.silverStatus.isActive) {
-            sponsorCard.balances.mitrons += 10;
-            sponsorCard.balances.usd = parseFloat(mitronsToUsd(sponsorCard.balances.mitrons));
-            sponsorCard.balances.rub = parseFloat(mitronsToRub(sponsorCard.balances.mitrons));
-            return `Серебряный бонус 10 Митронов успешно начислен лидеру: ${current}`;
-        }
-        current = referalsDB[current];
-    }
-    return "В спонсорской ветке нет активных Серебряных мест. Начисление не произведено.";
-}
-
-// === 4. ИНИЦИАЛИЗАЦИЯ ДЕФОЛТНЫХ СУЩНОСТЕЙ ===
-
 function createNewUserCard(username) {
     return {
         username: username,
-        isPaid: false,
-        paymentDate: null,
-        isRealBuyer: false,
+        isPaid: false,               // Флаг оплаты сертификата
+        paymentDate: null,           // Точная дата оплаты (для расчета 31 дня)
+        isRealBuyer: false,          // Стал ли покупатель "Реальным" (31 день + подтверждение товара)
         
+        // Балансы пользователя
         balances: {
-            mitrons: 0,
-            usd: 0,
-            rub: 0
+            mitrons: 0,              // Внутренний баланс в Митронах
+            usd: 0,                  // Отображаемый баланс в USD
+            rub: 0                   // Отображаемый баланс в рублях
         },
         
+        // Поля для Серебряных мест
         silverStatus: {
-            isActive: false,
-            activatedAt: null,
-            realDirectReferralsCount: 0
+            isActive: false,         // Активировано ли Серебряное место (требуется 10 Реальных в 1-й линии)
+            activatedAt: null,       // Время активации статуса
+            realDirectReferralsCount: 0 // Счетчик Реальных покупателей, приглашенных ЛИЧНО
         },
         
+        // Матричный след (где юзер сейчас находится для рендеринга и триггера)
         matrixPosition: {
-            currentCellId: null,
-            status: 'pending'
+            currentCellId: null,     // ID ячейки (например, 'C1')
+            status: 'pending'        // 'pending', 'active', 'divided'
         }
     };
 }
 
+/**
+ * Начальное состояние трехконтурного сейфа кошельков
+ */
 function createInitialWallets() {
     return {
+        // Контур 1: Сверхсекретное холодное хранилище прибыли Создателя (450 Митронов с каждого чека)
         myWallet: {
             address: "0xCreatorColdWalletAddress...",
             balanceMitrons: 0
         },
+        // Контур 2: Главный резерв ликвидности (сюда уходят 550 Митронов с каждой оплаты)
         payoutReserveWallet: {
             address: "0xPayoutReserveWalletAddress...",
             balanceMitrons: 0
         },
+        // Контур 3: Операционный транзитный горячий кошелек (всегда пуст, наполняется строго под транзакцию)
         bufferWallet: {
             address: "0xBufferWalletAddress...",
             balanceMitrons: 0
@@ -153,13 +110,12 @@ function createInitialWallets() {
     };
 }
 
+// Экспортируем все наши функции и константы наружу
 module.exports = {
     getLevelLetter,
     cellIdToGlobalIndex,
     mitronsToUsd,
     mitronsToRub,
-    distributeLinearBonus,
-    distributeSilverBonus,
     createNewUserCard,
     createInitialWallets
 };
