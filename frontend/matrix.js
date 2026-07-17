@@ -580,3 +580,34 @@ if (resetBtn) {
 // Первичный запуск и автообновление матриц
 fetchTree(true);
 setInterval(fetchTree, 2000);
+
+// --- ЛОГИКА ПЕРЕКЛЮЧЕНИЯ ЭКРАНОВ (МАТРИЦЫ / ТАБЛИЦА) ---
+const tableBtn = document.getElementById('tableBtn');
+const embeddedTableContainer = document.getElementById('embeddedTableContainer');
+
+if (tableBtn && embeddedTableContainer) {
+    tableBtn.addEventListener('click', () => {
+        const isTableVisible = embeddedTableContainer.style.display === 'block';
+
+        if (isTableVisible) {
+            // Переключаем на Матрицы
+            embeddedTableContainer.style.display = 'none';
+            if (mainTreeDisplay) mainTreeDisplay.style.display = 'flex';
+            tableBtn.textContent = 'таблица';
+            tableBtn.style.background = '#00fff0';
+            tableBtn.style.color = '#0b132b';
+        } else {
+            // Переключаем на Таблицу
+            if (mainTreeDisplay) mainTreeDisplay.style.display = 'none';
+            embeddedTableContainer.style.display = 'block';
+            tableBtn.textContent = 'матрицы';
+            tableBtn.style.background = '#ffd700'; // Сделаем кнопку золотистой в режиме таблицы
+            tableBtn.style.color = '#000';
+            
+            // Запускаем отрисовку таблицы при переключении
+            if (typeof buildInteractiveRefTable === 'function') {
+                buildInteractiveRefTable(true);
+            }
+        }
+    });
+}
