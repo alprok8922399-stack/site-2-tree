@@ -6,11 +6,6 @@
 const API_URL = '/api';
 
 // --- ЭЛЕМЕНТЫ УПРАВЛЕНИЯ ТАБЛИЦЕЙ ---
-const menuToggleBtn = document.getElementById('menuToggleBtn');
-const menuContent = document.getElementById('menuContent');
-const openTableBtn = document.getElementById('openTableBtn');
-const tableOverlay = document.getElementById('tableOverlay');
-const closeOverlayBtn = document.getElementById('closeOverlayBtn');
 const interactiveRefTableBody = document.getElementById('interactiveRefTableBody');
 
 // Элементы поиска внутри таблицы рефералов
@@ -21,37 +16,6 @@ const refSearchResetBtn = document.getElementById('refSearchResetBtn');
 let refSearchTargetUser = ''; // Цель для подсветки в Таблице рефералов
 let expandedNodes = new Set(); // Помнит, какие ветки развернуты
 let lastRefTreeJsonString = ''; 
-
-// --- ЛОГИКА ОТКРЫТИЯ/ЗАКРЫТИЯ МЕНЮ И ТАБЛИЦЫ ---
-if (menuToggleBtn && menuContent) {
-    menuToggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        menuContent.classList.toggle('show');
-    });
-}
-
-if (openTableBtn && tableOverlay && menuContent) {
-    openTableBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        tableOverlay.classList.add('show');
-        menuContent.classList.remove('show');
-        buildInteractiveRefTable(true); // Перерисовываем при открытии
-    });
-}
-
-if (closeOverlayBtn && tableOverlay) {
-    closeOverlayBtn.addEventListener('click', () => {
-        tableOverlay.classList.remove('show');
-    });
-}
-
-document.addEventListener('click', (e) => {
-    if (menuContent && menuContent.classList.contains('show')) {
-        if (!menuContent.contains(e.target) && e.target !== menuToggleBtn) {
-            menuContent.classList.remove('show');
-        }
-    }
-});
 
 // --- ПОИСК В ТАБЛИЦЕ РЕФЕРАЛОВ ---
 if (refSearchBtn) {
@@ -207,7 +171,8 @@ window.toggleRefBranch = function(username, btn) {
 
 // Запуск фонового обновления структуры таблицы
 setInterval(() => {
-    if (tableOverlay && tableOverlay.classList.contains('show')) {
+    const embeddedTable = document.getElementById('embeddedTableContainer');
+    if (embeddedTable && embeddedTable.style.display === 'block') {
         buildInteractiveRefTable();
     }
 }, 2000);
