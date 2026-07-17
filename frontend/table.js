@@ -87,11 +87,19 @@ async function buildInteractiveRefTable(forceRender = false) {
         const res = await fetch(`${API_URL}/referals-tree`);
         const data = await res.json();
         if (!data.success || !data.tree) {
-            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Ошибка структуры</td></tr>';
+            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#ff3366; padding: 20px;">Ошибка загрузки структуры рефералов</td></tr>';
             return;
         }
 
         const refTree = data.tree;
+        
+        // Если вообще нет данных или только корень пустой
+        const hasData = Object.keys(refTree).length > 0;
+        if (!hasData) {
+            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#ffd700; padding: 20px; font-size: 16px;">База данных пуста. Зарегистрируйте первого пользователя в матрицах!</td></tr>';
+            return;
+        }
+
         const currentRefTreeStr = JSON.stringify(data) + `_expanded:${Array.from(expandedNodes).join(',')}_target:${refSearchTargetUser}`;
         
         if (currentRefTreeStr === lastRefTreeJsonString && !forceRender) {
@@ -116,15 +124,15 @@ async function buildInteractiveRefTable(forceRender = false) {
 
             let html = `
                 <div class="ref-node ${isTarget ? 'ref-node-focused' : ''}" style="display: flex; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
-                    <div class="user-card" style="padding: 4px 6px; border-radius: 4px; min-width: 100px; max-width: 120px; box-sizing: border-box; ${isFoundTargetStyle}">
-                        <div style="font-weight: bold; color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
-                        <div style="font-size: 9px; color: #ffd700;">Уровень: ${currentColumn}</div>
-                        <div style="font-size: 9px; color: #a2e8dd; margin-top: 1px;">👥 Рефы: <strong>${directRefCount}</strong></div>
-                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 4px; background: #00fff0; border: none; color: #111; font-size: 9px; padding: 1px 4px; border-radius: 3px; cursor: pointer; font-weight: bold; width: 100%; display: block; text-align: center;">${isExpanded ? '▲' : '▼'}</button>` : ''}
+                    <div class="user-card" style="padding: 6px 10px; border-radius: 6px; min-width: 120px; max-width: 140px; box-sizing: border-box; ${isFoundTargetStyle}">
+                        <div style="font-weight: bold; color: #fff; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
+                        <div style="font-size: 10px; color: #ffd700; margin-top: 2px;">Уровень: ${currentColumn}</div>
+                        <div style="font-size: 10px; color: #a2e8dd; margin-top: 2px;">👥 Рефы: <strong>${directRefCount}</strong></div>
+                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)">${isExpanded ? '▲' : '▼'}</button>` : ''}
                     </div>
                     
                     ${hasChildren ? `
-                        <div id="children_of_${username}" class="children-container" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; border-left: 1px dashed #00fff0; padding-left: 8px; gap: 4px;">
+                        <div id="children_of_${username}" class="children-container" style="display: ${isExpanded ? 'flex' : 'none'};">
                             ${children.map(child => buildUserNodeHTML(child.username)).join('')}
                         </div>
                     ` : ''}
@@ -133,25 +141,41 @@ async function buildInteractiveRefTable(forceRender = false) {
             return html;
         }
 
-        if (refTree['SYSTEM_ROOT']) {
+        // Пытаемся найти корень дерева (обычно это SYSTEM_ROOT, либо первый попавшийся элемент без спонсора)
+        let rootKey = 'SYSTEM_ROOT';
+        if (!refTree[rootKey]) {
+            // Если SYSTEM_ROOT нет, берем первого пользователя без спонсора или просто первого в списке
+            const rootCandidate = Object.values(refTree).find(node => !node.sponsor || node.sponsor === 'null');
+            if (rootCandidate) {
+                rootKey = rootCandidate.username;
+            } else {
+                rootKey = Object.keys(refTree)[0];
+            }
+        }
+
+        if (rootKey && refTree[rootKey]) {
             let fullTreeHTML = `
                 <tr>
                     <td colspan="2" style="padding: 10px; overflow-x: auto;">
                         <div style="display: flex; min-width: max-content;">
-                            ${buildUserNodeHTML('SYSTEM_ROOT')}
+                            ${buildUserNodeHTML(rootKey)}
                         </div>
                     </td>
                 </tr>
             `;
             interactiveRefTableBody.innerHTML = fullTreeHTML;
         } else {
-            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">SYSTEM_ROOT не найден</td></tr>';
+            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#ffd700; padding: 20px;">Пользователи в системе не найдены.</td></tr>';
         }
 
     } catch (e) {
-        interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center; color: #e43f5a;">Не удалось загрузить реферальное дерево</td></tr>';
+        console.error(e);
+        interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center; color: #e43f5a; padding: 20px;">Не удалось загрузить реферальное дерево</td></tr>';
     }
 }
+
+// ДЕЛАЕМ ФУНКЦИЮ ГЛОБАЛЬНОЙ — ТЕПЕРЬ MATRIX.JS ТОЧНО ЕЁ УВИДИТ!
+window.buildInteractiveRefTable = buildInteractiveRefTable;
 
 window.toggleRefBranch = function(username, btn) {
     const container = document.getElementById(`children_of_${username}`);
@@ -176,3 +200,6 @@ setInterval(() => {
         buildInteractiveRefTable();
     }
 }, 2000);
+
+// Сразу пробуем один раз отрисовать, если таблица вдруг уже открыта
+buildInteractiveRefTable();
