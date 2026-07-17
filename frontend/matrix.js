@@ -1,5 +1,5 @@
 /* ==========================================================================
-   🚨 КРИТИЧЕСКАЯ ЗОНА: ТОЛЬКО ДЛЯ ЧТЕНИЯ (READ-ONLY)
+   🚨 КРИТИЧЕСКАЯ ЗОНА: ТОЛЬКО ДЛЯ ЧТЕНИЯ (READ-ONLY) И ОТРИСОВКА МАТРИЦ
    ========================================================================== */
 
 const API_URL = '/api';
@@ -12,10 +12,18 @@ const searchBtn = document.getElementById('searchBtn');
 
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; // Цель для подсветки в Матрицах
+let leadersSet = new Set(); // Сет для хранения логинов Лидеров (у кого >= 10 рефералов)
 
 // КЭШ ДЛЯ ОПТИМИЗАЦИИ СЕТИ И ПРЕДОТВРАЩЕНИЯ МЕРЦАНИЯ DOM
 let globalTreeCached = null; 
 let lastTreeJsonString = ''; 
+
+// Функция регистрации лидеров из table.js
+window.registerLeaderStatus = function(username) {
+    if (username) {
+        leadersSet.add(username.toLowerCase());
+    }
+};
 
 // Создаем HTML-структуру для всплывающего окна информации по матричной ячейке
 let modal = document.getElementById('infoModal');
@@ -168,6 +176,9 @@ function findUserAndFocus(username) {
             }
         });
 }
+
+// Делаем функцию доступной глобально для вызова из других файлов (например, table.js)
+window.findUserAndFocus = findUserAndFocus;
 
 // Вывод детальной информации о ячейке во всплывающем окне
 window.showUserDetails = async function(username, cellId, event) {
