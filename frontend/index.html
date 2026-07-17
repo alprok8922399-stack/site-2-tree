@@ -1,94 +1,271 @@
-/* ==========================================================================
-   📊 СКРИПТ УПРАВЛЕНИЯ ТАБЛИЦЕЙ РЕФЕРАЛОВ
-   ========================================================================== */
-
-const TABLE_API_URL = '/api';
-
-// Глобальные переменные для состояния
-let expandedUsers = new Set();
-let currentRefSearch = '';
-
-// Функция обновления (выносим в window, чтобы была доступна)
-window.updateReferralTable = async function() {
-    const tableBody = document.getElementById('interactiveRefTableBody');
-    if (!tableBody) return;
-
-    try {
-        const res = await fetch(`${TABLE_API_URL}/referrals`);
-        const data = await res.json();
-        if (!data.success) return;
-        
-        tableBody.innerHTML = "";
-        
-        // Заголовки
-        const headerRow = document.createElement('tr');
-        headerRow.innerHTML = `<th style="width: 60%;">Логин</th><th style="width: 20%; text-align: center;">Рефы</th><th style="width: 20%; text-align: center;">Действие</th>`;
-        tableBody.appendChild(headerRow);
-        
-        renderUserRow(data.tree, 0, tableBody);
-    } catch (err) {
-        console.error("Ошибка таблицы:", err);
-    }
-};
-
-function renderUserRow(node, depth, container) {
-    if (!node || !node.username) return;
-
-    const matchesSearch = currentRefSearch === '' || node.username.toLowerCase().includes(currentRefSearch);
-    
-    if (matchesSearch || hasMatchingChild(node, currentRefSearch)) {
-        const tr = document.createElement('tr');
-        const hasChildren = node.referrals && node.referrals.length > 0;
-        const isExpanded = expandedUsers.has(node.username);
-        const directRefsCount = hasChildren ? node.referrals.length : 0;
-        const isLeader = directRefsCount >= 10;
-
-        tr.innerHTML = `
-            <td style="padding-left: ${depth * 20 + 10}px; color: ${depth === 0 ? '#ffd700' : (isLeader ? '#ff8c00' : '#fff')};">
-                ${hasChildren ? (isExpanded ? '▼ ' : '▶ ') : '• '} ${node.username} ${isLeader ? '★' : ''}
-            </td>
-            <td style="text-align: center; color: #00fff0;">${directRefsCount}</td>
-            <td style="text-align: center;">
-                ${hasChildren ? `<button class="row-toggle-btn" onclick="event.stopPropagation(); window.toggleUserRow('${node.username}')">${isExpanded ? 'Свернуть' : 'Развернуть'}</button>` : '—'}
-            </td>
-        `;
-
-        tr.onclick = () => {
-            document.getElementById('tableOverlay').classList.remove('show');
-            if (window.findUserAndFocus) window.findUserAndFocus(node.username);
-        };
-        container.appendChild(tr);
-
-        if (hasChildren && (isExpanded || currentRefSearch !== '')) {
-            node.referrals.forEach(child => renderUserRow(child, depth + 1, container));
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мониторинг Матриц 7-К</title>
+    <style>
+        body {
+            background-color: #1a1a2e;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            user-select: none; 
+            -webkit-user-select: none;
         }
-    }
-}
+        h1 { margin: 5px 0; font-size: 20px; text-shadow: 0 0 10px #00fff0; }
+        
+        .control-panel {
+            background: #162447;
+            padding: 10px;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 500px;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            position: relative;
+            z-index: 10;
+        }
 
-function hasMatchingChild(node, searchStr) {
-    if (!node.referrals) return false;
-    return node.referrals.some(c => c.username.toLowerCase().includes(searchStr) || hasMatchingChild(c, searchStr));
-}
+        /* --- СТИЛИ ДЛЯ ВЫПАДАЮЩЕГО МЕНЮ И ОВЕРЛЕЯ --- */
+        .menu-btn {
+            background-color: #0f4c81; color: white; border: none; padding: 10px 15px;
+            font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer;
+            width: 100%; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .menu-btn:hover { background-color: #1f4068; }
+        
+        .menu-content { 
+            display: none; background: #1f4068; border: 1px solid #0f4c81; 
+            border-radius: 6px; padding: 10px; margin-bottom: 10px; box-sizing: border-box;
+        }
+        .menu-content.show { display: block; }
+        
+        .menu-item-btn { 
+            background-color: #e43f5a; color: white; border: none; padding: 8px 12px; 
+            font-size: 14px; border-radius: 4px; cursor: pointer; width: 100%; 
+            text-align: left; font-weight: bold; 
+        }
+        .menu-item-btn:hover { background-color: #ff3366; }
 
-window.toggleUserRow = function(username) {
-    if (expandedUsers.has(username)) expandedUsers.delete(username);
-    else expandedUsers.add(username);
-    window.updateReferralTable();
-};
+        .overlay { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background-color: rgba(26, 26, 46, 0.98); z-index: 9999; padding: 20px; 
+            box-sizing: border-box; overflow-y: auto; 
+        }
+        .overlay.show { display: block; }
+        .overlay-header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            border-bottom: 2px solid #00fff0; padding-bottom: 10px; margin-bottom: 20px; 
+        }
+        .overlay-title { font-size: 16px; font-weight: bold; color: #00fff0; }
+        .close-overlay-btn { 
+            background-color: #e43f5a; color: white; border: none; padding: 6px 12px; 
+            font-weight: bold; border-radius: 5px; cursor: pointer; 
+        }
+        .row-toggle-btn { 
+            background: #444; color: #fff; border: none; padding: 5px 10px; 
+            border-radius: 4px; cursor: pointer; font-weight: bold;
+        }
 
-// Привязка событий сразу после загрузки файла
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('openTableBtn').addEventListener('click', () => {
-        document.getElementById('tableOverlay').classList.add('show');
-        window.updateReferralTable();
-    });
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #0f4c81;
+            background: #1f4068;
+            color: #fff;
+            font-size: 16px;
+            min-width: 0; /* Позволяет инпуту уменьшаться на мобильных */
+        }
+        .search-box button {
+            padding: 8px 15px;
+            background: #e43f5a;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            white-space: nowrap; /* Защита текста кнопки от переноса */
+        }
+        .slider-zone {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 14px;
+        }
+        .slider-zone input { flex: 1; }
+        .btn-reset {
+            background: #438a5e;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
 
-    document.getElementById('closeOverlayBtn').addEventListener('click', () => {
-        document.getElementById('tableOverlay').classList.remove('show');
-    });
+        .screen-container {
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: auto; 
+            overflow-y: auto; 
+            display: block;   
+            background: #111122;
+            border-radius: 8px;
+            min-height: 450px;
+            box-sizing: border-box;
+            cursor: zoom-in;
+            padding: 20px;
+        }
+        
+        #mainTreeDisplay {
+            transform-origin: top left;
+            transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+            display: block;
+            width: max-content; 
+        }
+        
+        .matrices-row {
+            display: grid !important;
+            grid-template-columns: repeat(32, 260px) !important; 
+            gap: 30px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
 
-    document.getElementById('refSearchBtn').addEventListener('click', () => {
-        currentRefSearch = document.getElementById('refSearchInput').value.trim().toLowerCase();
-        window.updateReferralTable();
-    });
-});
+        .semerka-matrix {
+            background: rgba(22, 36, 71, 0.9);
+            border: 2px solid #0f4c81;
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+            min-width: 260px;
+            max-width: 260px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            cursor: default;
+        }
+        .matrix-row {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+        }
+        
+        .cell {
+            background: #1f4068;
+            border: 1px solid #0f4c81;
+            border-radius: 6px;
+            padding: 6px;
+            text-align: center;
+            min-width: 55px;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .cell:active { transform: scale(0.9) !important; }
+        .cell-id { font-size: 10px; color: #888; font-weight: bold; }
+        .cell-user { font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; }
+        
+        .level-1 { border: 2px solid #ffd700; background: #3a3000; } 
+        .level-2 { border: 2px solid #00fff0; background: #002b36; } 
+        .level-3 { border: 1px dashed #ffffff; background: #2b2b2b; } 
+        
+        .occupied { background: #16a085 !important; border-color: #1abc9c !important; }
+        .focused-cell { animation: pulse 1s infinite alternate; border-color: #ff3366 !important; box-shadow: 0 0 15px #ff3366 !important; background: #ff3366 !important; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
+
+        .table-container {
+            width: 100%;
+            max-width: 500px;
+            margin-top: 20px;
+            background: #162447;
+            border-radius: 8px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        .table-container h2 { font-size: 16px; margin: 0 0 10px 0; color: #00fff0; text-align: center; }
+        .ref-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .ref-table th, .ref-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #1f4068;
+        }
+        .ref-table th { background: #0f4c81; color: white; }
+        .ref-table tr:hover { background: rgba(255,255,255,0.05); cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <h1>Панель Управления Admin</h1>
+
+    <div class="control-panel">
+        <button class="menu-btn" id="menuToggleBtn">☰ Меню Управления <span>▼</span></button>
+        <div class="menu-content" id="menuContent">
+            <button class="menu-item-btn" id="openTableBtn">➔ Таблица рефералов</button>
+        </div>
+
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Поиск в Матрицах (логин)...">
+            <button id="searchBtn">Найти</button>
+        </div>
+        <div class="slider-zone">
+            <span>Масштаб:</span>
+            <input type="range" id="zoomSlider" min="0.03" max="1" step="0.05" value="0.8">
+            <button class="btn-reset" id="resetBtn">Сброс БД</button>
+        </div>
+    </div>
+
+    <div class="screen-container" id="screenContainer">
+        <div id="mainTreeDisplay"></div>
+    </div>
+
+    <div class="overlay" id="tableOverlay">
+        <div class="overlay-header">
+            <div class="overlay-title">📋 ИНТЕРАКТИВНАЯ ТАБЛИЦА РЕФЕРАЛОВ</div>
+            <button class="close-overlay-btn" id="closeOverlayBtn">Закрыть ✖</button>
+        </div>
+
+        <div class="control-panel" style="max-width: 500px; margin: 0 auto 15px auto; background: #162447;">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <input type="text" id="refSearchInput" placeholder="Поиск в Таблице Рефералов (логин)..." style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #0f4c81; background: #1f4068; color: #fff; font-size: 16px; box-sizing: border-box;">
+                <div style="display: flex; gap: 10px; width: 100%;">
+                    <button id="refSearchBtn" style="flex: 1; padding: 8px; background: #00fff0; color: #111; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; white-space: nowrap;">Найти</button>
+                    <button id="refSearchResetBtn" style="flex: 1; padding: 8px; background: #444; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; white-space: nowrap;">Сброс</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container" style="max-width: 100%; margin-top: 0;">
+            <table class="ref-table">
+                <tbody id="interactiveRefTableBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
