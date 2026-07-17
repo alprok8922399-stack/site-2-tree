@@ -295,75 +295,99 @@ function getNextLevelLetter(letter) {
 
 // --- ДИНАМИЧЕСКИЙ РАСЧЕТ И ДЕЛЕНИЕ МАТРИЦ (SPLITTING) ---
 function renderDynamicSplitting(tree) {
-    globalTreeCached = tree;
-    let activeMatricesHTML = [];
-    let queue = [currentRootId]; 
-    let processedNodes = new Set();
+    globalTreeCached = tree;
+    let activeMatricesHTML = [];
+    let queue = [currentRootId]; 
+    let processedNodes = new Set();
 
-    while (queue.length > 0) {
-        const currentId = queue.shift();
-        if (processedNodes.has(currentId)) continue;
-        processedNodes.add(currentId);
+    while (queue.length > 0) {
+        const currentId = queue.shift();
+        if (processedNodes.has(currentId)) continue;
+        processedNodes.add(currentId);
 
-        const topCell = tree[currentId] || null;
-        const parsed = parseCell(currentId);
-        if (!parsed) continue;
+        const topCell = tree[currentId] || null;
+        const parsed = parseCell(currentId);
+        if (!parsed) continue;
 
-        const nextLetter = getNextLevelLetter(parsed.letter);       
-        const bottomLetter = getNextLevelLetter(nextLetter);        
+        const nextLetter = getNextLevelLetter(parsed.letter);       
+        const bottomLetter = getNextLevelLetter(nextLetter);        
 
-        const leftLNum = parsed.num * 2 - 1;
-        const rightLNum = parsed.num * 2;
+        const leftLNum = parsed.num * 2 - 1;
+        const rightLNum = parsed.num * 2;
 
-        const leftShoulderId = `${nextLetter}${leftLNum}`;
-        const rightShoulderId = `${nextLetter}${rightLNum}`;
+        const leftShoulderId = `${nextLetter}${leftLNum}`;
+        const rightShoulderId = `${nextLetter}${rightLNum}`;
 
-        const b1 = `${bottomLetter}${leftLNum * 2 - 1}`;
-        const b2 = `${bottomLetter}${leftLNum * 2}`;
-        const b3 = `${bottomLetter}${rightLNum * 2 - 1}`;
-        const b4 = `${bottomLetter}${rightLNum * 2}`;
+        const b1 = `${bottomLetter}${leftLNum * 2 - 1}`;
+        const b2 = `${bottomLetter}${leftLNum * 2}`;
+        const b3 = `${bottomLetter}${rightLNum * 2 - 1}`;
+        const b4 = `${bottomLetter}${rightLNum * 2}`;
 
-        const leftShoulder = tree[leftShoulderId] || null;
-        const rightShoulder = tree[rightShoulderId] || null;
-        const bottom4 = [
-            tree[b1] || null,
-            tree[b2] || null,
-            tree[b3] || null,
-            tree[b4] || null
-        ];
+        const leftShoulder = tree[leftShoulderId] || null;
+        const rightShoulder = tree[rightShoulderId] || null;
+        const bottom4 = [
+            tree[b1] || null,
+            tree[b2] || null,
+            tree[b3] || null,
+            tree[b4] || null
+        ];
 
-        const isMatrixClosed = bottom4.every(cell => cell && cell.user);
+        const isMatrixClosed = bottom4.every(cell => cell && cell.user);
 
-        if (isMatrixClosed) {
-            queue.push(leftShoulderId);
-            queue.push(rightShoulderId);
-        } else {
-            const ids = { top: currentId, left: leftShoulderId, right: rightShoulderId, b1, b2, b3, b4 };
-            activeMatricesHTML.push(buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids));
-        }
-    }
+        if (isMatrixClosed) {
+            queue.push(leftShoulderId);
+            queue.push(rightShoulderId);
+        } else {
+            const ids = { top: currentId, left: leftShoulderId, right: rightShoulderId, b1, b2, b3, b4 };
+            activeMatricesHTML.push(buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids));
+        }
+    }
 
-    // Рендерим 5 фиксированных золотых ячеек над общими матрицами
-    // Добавили: background: #ffd700, цвет текста #000, min-width для ширины
-    let goldHeaderHTML = `
-        <div class="gold-static-row" style="display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; padding: 20px; background: rgba(255, 215, 0, 0.1); border-radius: 12px; border: 2px dashed #ffd700;">
-            <div class="cell level-1 occupied" style="background: #ffd700 !important; color: #000 !important; min-width: 100px; font-weight: bold; cursor: default;"><div class="cell-id">G1</div><div class="cell-user">GOLD_1</div></div>
-            <div class="cell level-1 occupied" style="background: #ffd700 !important; color: #000 !important; min-width: 100px; font-weight: bold; cursor: default;"><div class="cell-id">G2</div><div class="cell-user">GOLD_2</div></div>
-            <div class="cell level-1 occupied" style="background: #ffd700 !important; color: #000 !important; min-width: 100px; font-weight: bold; cursor: default;"><div class="cell-id">G3</div><div class="cell-user">GOLD_3</div></div>
-            <div class="cell level-1 occupied" style="background: #ffd700 !important; color: #000 !important; min-width: 100px; font-weight: bold; cursor: default;"><div class="cell-id">G4</div><div class="cell-user">GOLD_4</div></div>
-            <div class="cell level-1 occupied" style="background: #ffd700 !important; color: #000 !important; min-width: 100px; font-weight: bold; cursor: default;"><div class="cell-id">G5</div><div class="cell-user">GOLD_5</div></div>
-        </div>
-    `;
+    // Рендерим 5 фиксированных золотых ячеек над общими матрицами
+    let goldHeaderHTML = `
+        <div class="gold-static-row" style="display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; padding: 10px; background: rgba(255, 215, 0, 0.05); border-radius: 8px; border: 1px dashed #ffd700;">
+            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G1</div><div class="cell-user">GOLD_1</div></div>
+            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G2</div><div class="cell-user">GOLD_2</div></div>
+            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G3</div><div class="cell-user">GOLD_3</div></div>
+            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G4</div><div class="cell-user">GOLD_4</div></div>
+            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G5</div><div class="cell-user">GOLD_5</div></div>
+        </div>
+    `;
 
-    if (mainTreeDisplay) {
-        mainTreeDisplay.innerHTML = `
-            ${goldHeaderHTML}
-            <div class="matrices-row">
-                ${activeMatricesHTML.join('')}
-            </div>
-        `;
-        const currentScale = zoomSlider ? zoomSlider.value : 0.8;
-        mainTreeDisplay.style.transform = `scale(${currentScale})`;
-        mainTreeDisplay.style.width = '100%';
-    }
+    if (mainTreeDisplay) {
+        mainTreeDisplay.innerHTML = `
+            ${goldHeaderHTML}
+            <div class="matrices-row">
+                ${activeMatricesHTML.join('')}
+            </div>
+        `;
+        const currentScale = zoomSlider ? zoomSlider.value : 0.8;
+        mainTreeDisplay.style.transform = `scale(${currentScale})`;
+        mainTreeDisplay.style.width = '100%';
+    }
 }
+
+// --- СБРОС СИСТЕМЫ ---
+if (resetBtn) {
+    resetBtn.addEventListener('click', async () => {
+        if (!confirm('Очистить базу данных дерева?')) return;
+        try {
+            const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                alert('База успешно сброшена!');
+                currentRootId = 'A1';
+                searchTargetUser = '';
+                lastTreeJsonString = ''; 
+                setZoom(0.8);
+                fetchTree(true);
+            }
+        } catch (err) {
+            alert('Ошибка при сбросе');
+        }
+    });
+}
+
+// Первичный запуск и автообновление матриц
+fetchTree(true);
+setInterval(fetchTree, 2000);
