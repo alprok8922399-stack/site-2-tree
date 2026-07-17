@@ -7,14 +7,7 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static('../frontend'));
 
-// Логин основателя, куда летят средства с пустых/замороженных ячеек
-const FOUNDER_USERNAME = 'FOUNDER';
-
-let shopUsersDB = {
-    // Инициализируем основателя в базе маркетплейса, чтобы ему капал баланс
-    [FOUNDER_USERNAME]: { username: FOUNDER_USERNAME, isPaid: true, balance: 0 }
-};
-
+let shopUsersDB = {};
 // База данных реферальных связей (кто кого пригласил): { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
     'SYSTEM_ROOT': null,
@@ -23,15 +16,6 @@ let referalsDB = {
 };
 // Храним имя последнего зарегистрированного бота для создания автоматической цепочки
 let lastRegisteredBot = null;
-
-// === БАЗА ДАННЫХ ПРЕМИАЛЬНЫХ ЗОЛОТЫХ ЯЧЕЕК ===
-let premiumCellsDB = {
-    'GOLD-1': { id: 'GOLD-1', user: null, isFrozen: false, reward: 150 },
-    'GOLD-2': { id: 'GOLD-2', user: null, isFrozen: false, reward: 50 },
-    'GOLD-3': { id: 'GOLD-3', user: null, isFrozen: false, reward: 50 },
-    'GOLD-4': { id: 'GOLD-4', user: null, isFrozen: false, reward: 25 },
-    'GOLD-5': { id: 'GOLD-5', user: null, isFrozen: false, reward: 25 }
-};
 
 function getLevelLetter(levelIndex) {
     let letter = '';
@@ -75,23 +59,28 @@ function createInitialTree() {
 let treeDB = createInitialTree();
 
 function findNextEmptyCell(tree) {
+    // Начальные фиксированные уровни A, B, C
     const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    let levelIndex = 3; 
+    let levelIndex = 3; // Начинаем с уровня D (индекс 3)
     while (true) {
         const letter = getLevelLetter(levelIndex);
-        const countInLevel = 1 << levelIndex; 
-        const totalQuadsInLevel = countInLevel / 4; 
+        const countInLevel = 1 << levelIndex; // Всего ячеек на данном буквенном уровне
+        const totalQuadsInLevel = countInLevel / 4; // Всего матриц ("четверок") на уровне
 
+        // Дробим матрицы уровня на порции строго по 32 матрицы (128 ячеек)
         const CHUNK_SIZE = 32;
 
         for (let chunkStart = 0; chunkStart < totalQuadsInLevel; chunkStart += CHUNK_SIZE) {
             const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalQuadsInLevel);
+            
+            // Флаг: проверяем, закрыта ли текущая порция из 32 матриц полностью
             let isChunkFull = true;
 
+            // Запускаем фирменный круговой обход ("гребёнку") строго ВНУТРИ текущей порции матриц
             for (let position = 0; position < 4; position++) {
                 for (let quad = chunkStart; quad < chunkEnd; quad++) {
                     const num = (quad * 4) + position + 1;
@@ -102,11 +91,16 @@ function findNextEmptyCell(tree) {
                     }
                     
                     if (!tree[id].user) {
-                        return id; 
+                        return id; // Нашли свободную ячейку по правилу гребёнки внутри этих 32 матриц!
                     }
                 }
             }
+
+            // Если мы вышли из циклов позиций и не вернули id, значит вся текущая порция из 32 матриц забита.
+            // Только в этом случае цикл перейдет к следующей порции chunkStart (следующим 32 матрицам этого же уровня).
         }
+
+        // Если абсолютно весь буквенный уровень закрылся по порциям, спускаемся на букву ниже
         levelIndex++; 
     }
 }
@@ -136,27 +130,6 @@ function checkAndGenerateChildren(tree, currentCellId) {
     createCellByGlobalIndex(rightChildGlobal);
 }
 
-// Вспомогательная функция распределения 300 золотых единиц
-function distributePremiumRewards() {
-    Object.keys(premiumCellsDB).forEach(cellId => {
-        const cell = premiumCellsDB[cellId];
-        const amount = cell.reward;
-
-        // Если в золотой ячейке есть пользователь и выплаты не заморожены
-        if (cell.user && !cell.isFrozen) {
-            if (shopUsersDB[cell.user]) {
-                shopUsersDB[cell.user].balance += amount;
-            }
-        } else {
-            // Иначе начисления улетают ОСНОВАТЕЛЮ
-            if (!shopUsersDB[FOUNDER_USERNAME]) {
-                shopUsersDB[FOUNDER_USERNAME] = { username: FOUNDER_USERNAME, isPaid: true, balance: 0 };
-            }
-            shopUsersDB[FOUNDER_USERNAME].balance += amount;
-        }
-    });
-}
-
 // === API МАТРИЦЫ ===
 app.get('/api/tree', (req, res) => res.json(treeDB));
 
@@ -170,6 +143,7 @@ app.post('/api/register', (req, res) => {
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = username;
     
+    // Привязываем спонсора. Если не указан — привязываем к SYSTEM_ROOT
     referalsDB[username] = sponsor ? sponsor : 'SYSTEM_ROOT';
     
     checkAndGenerateChildren(treeDB, cellId);
@@ -178,34 +152,30 @@ app.post('/api/register', (req, res) => {
 
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
-    shopUsersDB = {
-        [FOUNDER_USERNAME]: { username: FOUNDER_USERNAME, isPaid: true, balance: 0 }
-    };
+    shopUsersDB = {};
     referalsDB = {
         'SYSTEM_ROOT': null,
         'LEADER_1': 'SYSTEM_ROOT',
         'LEADER_2': 'SYSTEM_ROOT'
     };
-    Object.keys(premiumCellsDB).forEach(id => {
-        premiumCellsDB[id].user = null;
-        premiumCellsDB[id].isFrozen = false;
-    });
     lastRegisteredBot = null;
     res.json({ success: true });
 });
 
-// Получение данных пользователя (включая проверку на Премиум-статус для ЛК сайта №1)
+// Новый API эндпоинт для получения полных данных реферальной цепочки вверх («Кто-за-кем»)
 app.get('/api/user-details/:username', (req, res) => {
     const username = req.params.username;
     
+    // Находим все ячейки, которые занимает данный пользователь
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase())
         .map(cell => cell.id);
         
-    if (userCells.length === 0 && !referalsDB[username] && !shopUsersDB[username]) {
+    if (userCells.length === 0 && !referalsDB[username]) {
         return res.status(404).json({ error: 'Пользователь не найден' });
     }
     
+    // Выстраиваем спонсорскую линию вверх до SYSTEM_ROOT
     let sponsorChain = [];
     let currentSponsor = referalsDB[username] || 'SYSTEM_ROOT';
     
@@ -213,25 +183,21 @@ app.get('/api/user-details/:username', (req, res) => {
         sponsorChain.push(currentSponsor);
         currentSponsor = referalsDB[currentSponsor];
     }
-
-    // Проверяем, владеет ли этот пользователь какой-либо золотой ячейкой
-    const isPremiumUser = Object.values(premiumCellsDB).some(
-        cell => cell.user && cell.user.toLowerCase() === username.toLowerCase()
-    );
     
     res.json({
         success: true,
         username: username,
         cells: userCells,
         sponsor: referalsDB[username] || 'SYSTEM_ROOT',
-        chain: sponsorChain,
-        isPremium: isPremiumUser // Передаём флаг на фронтенд для подсветки
+        chain: sponsorChain
     });
 });
 
+// Новый API для построения реферальной структуры с расчетом колонок (ручное наследование)
 app.get('/api/referals-tree', (req, res) => {
     let structure = {};
     
+    // Вычисляем уровень (колонку) для каждого зарегистрированного пользователя динамически
     function getCalculatedLevel(user) {
         if (user === 'SYSTEM_ROOT') return 1;
         let sponsor = referalsDB[user];
@@ -250,62 +216,6 @@ app.get('/api/referals-tree', (req, res) => {
     res.json({ success: true, tree: structure });
 });
 
-// === API ДЛЯ РАБОТЫ С ЗОЛОТЫМИ МЕСТАМИ (ДЛЯ ПАНЕЛИ АДМИНИСТРАТОРА / САЙТА №2) ===
-
-// Получить состояние всех 5 золотых ячеек
-app.get('/api/premium-cells', (req, res) => {
-    // Обогащаем данными пользователей из shopUsersDB для отображения полной карточки
-    let detailedCells = {};
-    Object.keys(premiumCellsDB).forEach(id => {
-        const cell = premiumCellsDB[id];
-        let userData = null;
-        if (cell.user && shopUsersDB[cell.user]) {
-            userData = shopUsersDB[cell.user];
-        }
-        detailedCells[id] = {
-            ...cell,
-            fullUserData: userData
-        };
-    });
-    res.json({ success: true, cells: detailedCells });
-});
-
-// Посадить пользователя в золотую ячейку по ID (регистрация в премиум месте)
-app.post('/api/premium/occupy', (req, res) => {
-    const { cellId, username } = req.body;
-    if (!premiumCellsDB[cellId]) return res.status(400).json({ error: 'Неверный ID золотой ячейки' });
-    if (!username) return res.status(400).json({ error: 'Логин пользователя обязателен' });
-
-    // Проверим, зарегистрирован ли вообще этот пользователь на сайте маркетплейса
-    if (!shopUsersDB[username]) {
-        // Создаем пользователя в системе, если его не было
-        shopUsersDB[username] = { username, isPaid: false, balance: 0 };
-    }
-
-    premiumCellsDB[cellId].user = username;
-    res.json({ success: true, cell: premiumCellsDB[cellId] });
-});
-
-// Заморозить / Разморозить выплаты премиальной ячейке
-app.post('/api/premium/toggle-freeze', (req, res) => {
-    const { cellId } = req.body;
-    if (!premiumCellsDB[cellId]) return res.status(400).json({ error: 'Ячейка не найдена' });
-
-    premiumCellsDB[cellId].isFrozen = !premiumCellsDB[cellId].isFrozen;
-    res.json({ success: true, cell: premiumCellsDB[cellId] });
-});
-
-// Удалить пользователя из премиальной ячейки
-app.post('/api/premium/remove-user', (req, res) => {
-    const { cellId } = req.body;
-    if (!premiumCellsDB[cellId]) return res.status(400).json({ error: 'Ячейка не найдена' });
-
-    premiumCellsDB[cellId].user = null;
-    premiumCellsDB[cellId].isFrozen = false; // сбрасываем заморозку при очистке
-    res.json({ success: true, cell: premiumCellsDB[cellId] });
-});
-
-
 // === API МАРКЕТПЛЕЙСА (ДЛЯ САЙТА №1) ===
 app.post('/api/shop/register', (req, res) => {
     const { username, sponsor } = req.body;
@@ -314,12 +224,13 @@ app.post('/api/shop/register', (req, res) => {
     
     shopUsersDB[username] = { username, isPaid: false, balance: 0 };
     
+    // Запоминаем спонсора. Если робот регистрирует пачку ботов, связываем их цепочкой друг за другом
     if (sponsor) {
         referalsDB[username] = sponsor;
     } else {
         referalsDB[username] = lastRegisteredBot ? lastRegisteredBot : 'SYSTEM_ROOT';
     }
-    lastRegisteredBot = username; 
+    lastRegisteredBot = username; // Текущий бот становится спонсором для следующего
     
     res.json({ success: true, shopUserStatus: shopUsersDB[username] });
 });
@@ -335,10 +246,6 @@ app.post('/api/shop/pay', (req, res) => {
 
     treeDB[cellId].user = username;
     checkAndGenerateChildren(treeDB, cellId);
-
-    // === ЛОГИКА ЗОЛОТЫХ ЯЧЕЕК ===
-    // При каждой оплате (начислении) запускаем распределение 300 единиц по золотым местам
-    distributePremiumRewards();
 
     res.json({
         success: true,
