@@ -238,8 +238,13 @@ function getCellHTML(cell, roleClass, fallbackId = '-') {
     const displayUser = cell.user ? cell.user : '-';
     const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
 
+    // Возвращаем учет золотого и серебряного статусов ячеек из БД
+    let statusClass = '';
+    if (cell.isGold) statusClass = 'gold-cell';
+    else if (cell.isSilver) statusClass = 'silver-cell';
+
     return `
-        <div class="cell ${roleClass} ${isOccupied} ${isFocused}" onclick="showUserDetails('${displayUser}', '${cell.id}', event)">
+        <div class="cell ${roleClass} ${isOccupied} ${isFocused} ${statusClass}" onclick="showUserDetails('${displayUser}', '${cell.id}', event)">
             <div class="cell-id">${cell.id}</div>
             <div class="cell-user">${displayUser}</div>
         </div>
@@ -338,8 +343,20 @@ function renderDynamicSplitting(tree) {
         }
     }
 
+    // Рендерим 5 фиксированных золотых ячеек над общими матрицами
+    let goldHeaderHTML = `
+        <div class="gold-static-row" style="display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; padding: 10px; background: rgba(255, 215, 0, 0.05); border-radius: 8px; border: 1px dashed #ffd700;">
+            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G1</div><div class="cell-user">GOLD_1</div></div>
+            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G2</div><div class="cell-user">GOLD_2</div></div>
+            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G3</div><div class="cell-user">GOLD_3</div></div>
+            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G4</div><div class="cell-user">GOLD_4</div></div>
+            <div class="cell level-1 occupied gold-cell" style="cursor: default;"><div class="cell-id">G5</div><div class="cell-user">GOLD_5</div></div>
+        </div>
+    `;
+
     if (mainTreeDisplay) {
         mainTreeDisplay.innerHTML = `
+            ${goldHeaderHTML}
             <div class="matrices-row">
                 ${activeMatricesHTML.join('')}
             </div>
