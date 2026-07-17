@@ -1,198 +1,157 @@
 /* ==========================================================================
-   🚨 КРИТИЧЕСКАЯ ЗОНА: ТОЛЬКО ДЛЯ ЧТЕНИЯ (READ-ONLY)
-   ⚠️ ЛЮБЫЕ ИЗМЕНЕНИЯ В ЭТОМ ФАЙЛЕ ЗАПРЕЩЕНЫ И МОГУТ СЛОМАТЬ СИСТЕМУ ДЕПЛОЯ!
+   📊 СКРИПТ УПРАВЛЕНИЯ ТАБЛИЦЕЙ РЕФЕРАЛОВ (ДЕРЕВО СВЯЗЕЙ)
    ========================================================================== */
 
-const API_URL = '/api';
+const TABLE_API_URL = '/api';
 
+// Элементы интерактивной таблицы и меню
+const menuToggleBtn = document.getElementById('menuToggleBtn');
+const menuContent = document.getElementById('menuContent');
+const openTableBtn = document.getElementById('openTableBtn');
+const tableOverlay = document.getElementById('tableOverlay');
+const closeOverlayBtn = document.getElementById('closeOverlayBtn');
 const interactiveRefTableBody = document.getElementById('interactiveRefTableBody');
 const refSearchInput = document.getElementById('refSearchInput');
 const refSearchBtn = document.getElementById('refSearchBtn');
 const refSearchResetBtn = document.getElementById('refSearchResetBtn');
 
-let refSearchTargetUser = ''; 
-let expandedNodes = new Set(); 
-let lastRefTreeJsonString = ''; 
+let expandedUsers = new Set(); // Кэш развернутых пользователей в таблице
+let currentRefSearch = ''; // Поисковый запрос для таблицы
 
-if (refSearchBtn) {
-    refSearchBtn.addEventListener('click', () => {
-        const val = refSearchInput.value.trim();
-        if (val) {
-            findReferalAndExpand(val);
-        }
+// Открытие / Закрытие шторки меню
+if (menuToggleBtn) {
+    menuToggleBtn.addEventListener('click', () => {
+        menuContent.classList.toggle('show');
     });
 }
 
-if (refSearchResetBtn) {
-    refSearchResetBtn.addEventListener('click', () => {
-        if (refSearchInput) refSearchInput.value = '';
-        refSearchTargetUser = '';
-        expandedNodes.clear(); 
-        buildInteractiveRefTable(true); 
+// Открытие оверлея таблицы
+if (openTableBtn) {
+    openTableBtn.addEventListener('click', async () => {
+        if (menuContent) menuContent.classList.remove('show');
+        tableOverlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
+        await updateReferralTable();
     });
 }
 
-function scrollToFocusedReferal() {
-    setTimeout(() => {
-        const focusedCard = document.querySelector('.ref-node-focused');
-        if (focusedCard) {
-            focusedCard.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-                inline: 'nearest'
-            });
-        }
-    }, 500); 
+// Закрытие оверлея таблицы
+if (closeOverlayBtn) {
+    closeOverlayBtn.addEventListener('click', () => {
+        tableOverlay.classList.remove('show');
+        document.body.style.overflow = '';
+    });
 }
 
-async function findReferalAndExpand(username) {
+// Запрос и отрисовка реферальной структуры
+async function updateReferralTable() {
     try {
-        const res = await fetch(`${API_URL}/referals-tree`);
-        const resData = await res.json();
+        const res = await fetch(`${TABLE_API_URL}/referrals`);
+        const data = await res.json();
+        if (!data.success) return;
         
-        if (!resData || !resData.tree) return;
-        const tree = resData.tree;
+        interactiveRefTableBody.innerHTML = "";
         
-        let targetNode = Object.values(tree).find(node => node && node.username && node.username.toLowerCase() === username.toLowerCase());
+        // Генерация заголовков таблицы
+        const headerRow = document.createElement('tr');
+        headerRow.innerHTML = `
+            <th style="width: 60%;">Логин Лидера / Партнера</th>
+            <th style="width: 20%; text-align: center;">Рефералы</th>
+            <th style="width: 20%; text-align: center;">Действие</th>
+        `;
+        interactiveRefTableBody.appendChild(headerRow);
         
-        if (targetNode) {
-            refSearchTargetUser = targetNode.username; 
-            
-            // Раскрываем ветки вверх по цепочке спонсоров
-            let currentSponsor = targetNode.sponsor;
-            while (currentSponsor) {
-                const sponsorNode = Object.values(tree).find(n => n && n.username === currentSponsor);
-                if (sponsorNode) {
-                    expandedNodes.add(sponsorNode.username);
-                    currentSponsor = sponsorNode.sponsor;
-                } else {
-                    currentSponsor = null;
-                }
-            }
-            
-            buildInteractiveRefTable(true);
-            scrollToFocusedReferal();
-        } else {
-            alert(`Реферал "${username}" не найден в структуре`);
-        }
+        // Запуск рекурсивной отрисовки структуры от корня
+        renderUserRow(data.tree, 0);
     } catch (err) {
-        console.error('Ошибка поиска реферала:', err);
+        console.error("Ошибка обновления таблицы:", err);
     }
 }
 
-// Построение реферального дерева строго по структуре бэкенда
-async function buildInteractiveRefTable(forceRender = false) {
-    if (!interactiveRefTableBody) return;
+// Рекурсивная функция создания строк
+function renderUserRow(node, depth) {
+    if (!node || !node.username) return;
 
-    try {
-        const res = await fetch(`${API_URL}/referals-tree`);
-        const resData = await res.json();
+    // Проверяем фильтр поиска по логину
+    const matchesSearch = currentRefSearch === '' || node.username.toLowerCase().includes(currentRefSearch);
+    
+    // Проверяем, есть ли совпадения внутри вложенных веток
+    if (matchesSearch || hasMatchingChild(node, currentRefSearch)) {
+        const tr = document.createElement('tr');
+        const hasChildren = node.referrals && node.referrals.length > 0;
+        const isExpanded = expandedUsers.has(node.username);
+        const paddingLeft = depth * 20 + 10;
 
-        if (!resData || !resData.tree) {
-            interactiveRefTableBody.innerHTML = '<div style="text-align:center; color:#e43f5a; padding: 20px;">Ошибка структуры данных от сервера</div>';
-            return;
+        tr.innerHTML = `
+            <td style="padding-left: ${paddingLeft}px; font-weight: ${depth === 0 ? 'bold' : 'normal'}; color: ${depth === 0 ? '#ffd700' : '#fff'};">
+                ${hasChildren ? (isExpanded ? '▼ ' : '▶ ') : '• '} ${node.username}
+            </td>
+            <td style="text-align: center; color: #00fff0; font-weight: bold;">
+                ${hasChildren ? node.referrals.length : 0}
+            </td>
+            <td style="text-align: center;">
+                ${hasChildren ? `<button class="row-toggle-btn" onclick="event.stopPropagation(); toggleUserRow('${node.username}')">${isExpanded ? 'Свернуть' : 'Развернуть'}</button>` : '—'}
+            </td>
+        `;
+
+        // Клик по строке перенаправляет фокус матриц на этого пользователя и закрывает оверлей таблицы
+        tr.onclick = () => {
+            if (tableOverlay) tableOverlay.classList.remove('show');
+            document.body.style.overflow = '';
+            if (typeof typeof window.findUserAndFocus === 'function') {
+                window.findUserAndFocus(node.username);
+            } else if (typeof findUserAndFocus === 'function') {
+                findUserAndFocus(node.username);
+            }
+        };
+
+        interactiveRefTableBody.appendChild(tr);
+
+        // Если пользователь развернут или активен поиск, выводим дочерние строки
+        if (hasChildren && (isExpanded || currentRefSearch !== '')) {
+            node.referrals.forEach(child => renderUserRow(child, depth + 1));
         }
-
-        const tree = resData.tree;
-        const activeUsers = Object.values(tree).filter(node => node && node.username && node.username !== 'null');
-
-        if (activeUsers.length === 0) {
-            interactiveRefTableBody.innerHTML = '<div style="text-align:center; color:#ffd700; padding: 20px; font-size: 16px; background: rgba(28,37,65,0.6); border-radius:8px;">Реферальная структура пуста.</div>';
-            return;
-        }
-
-        const currentRefTreeStr = JSON.stringify(resData) + `_expanded:${Array.from(expandedNodes).join(',')}_target:${refSearchTargetUser}`;
-        
-        if (currentRefTreeStr === lastRefTreeJsonString && !forceRender) {
-            return; 
-        }
-        lastRefTreeJsonString = currentRefTreeStr;
-
-        // Рекурсивное построение дерева на DIV-блоках
-        function buildUserNodeHTML(userLogin) {
-            // Ищем детей, у которых поле sponsor равно текущему userLogin
-            let children = activeUsers.filter(node => node.sponsor === userLogin);
-            children.sort((a, b) => a.username.localeCompare(b.username));
-
-            let hasChildren = children.length > 0;
-            let directRefCount = children.length;
-            let isExpanded = expandedNodes.has(userLogin); 
-
-            const isTarget = userLogin.toLowerCase() === refSearchTargetUser.toLowerCase();
-
-            let isFoundTargetStyle = isTarget 
-                ? 'border: 2px solid #ff3366; box-shadow: 0 0 15px #ff3366; background: #ff3366;' 
-                : 'border: 1px solid #00fff0; background: #1c2541; box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
-
-            let html = `
-                <div class="ref-node" style="display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 10px;">
-                    <div class="user-card ${isTarget ? 'ref-node-focused' : ''}" style="padding: 10px; border-radius: 8px; min-width: 140px; box-sizing: border-box; ${isFoundTargetStyle}">
-                        <div style="font-weight: bold; color: #fff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${userLogin}">${userLogin}</div>
-                        <div style="font-size: 11px; color: #a2e8dd; margin-top: 5px;">👥 Рефы: <strong>${directRefCount}</strong></div>
-                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${userLogin}', this)">${isExpanded ? 'Свернуть ▲' : 'Развернуть ▼'}</button>` : ''}
-                    </div>
-                    
-                    ${hasChildren ? `
-                        <div id="children_of_${userLogin}" class="children-container" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; margin-top: 6px; padding-left: 15px; border-left: 2px dashed #00fff0; gap: 6px;">
-                            ${children.map(child => buildUserNodeHTML(child.username)).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-            return html;
-        }
-
-        // В твоей базе корнем всегда является SYSTEM_ROOT
-        let rootUsername = 'SYSTEM_ROOT';
-
-        // Проверяем, есть ли он вообще в пришедшей структуре
-        if (!tree[rootUsername]) {
-            // Если вдруг нет, берем того, у кого спонсор null или кто идет первым
-            let fallbackNode = activeUsers.find(node => !node.sponsor || node.sponsor === 'null') || activeUsers[0];
-            rootUsername = fallbackNode ? fallbackNode.username : null;
-        }
-
-        if (rootUsername) {
-            interactiveRefTableBody.innerHTML = `
-                <div style="width: 100%; overflow-x: auto; padding: 10px 0;">
-                    <div style="display: flex; flex-direction: column; min-width: max-content;">
-                        ${buildUserNodeHTML(rootUsername)}
-                    </div>
-                </div>
-            `;
-        } else {
-            interactiveRefTableBody.innerHTML = '<div style="text-align:center; color:#ffd700; padding: 20px;">Зарегистрированные пользователи не найдены.</div>';
-        }
-
-    } catch (e) {
-        console.error(e);
-        interactiveRefTableBody.innerHTML = '<div style="text-align:center; color: #e43f5a; padding: 20px;">Не удалось загрузить реферальное дерево</div>';
     }
 }
 
-window.buildInteractiveRefTable = buildInteractiveRefTable;
+// Проверка наличия совпадений в глубине дерева
+function hasMatchingChild(node, searchStr) {
+    if (searchStr === '') return false;
+    if (!node.referrals) return false;
+    return node.referrals.some(child => child.username.toLowerCase().includes(searchStr) || hasMatchingChild(child, searchStr));
+}
 
-window.toggleRefBranch = function(username, btn) {
-    const container = document.getElementById(`children_of_${username}`);
-    if (!container) return;
-
-    if (container.style.display === 'none') {
-        container.style.display = 'flex';
-        btn.innerHTML = 'Свернуть ▲';
-        expandedNodes.add(username); 
+// Переключение состояния развернутости строки
+window.toggleUserRow = function(username) {
+    if (expandedUsers.has(username)) {
+        expandedUsers.delete(username);
     } else {
-        container.style.display = 'none';
-        btn.innerHTML = 'Развернуть ▼';
-        expandedNodes.delete(username); 
+        expandedUsers.add(username);
     }
-    buildInteractiveRefTable(true); 
+    updateReferralTable();
 };
 
-setInterval(() => {
-    const embeddedTable = document.getElementById('embeddedTableContainer');
-    if (embeddedTable && embeddedTable.style.display === 'block') {
-        buildInteractiveRefTable();
-    }
-}, 2000);
+// Фильтрация поиска внутри таблицы
+if (refSearchBtn) {
+    refSearchBtn.addEventListener('click', () => {
+        currentRefSearch = refSearchInput.value.trim().toLowerCase();
+        updateReferralTable();
+    });
+}
 
-buildInteractiveRefTable();
+// Сброс поиска внутри таблицы
+if (refSearchResetBtn) {
+    refSearchResetBtn.addEventListener('click', () => {
+        refSearchInput.value = '';
+        currentRefSearch = '';
+        expandedUsers.clear();
+        updateReferralTable();
+    });
+}
+
+// Интервал автообновления таблицы рефералов, если она открыта на экране
+setInterval(() => {
+    if (tableOverlay && tableOverlay.classList.contains('show')) {
+        updateReferralTable();
+    }
+}, 3000);
