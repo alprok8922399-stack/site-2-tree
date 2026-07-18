@@ -198,7 +198,7 @@ function renderVipZone(tree, refTree) {
         });
     }).map(node => node.username);
 
-    // Выводим серебряные ячейки (например, берем ID от S1 до S5 по числу лидеров или пустую готовую ячейку)
+    // Выводим серебряные ячейки
     const totalSilverSlots = Math.max(silverLeaders.length, 1); 
     for (let i = 1; i <= totalSilverSlots; i++) {
         const cellId = `S${i}`;
@@ -238,7 +238,6 @@ function renderVipZone(tree, refTree) {
 // --- 🖱️ ДВОЙНОЙ ТРИГГЕР (КОРОТКИЙ КЛИК / LONG-PRESS) ---
 function bindCellInteractions() {
     document.querySelectorAll('.cell').forEach(cell => {
-        // Защита от дублирования событий
         cell.onmousedown = (e) => startPress(e, cell);
         cell.onmouseup = (e) => endPress(e, cell);
         cell.onmouseleave = () => clearPress();
@@ -289,7 +288,9 @@ function clearPress() {
 async function handleShortClick(username, cellId) {
     if (!username || username === '-') {
         // Клик по пустой ячейке переключает фокус матрицы
-        switchFocus(cellId);
+        if (cellId && !cellId.startsWith('G') && !cellId.startsWith('S')) {
+            switchFocus(cellId);
+        }
         return;
     }
 
@@ -323,16 +324,15 @@ async function handleShortClick(username, cellId) {
     }
 }
 
-// 2. Долгий клик: Вызов Карточки Модерации + расчет индикатора дней и цепочки спонсоров
+// 2. Долгий клик: Вызов Карточки Модерации + расчет индикатора дней БЕЗ ЦЕПОЧКИ СПОНСОРОВ
 async function handleLongPress(username, cellId) {
     if (!userModalCard) return;
     
-    // Показываем заголовок карточки
     document.getElementById('modalCardTitle').textContent = `Модерация: ${username}`;
     userModalCard.style.display = 'flex';
 
     const cardBody = document.getElementById('modalCardBody');
-    cardBody.innerHTML = `<div style="color:#00fff0; font-size:14px;">Вычисление цепочки и активности...</div>`;
+    cardBody.innerHTML = `<div style="color:#00fff0; font-size:14px;">Вычисление активности...</div>`;
 
     try {
         const res = await fetch(`${API_URL}/user-details/${encodeURIComponent(username)}`);
@@ -344,17 +344,11 @@ async function handleLongPress(username, cellId) {
             const daysActive = Math.floor((Date.now() - regDate.getTime()) / (1000 * 60 * 60 * 24));
             const dayClass = daysActive <= 31 ? 'days-active-accent' : 'days-active-normal';
 
-            const chainLine = data.chain && data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Главный Лидер';
-
             cardBody.innerHTML = `
                 <p style="margin:6px 0;">👤 <strong>Логин:</strong> <span style="color:#00fff0;">${data.username}</span></p>
                 <p style="margin:6px 0;">📅 <strong>Регистрация:</strong> ${regDate.toLocaleDateString()}</p>
                 <p style="margin:6px 0;">⏱️ <strong>Дней в системе:</strong> <span class="${dayClass}" style="font-weight:bold; font-size:16px;">${daysActive} дн.</span></p>
                 <p style="margin:6px 0;">🤝 <strong>Спонсор:</strong> ${data.sponsor || '-'}</p>
-                <div style="background:#1f4068; padding:8px; border-radius:6px; margin-top:10px; border:1px dashed #00fff0; font-size:13px;">
-                    <strong style="color:#ffd700; display:block; margin-bottom:4px;">Цепочка спонсоров вверх:</strong>
-                    <div style="word-break:break-all; color:#e2e2e2;">${chainLine}</div>
-                </div>
                 
                 <div style="display:flex; gap:10px; margin-top:15px;">
                     <button onclick="freezeUserPayments('${data.username}')" style="flex:1; padding:8px; background:#ffd700; color:#111; font-weight:bold; border:none; border-radius:4px; cursor:pointer; font-size:12px;">ЗАМОРОЗИТЬ</button>
@@ -362,11 +356,12 @@ async function handleLongPress(username, cellId) {
                 </div>
             `;
             
-            // Синхронизируем состояние фокуса в матрице
-            currentRootId = cellId;
+            if (!cellId.startsWith('G') && !cellId.startsWith('S')) {
+                currentRootId = cellId;
+            }
             searchTargetUser = username;
         } else {
-            cardBody.innerHTML = `<div style="color:#e43f5a;">Ошибка получения связей: ${data.error}</div>`;
+            cardBody.innerHTML = `<div style="color:#e43f5a;">Ошибка получения данных: ${data.error}</div>`;
         }
     } catch (err) {
         cardBody.innerHTML = `<div style="color:#e43f5a;">Сервер не отвечает</div>`;
@@ -527,7 +522,6 @@ function renderDynamicSplitting(tree, refTree = {}) {
         mainTreeDisplay.style.width = '100%';
     }
 
-    // Повторно навешиваем touch/mouse события на новые сгенерированные DOM-элементы матриц
     bindCellInteractions();
 }
 
