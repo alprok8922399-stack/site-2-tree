@@ -9,7 +9,7 @@ function convertMitronsToUsd(mitrons) {
     return (mitrons * MITRON_RATE_USD).toFixed(2);
 }
 
-// === 1. ИНИЦИАЛИЗАЦИЯ И РАБОТА С МАТРИЦЕЙ ===
+// === 1. РАБОТА С БИНАРНОЙ МАТРИЦЕЙ ===
 
 async function loadMatrixTree() {
     try {
@@ -23,7 +23,6 @@ async function loadMatrixTree() {
 
 // Рендеринг структуры матрицы внутрь отмасштабированного контейнера
 function renderMatrixUI(tree) {
-    // Рендерим строго в зум-враппер
     const matrixContainer = document.getElementById('matrix-zoom-wrapper');
     if (!matrixContainer) return;
     
@@ -55,6 +54,7 @@ function renderMatrixUI(tree) {
                 <div class="cell-user">${cell.user ? cell.user : 'Свободно'}</div>
             `;
             
+            matrixContainer.appendChild(cellElement);
             rowDiv.appendChild(cellElement);
         });
 
@@ -91,11 +91,11 @@ async function registerInMatrix() {
             alert(`Ошибка: ${result.error}`);
         }
     } catch (error) {
-        console.error('Ошибка регистрации:', error);
+        console.error('Ошибка регистрации в матрице:', error);
     }
 }
 
-// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА ===
+// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА И ЛОГИКА СЕЙФОВ ===
 
 async function registerShopUser() {
     const shopUserStr = document.getElementById('shop-username').value.trim();
@@ -161,6 +161,7 @@ async function payCertificate() {
     }
 }
 
+// === УМНЫЙ ПОИСК, НЕОНОВЫЙ ФОКУС И АВТО-СКРОЛЛ ===
 async function loadUserProfile(username) {
     if (!username) return;
     
@@ -171,17 +172,52 @@ async function loadUserProfile(username) {
         
         if (data.success) {
             document.getElementById('current-profile-user').innerText = data.username;
-            document.getElementById('profile-cell-id').innerText = data.profile.matrixPosition.currentCellId || 'Нет места';
+            const cellId = data.profile.matrixPosition.currentCellId;
+            document.getElementById('profile-cell-id').innerText = cellId || 'Нет места';
             document.getElementById('profile-status').innerText = data.profile.isPaid ? 'Оплачен (Активен)' : 'Не оплачен';
             
             const mitronsBalance = data.profile.balances.mitrons;
             document.getElementById('balance-mitrons').innerText = `${mitronsBalance} Mitrons`;
             document.getElementById('balance-usd').innerText = `$${convertMitronsToUsd(mitronsBalance)}`;
             
+            // --- УМНЫЙ АВТОФОКУС В ДЕРЕВЕ МАТРИЦЫ ---
+            // 1. Убираем старую неоновую подсветку с прошлых поисков
+            document.querySelectorAll('.matrix-cell.search-highlight').forEach(el => {
+                el.classList.remove('search-highlight');
+            });
+
+            if (cellId) {
+                const targetCell = document.getElementById(`ui-cell-${cellId}`);
+                if (targetCell) {
+                    const zoomSlider = document.getElementById('matrix-zoom-slider');
+                    const matrixWrapper = document.getElementById('matrix-zoom-wrapper');
+                    const zoomValueText = document.getElementById('zoom-value');
+                    
+                    // 2. Если масштаб слишком мелкий для глаз, плавно возвращаем к 80%
+                    if (zoomSlider && parseFloat(zoomSlider.value) < 0.5) {
+                        zoomSlider.value = 0.8;
+                        if (matrixWrapper) matrixWrapper.style.transform = `scale(0.8)`;
+                        if (zoomValueText) zoomValueText.innerText = `80%`;
+                    }
+
+                    // 3. Включаем неоновую пульсацию на нужной ячейке
+                    targetCell.classList.add('search-highlight');
+
+                    // 4. Плавно центрируем экран телефона/ПК ровно на этой ячейке
+                    setTimeout(() => {
+                        targetCell.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                            inline: 'center'
+                        });
+                    }, 150);
+                }
+            }
+            
+            // Отрисовка статуса 5 ЗОЛОТЫХ ЯЧЕЕК
             const goldenContainer = document.getElementById('golden-cells-status');
             if (goldenContainer) {
                 goldenContainer.innerHTML = '';
-                
                 const countReal = data.profile.goldenStatus.realDirectReferralsCount || 0;
                 
                 const title = document.createElement('h4');
@@ -235,11 +271,11 @@ async function resetSystem() {
     }
 }
 
-// Привязка событий после загрузки DOM страницы
+// Привязка событий после загрузки страницы
 document.addEventListener('DOMContentLoaded', () => {
     loadMatrixTree();
     
-    // === ЛОГИКА ИНТЕРАКТИВНОГО ЗУМА (МАСШТАБИРОВАНИЯ) ===
+    // === ОБРАБОТЧИК ДЛЯ СУПЕР-ЗУМА ДО 0.03 ===
     const zoomSlider = document.getElementById('matrix-zoom-slider');
     const zoomValueText = document.getElementById('zoom-value');
     const matrixWrapper = document.getElementById('matrix-zoom-wrapper');
@@ -247,9 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (zoomSlider && matrixWrapper && zoomValueText) {
         zoomSlider.addEventListener('input', (event) => {
             const currentScale = event.target.value;
-            // Применяем CSS трансформацию масштаба
             matrixWrapper.style.transform = `scale(${currentScale})`;
-            // Выводим процентное значение для пользователя
             zoomValueText.innerText = `${Math.round(currentScale * 100)}%`;
         });
     }
