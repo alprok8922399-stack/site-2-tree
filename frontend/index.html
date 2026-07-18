@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mitron Matrix & Marketplace System</title>
     <style>
+        /* === ТЁМНАЯ ТЕМА (DARK THEME) === */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f7f6;
+            background-color: #0f0f12; /* Глубокий тёмный фон */
             margin: 0;
             padding: 20px;
-            color: #333;
+            color: #e3e3e8; /* Светлый текст */
         }
         .container {
             max-width: 1200px;
@@ -20,10 +21,12 @@
             text-align: center;
             margin-bottom: 30px;
             padding-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
+            border-bottom: 2px solid #232329;
         }
-        h1 { margin: 0; color: #2c3e50; }
-        h2 { color: #34495e; border-left: 5px solid #3498db; padding-left: 10px; }
+        h1 { margin: 0; color: #ffffff; }
+        h2 { color: #ffffff; border-left: 5px solid #3498db; padding-left: 10px; }
+        p { color: #a0a0ab; }
+        
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -31,10 +34,11 @@
             margin-bottom: 30px;
         }
         .card {
-            background: #fff;
+            background: #17171c; /* Тёмные карточки блоков */
             padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid #232329;
         }
         .form-group {
             margin-bottom: 15px;
@@ -43,22 +47,48 @@
             display: block;
             margin-bottom: 5px;
             font-weight: bold;
+            color: #a0a0ab;
         }
         input[type="text"] {
             width: 100%;
-            padding: 10px;
+            padding: 11px;
             box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+            border: 1px solid #2d2d35;
+            background-color: #202026; /* Тёмные поля ввода */
+            color: #ffffff;
+            border-radius: 6px;
         }
+        input[type="text"]:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+        
+        /* Управление зумом */
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #202026;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            width: fit-content;
+            border: 1px solid #2d2d35;
+        }
+        input[type="range"] {
+            cursor: pointer;
+            accent-color: #3498db;
+        }
+
         button {
             background-color: #3498db;
             color: white;
             padding: 10px 15px;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
+            transition: background 0.2s;
         }
         button:hover { background-color: #2980b9; }
         .btn-danger { background-color: #e74c3c; }
@@ -66,17 +96,29 @@
         .btn-success { background-color: #2ecc71; }
         .btn-success:hover { background-color: #27ae60; }
         
-        /* Стили глобальной матрицы ячеек */
+        /* Окно просмотра матрицы с поддержкой зума */
         #matrix-view-container {
+            background: #09090b;
+            padding: 30px;
+            border-radius: 8px;
+            overflow: auto; /* Прокрутка при масштабировании */
+            border: 1px solid #2d2d35;
+            min-height: 400px;
+            position: relative;
+        }
+        
+        /* Контейнер-обертка для применения CSS трансформации */
+        #matrix-zoom-wrapper {
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 15px;
-            background: #2c3e50;
-            padding: 30px;
-            border-radius: 8px;
-            overflow-x: auto;
+            transform-origin: top center; /* Масштабирование сверху вниз */
+            transition: transform 0.1s ease-out;
+            width: max-content;
+            margin: 0 auto;
         }
+        
         .matrix-row {
             display: flex;
             justify-content: center;
@@ -90,38 +132,41 @@
             text-align: center;
             font-size: 12px;
             font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.4);
         }
-        .matrix-cell.empty { background-color: #95a5a6; color: #fff; border: 2px dashed #7f8c8d; }
-        .matrix-cell.occupied { background-color: #2ecc71; color: #fff; border: 2px solid #27ae60; }
+        .matrix-cell.empty { background-color: #3f3f46; color: #a1a1aa; border: 2px dashed #52525b; }
+        .matrix-cell.occupied { background-color: #1e3a1e; color: #4ade80; border: 2px solid #166534; }
         .cell-id { font-size: 10px; opacity: 0.7; }
 
-        /* Профиль и Золотые Ячейки */
+        /* Профиль и 5 Золотых ячеек */
         .profile-info p { margin: 8px 0; font-size: 16px; }
-        .balance-box { font-size: 20px; font-weight: bold; color: #27ae60; margin: 10px 0; }
+        .balance-box { font-size: 22px; font-weight: bold; color: #4ade80; margin: 15px 0; }
         .golden-cells-list { list-style: none; padding: 0; }
         .golden-cells-list li {
-            padding: 8px;
-            margin-bottom: 5px;
-            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 6px;
+            border-radius: 6px;
             font-weight: bold;
         }
-        .cell-gold-active { background-color: #f1c40f; color: #7f8c8d; border: 1px solid #f39c12; }
-        .cell-gold-locked { background-color: #eaedd1; color: #95a5a6; text-decoration: line-through; }
+        .cell-gold-active { background-color: #453507; color: #fbbf24; border: 1px solid #78350f; }
+        .cell-gold-locked { background-color: #27272a; color: #71717a; text-decoration: line-through; border: 1px solid #3f3f46; }
 
         /* Аналитическая таблица */
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 15px;
-            background: #fff;
+            background: #17171c;
+            border-radius: 8px;
+            overflow: hidden;
         }
         th, td {
             padding: 12px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #232329;
         }
-        th { background-color: #f2f2f2; color: #333; }
+        th { background-color: #202026; color: #ffffff; }
+        td { color: #e3e3e8; }
     </style>
 </head>
 <body>
@@ -145,7 +190,7 @@
             </div>
             <button onclick="registerShopUser()">Создать аккаунт покупателя</button>
             
-            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #232329;">
             
             <h2>2. Прямая посадка в матрицу (Админ-панель)</h2>
             <div class="form-group">
@@ -173,22 +218,30 @@
                 
                 <div class="balance-box">
                     Баланс: <span id="balance-mitrons">0 Mitrons</span> 
-                    <span id="balance-usd" style="font-size: 14px; color: #555;">($0.00)</span>
+                    <span id="balance-usd" style="font-size: 14px; color: #a0a0ab;">($0.00)</span>
                 </div>
                 
                 <button onclick="payCertificate()" class="btn-success">Активировать пакет (1000 Mitrons / $130)</button>
             </div>
 
-            <div id="golden-cells-status" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #ccc;">
+            <div id="golden-cells-status" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #2d2d35;">
                 </div>
         </div>
     </div>
 
     <div class="card" style="margin-bottom: 30px;">
         <h2>4. Глобальная структура бинарной матрицы</h2>
-        <p style="font-size: 14px; color: #666;">Автоматическое распределение по ячейкам сверху-вниз, слева-направо.</p>
+        
+        <div class="zoom-controls">
+            <label for="matrix-zoom-slider" style="margin: 0;">Масштаб дерева:</label>
+            <input type="range" id="matrix-zoom-slider" min="0.03" max="1" step="0.01" value="1">
+            <span id="zoom-value" style="font-weight: bold; color: #3498db;">100%</span>
+        </div>
+
         <div id="matrix-view-container">
-            </div>
+            <div id="matrix-zoom-wrapper">
+                </div>
+        </div>
     </div>
 
     <div class="card">
