@@ -3,19 +3,14 @@
 const API_URL = window.location.origin;
 
 // === ГЛОБАЛЬНЫЙ КУРС ВАЛЮТЫ ===
-// РУБЛИ ПОЛНОСТЬЮ УДАЛЕНЫ. 1000 Митронов = 130 USD по умолчанию.
 const MITRON_RATE_USD = 130 / 1000; 
 
-/**
- * Вспомогательная функция для перевода Митронов в USD
- */
 function convertMitronsToUsd(mitrons) {
     return (mitrons * MITRON_RATE_USD).toFixed(2);
 }
 
 // === 1. ИНИЦИАЛИЗАЦИЯ И РАБОТА С МАТРИЦЕЙ ===
 
-// Функция загрузки и визуализации глобального бинарного дерева ячеек
 async function loadMatrixTree() {
     try {
         const response = await fetch(`${API_URL}/api/tree`);
@@ -26,21 +21,20 @@ async function loadMatrixTree() {
     }
 }
 
-// Рендеринг структуры матрицы на клиенте
+// Рендеринг структуры матрицы внутрь отмасштабированного контейнера
 function renderMatrixUI(tree) {
-    const matrixContainer = document.getElementById('matrix-view-container');
+    // Рендерим строго в зум-враппер
+    const matrixContainer = document.getElementById('matrix-zoom-wrapper');
     if (!matrixContainer) return;
     
-    matrixContainer.innerHTML = ''; // Очистка перед перерисовкой
+    matrixContainer.innerHTML = ''; 
 
-    // Группируем ячейки по уровням (буквам) для красивого вывода рядов
     const levels = {};
     Object.values(tree).forEach(cell => {
         if (!levels[cell.level]) levels[cell.level] = [];
         levels[cell.level].push(cell);
     });
 
-    // Сортируем ячейки внутри каждого уровня по их номерам
     Object.keys(levels).sort().forEach(levelLetter => {
         const rowDiv = document.createElement('div');
         rowDiv.className = `matrix-row level-${levelLetter}`;
@@ -68,7 +62,6 @@ function renderMatrixUI(tree) {
     });
 }
 
-// Регистрация нового места напрямую в матрицу
 async function registerInMatrix() {
     const usernameInput = document.getElementById('matrix-username');
     const sponsorInput = document.getElementById('matrix-sponsor');
@@ -102,9 +95,8 @@ async function registerInMatrix() {
     }
 }
 
-// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА (ПОКУПКИ И КОШЕЛЬКИ) ===
+// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА ===
 
-// Регистрация аккаунта Покупателя на Маркетплейсе
 async function registerShopUser() {
     const shopUserStr = document.getElementById('shop-username').value.trim();
     const shopSponsorStr = document.getElementById('shop-sponsor').value.trim();
@@ -123,7 +115,7 @@ async function registerShopUser() {
         const result = await response.json();
         
         if (result.success) {
-            alert(`Покупатель ${shopUserStr} успешно зарегистрирован в базе данных!`);
+            alert(`Покупатель ${shopUserStr} успешно зарегистрирован!`);
             loadUserProfile(shopUserStr);
         } else {
             alert(`Ошибка: ${result.error}`);
@@ -133,7 +125,6 @@ async function registerShopUser() {
     }
 }
 
-// Симуляция оплаты тарифа (1000 Митронов / 130 USD)
 async function payCertificate() {
     const username = document.getElementById('current-profile-user')?.innerText;
     if (!username || username === '—') {
@@ -150,7 +141,6 @@ async function payCertificate() {
         const result = await response.json();
         
         if (result.success) {
-            // Отображаем расщепление средств строго в Митронах и USD
             const splitInfo = `
 Активация успешна!
 Списано: ${result.split.totalMitrons} Митронов ($${result.split.totalUsd})
@@ -161,7 +151,6 @@ async function payCertificate() {
             `;
             alert(splitInfo);
             
-            // Обновляем профиль и глобальную матрицу
             loadUserProfile(username);
             loadMatrixTree();
         } else {
@@ -172,7 +161,6 @@ async function payCertificate() {
     }
 }
 
-// Загрузка детальной карточки профиля пользователя и статуса 5 Золотых Ячеек
 async function loadUserProfile(username) {
     if (!username) return;
     
@@ -182,24 +170,20 @@ async function loadUserProfile(username) {
         const data = await response.json();
         
         if (data.success) {
-            // Заполнение текстовых полей UI
             document.getElementById('current-profile-user').innerText = data.username;
             document.getElementById('profile-cell-id').innerText = data.profile.matrixPosition.currentCellId || 'Нет места';
             document.getElementById('profile-status').innerText = data.profile.isPaid ? 'Оплачен (Активен)' : 'Не оплачен';
             
-            // Вывод финансовых балансов (Исключительно Митроны и Доллары)
             const mitronsBalance = data.profile.balances.mitrons;
             document.getElementById('balance-mitrons').innerText = `${mitronsBalance} Mitrons`;
             document.getElementById('balance-usd').innerText = `$${convertMitronsToUsd(mitronsBalance)}`;
             
-            // Отрисовка статуса 5 ЗОЛОТЫХ ЯЧЕЕК (XYZ_1 - XYZ_5)
             const goldenContainer = document.getElementById('golden-cells-status');
             if (goldenContainer) {
                 goldenContainer.innerHTML = '';
                 
                 const countReal = data.profile.goldenStatus.realDirectReferralsCount || 0;
                 
-                // Создаем блок индикации для 5 Золотых мест
                 const title = document.createElement('h4');
                 title.innerText = `Статус 5 ЗОЛОТЫХ ЯЧЕЕК (XYZ_1 - XYZ_5):`;
                 goldenContainer.appendChild(title);
@@ -207,11 +191,9 @@ async function loadUserProfile(username) {
                 const list = document.createElement('ul');
                 list.className = 'golden-cells-list';
                 
-                // Генерируем статус для каждого из 5 Золотых уровней
                 for (let i = 1; i <= 5; i++) {
                     const li = document.createElement('li');
-                    // Пример логики: активация мест XYZ зависит от количества реальных рефералов
-                    const isCellUnlocked = countReal >= (i * 2); // каждые 2 реальных открывают золотую ячейку
+                    const isCellUnlocked = countReal >= (i * 2); 
                     
                     li.className = isCellUnlocked ? 'cell-gold-active' : 'cell-gold-locked';
                     li.innerText = `Ячейка XYZ_${i}: ${isCellUnlocked ? '🏆 АКТИВИРОВАНА (ЗОЛОТО)' : '🔒 Заблокирована (Требуется больше Реальных партнеров)'}`;
@@ -230,7 +212,6 @@ async function loadUserProfile(username) {
     }
 }
 
-// Сброс всей базы данных
 async function resetSystem() {
     if (!confirm('Вы уверены, что хотите полностью очистить систему матриц и балансов?')) return;
     
@@ -258,7 +239,21 @@ async function resetSystem() {
 document.addEventListener('DOMContentLoaded', () => {
     loadMatrixTree();
     
-    // Поиск профиля по нажатию кнопки
+    // === ЛОГИКА ИНТЕРАКТИВНОГО ЗУМА (МАСШТАБИРОВАНИЯ) ===
+    const zoomSlider = document.getElementById('matrix-zoom-slider');
+    const zoomValueText = document.getElementById('zoom-value');
+    const matrixWrapper = document.getElementById('matrix-zoom-wrapper');
+
+    if (zoomSlider && matrixWrapper && zoomValueText) {
+        zoomSlider.addEventListener('input', (event) => {
+            const currentScale = event.target.value;
+            // Применяем CSS трансформацию масштаба
+            matrixWrapper.style.transform = `scale(${currentScale})`;
+            // Выводим процентное значение для пользователя
+            zoomValueText.innerText = `${Math.round(currentScale * 100)}%`;
+        });
+    }
+    
     const searchBtn = document.getElementById('search-profile-btn');
     if (searchBtn) {
         searchBtn.addEventListener('click', () => {
