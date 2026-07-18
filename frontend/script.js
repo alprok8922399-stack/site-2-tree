@@ -402,23 +402,16 @@ function renderDynamicSplitting(tree, refTree = {}) {
     let processedNodes = new Set();
 
     // Функция-проверка: имеет ли право пользователь (или ячейка) отображать Серебро
-    // Предполагаем, что Серебряные ячейки имеют уникальный идентификатор (например, начинаются с буквы 'S')
-    // Или, если у вас общая нумерация, мы проверяем владельца ячейки на наличие 10 личников.
     function isSilverAllowed(cellId, cellData) {
-        // Если это обычная базовая матрица (например, префикс 'A', 'B', 'C' и т.д.), возвращаем true
-        if (cellId.startsWith('A') || cellId.startsWith('B') || cellId.startsWith('C')) {
-            return true; 
-        }
-
-        // Если это Серебряная ветка (допустим, у неё ID начинается с 'S')
-        if (cellId.startsWith('S')) {
+        // Если ID ячейки начинается с XYZ — это Серебряная ячейка
+        if (cellId.startsWith('XYZ')) {
             // Ищем по всей репутационной базе лидеров, у кого есть 10 рефералов
             const leadersWithTenRefs = Object.values(refTree).filter(node => {
                 const subRefs = Object.values(refTree).filter(child => child.sponsor === node.username);
                 return subRefs.length >= 10;
             }).map(node => node.username);
 
-            // Если ячейка пустая, но её родитель или корень — Лидер с 10 рефами, то её МОЖНО видеть
+            // Если ячейка пустая, но в системе появился хотя бы один Лидер с 10 рефами, то её МОЖНО видеть
             if (!cellData || !cellData.user) {
                 return leadersWithTenRefs.length > 0; 
             }
@@ -427,6 +420,7 @@ function renderDynamicSplitting(tree, refTree = {}) {
             return leadersWithTenRefs.includes(cellData.user);
         }
 
+        // Все остальные стандартные ряды (A, B, C, ..., S и т.д.) возвращаются без ограничений
         return true; 
     }
 
@@ -437,7 +431,7 @@ function renderDynamicSplitting(tree, refTree = {}) {
 
         const topCell = tree[currentId] || null;
         
-        // КРИТИЧЕСКИЙ ФИЛЬТР: Если эта ячейка Серебряная и лидер ещё не созрел — полностью игнорируем ветку
+        // КРИТИЧЕСКИЙ ФИЛЬТР: Если эта ячейка Серебряная (XYZ) и лидер ещё не созрел — полностью игнорируем ветку
         if (!isSilverAllowed(currentId, topCell)) {
             continue; 
         }
