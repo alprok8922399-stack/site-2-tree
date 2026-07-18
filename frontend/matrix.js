@@ -1,7 +1,6 @@
 /* ==========================================================================
    🚨 КРИТИЧЕСКАЯ ЗОНА: ТОЛЬКО ДЛЯ ЧТЕНИЯ (READ-ONLY)
    ⚠️ ЛЮБЫЕ ИЗМЕНЕНИЯ В ЭТОМ ФАЙЛЕ ЗАПРЕЩЕНЫ И МОГУТ СЛОМАТЬ СИСТЕМУ ДЕПЛОЯ!
-   Оригинальный код с добавлением Золотого ряда (G1-G5).
    ========================================================================== */
 
 const API_URL = '/api';
@@ -210,7 +209,8 @@ window.showUserDetails = async function(username, cellId, event) {
             
             currentRootId = cellId;
             searchTargetUser = username;
-            // Мы не вызываем рендер тут, пользователь уже подсвечен в текущем дереве
+            renderDynamicSplitting(globalTreeCached);
+            scrollToFocusedCell(); 
         } else {
             modalBody.innerHTML = `<span style="color:#e43f5a;">Ошибка: ${data.error}</span>`;
         }
@@ -282,37 +282,33 @@ function getNextLevelLetter(letter) {
 function renderDynamicSplitting(tree) {
     globalTreeCached = tree;
 
-    // 👑👑👑 ВСТАВКА ЗОЛОТОГО РЯДА (G1-G5) 👑👑👑
-    let goldHTML = '';
-    for (let i = 1; i <= 5; i++) {
-        const cellId = `G${i}`;
-        const cell = tree[cellId] || null;
-        const isOccupied = cell && cell.user;
-        const displayUser = isOccupied ? cell.user : '-';
-        const focusedClass = (isOccupied && cell.user === searchTargetUser) ? 'focused-cell' : '';
-        
-        // Используем инлайн-стили, чтобы не зависеть от внешних CSS для этих ячеек
-        goldHTML += `
-            <div class="vip-gold ${isOccupied ? 'occupied' : ''} ${focusedClass}" 
-                 onclick="showUserDetails('${isOccupied ? cell.user : '-'}', '${cellId}', event)"
-                 style="background: ${isOccupied ? '#3a3000' : '#1f4068'}; border: 2px solid #ffd700; border-radius: 8px; padding: 10px; text-align: center; width: 100px; height: 70px; cursor: pointer; transition: all 0.2s; box-sizing: border-box;">
-                <div style="font-size: 11px; color: #ffd700; font-weight: bold; margin-bottom: 4px;">${cellId}</div>
-                <div style="font-size: 12px; font-weight: bold; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayUser}</div>
+    // 🔥 ДОБАВЛЕНИЕ 5 ЗОЛОТЫХ МЕСТ В НАЧАЛО СТРАНИЦЫ
+    const vipContainer = document.getElementById('vipRowContainer');
+    if (vipContainer) {
+        let goldHTML = '';
+        for (let i = 1; i <= 5; i++) {
+            const cellId = `G${i}`;
+            const cell = tree[cellId] || null;
+            const isOccupied = cell && cell.user;
+            const displayUser = isOccupied ? cell.user : 'Выплата Создателю';
+            const focusedClass = (isOccupied && cell.user === searchTargetUser) ? 'focused-cell' : '';
+
+            goldHTML += `
+                <div class="vip-cell vip-gold ${isOccupied ? 'occupied' : ''} ${focusedClass}" 
+                     style="background: ${isOccupied ? '#3a3000' : '#1f4068'}; border: 2px solid #ffd700; border-radius: 8px; padding: 10px; text-align: center; width: 110px; height: 70px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-sizing: border-box; transition: all 0.2s ease; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3);"
+                     onclick="showUserDetails('${isOccupied ? cell.user : '-'}', '${cellId}', event)">
+                    <div style="font-size: 11px; color: #ffd700; font-weight: bold; margin-bottom: 4px;">${cellId}</div>
+                    <div style="font-size: 12px; font-weight: bold; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${displayUser}">${displayUser}</div>
+                </div>
+            `;
+        }
+        vipContainer.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:10px; width:100%; align-items:center; margin-bottom:20px;">
+                <div style="color:#ffd700; font-weight:bold; font-size:14px; text-shadow: 0 0 5px #ffd700;">👑 ЗОЛОТОЙ VIP-РЯД (5 МЕСТ)</div>
+                <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">${goldHTML}</div>
             </div>
         `;
     }
-
-    // Обертка для золотого ряда
-    const goldRowHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; margin-bottom:30px; width:100%; box-sizing:border-box;">
-            <div style="color:#ffd700; font-weight:bold; font-size:14px; margin-bottom:12px; text-shadow: 0 0 5px #ffd700;">👑 ЗОЛОТОЙ VIP-РЯД (5 МЕСТ)</div>
-            <div style="display:flex; gap:15px; justify-content:center; flex-wrap:wrap; width:100%; box-sizing:border-box;">
-                ${goldHTML}
-            </div>
-        </div>
-    `;
-    // 👑👑👑 КОНЕЦ ВСТАВКИ ЗОЛОТОГО РЯДА 👑👑👑
-
 
     let activeMatricesHTML = [];
     let queue = [currentRootId]; 
@@ -362,13 +358,22 @@ function renderDynamicSplitting(tree) {
     }
 
     if (mainTreeDisplay) {
-        // Вставляем золотой ряд (goldRowHTML) и матрицы одновременно
         mainTreeDisplay.innerHTML = `
-            ${goldRowHTML}
+            <div id="vipRowContainer"></div>
             <div class="matrices-row">
                 ${activeMatricesHTML.join('')}
             </div>
         `;
+        // Повторно рендерим VIP-зону внутри вставленного контейнера
+        const innerVipContainer = document.getElementById('vipRowContainer');
+        if (innerVipContainer && vipContainer) {
+            innerVipContainer.innerHTML = vipContainer.innerHTML;
+            innerVipContainer.style.width = '100%';
+            innerVipContainer.style.display = 'flex';
+            innerVipContainer.style.flexDirection = 'column';
+            innerVipContainer.style.alignItems = 'center';
+            innerVipContainer.style.marginBottom = '25px';
+        }
 
         const currentScale = zoomSlider ? zoomSlider.value : 0.8;
         mainTreeDisplay.style.transform = `scale(${currentScale})`;
