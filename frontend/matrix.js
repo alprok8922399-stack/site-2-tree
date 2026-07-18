@@ -174,10 +174,10 @@ function renderVipZone(tree, refTree) {
         const focusedClass = (isOccupied && cell.user === searchTargetUser) ? 'focused-cell' : '';
 
         goldHTML += `
-            <div class="cell vip-gold ${isOccupied ? 'occupied' : ''} ${focusedClass}" 
+            <div class="vip-cell vip-gold ${isOccupied ? 'occupied' : ''} ${focusedClass}" 
                  data-cell-id="${cellId}" data-user="${isOccupied ? cell.user : '-'}">
-                <div class="cell-id">${cellId}</div>
-                <div class="cell-user">${displayUser}</div>
+                <div class="vip-id">${cellId}</div>
+                <div class="vip-user" title="${displayUser}">${displayUser}</div>
             </div>
         `;
     }
@@ -185,12 +185,10 @@ function renderVipZone(tree, refTree) {
     // 2. Динамический расчет Серебряных мест (Условие: 10 личников + у каждого 31+ дней активности)
     let silverHTML = '';
     
-    // Вычисляем лидеров, которые выполнили квалификацию «И»
     const silverLeaders = Object.values(refTree).filter(node => {
         const directRefs = Object.values(refTree).filter(child => child.sponsor === node.username);
         if (directRefs.length < 10) return false;
 
-        // Проверяем каждого личника на срок активности > 31 дня
         return directRefs.every(child => {
             if (!child.createdAt) return false;
             const daysActive = Math.floor((Date.now() - new Date(child.createdAt).getTime()) / (1000 * 60 * 60 * 24));
@@ -198,7 +196,6 @@ function renderVipZone(tree, refTree) {
         });
     }).map(node => node.username);
 
-    // Выводим серебряные ячейки
     const totalSilverSlots = Math.max(silverLeaders.length, 1); 
     for (let i = 1; i <= totalSilverSlots; i++) {
         const cellId = `S${i}`;
@@ -207,17 +204,16 @@ function renderVipZone(tree, refTree) {
         if (leaderUser) {
             const focusedClass = (leaderUser === searchTargetUser) ? 'focused-cell' : '';
             silverHTML += `
-                <div class="cell vip-silver occupied ${focusedClass}" data-cell-id="${cellId}" data-user="${leaderUser}">
-                    <div class="cell-id">${cellId}</div>
-                    <div class="cell-user">${leaderUser}</div>
+                <div class="vip-cell vip-silver occupied ${focusedClass}" data-cell-id="${cellId}" data-user="${leaderUser}">
+                    <div class="vip-id">${cellId}</div>
+                    <div class="vip-user">${leaderUser}</div>
                 </div>
             `;
         } else if (silverLeaders.length === 0 && i === 1) {
-            // Если лидеров нет вообще, показываем одну пустую полупрозрачную ячейку-заглушку
             silverHTML += `
-                <div class="cell vip-silver" data-cell-id="${cellId}" data-user="-">
-                    <div class="cell-id">${cellId}</div>
-                    <div class="cell-user">Нет квалификаций</div>
+                <div class="vip-cell vip-silver" data-cell-id="${cellId}" data-user="-">
+                    <div class="vip-id">${cellId}</div>
+                    <div class="vip-user">Нет квалификаций</div>
                 </div>
             `;
         }
@@ -237,7 +233,7 @@ function renderVipZone(tree, refTree) {
 
 // --- 🖱️ ДВОЙНОЙ ТРИГГЕР (КОРОТКИЙ КЛИК / LONG-PRESS) ---
 function bindCellInteractions() {
-    document.querySelectorAll('.cell').forEach(cell => {
+    document.querySelectorAll('.cell, .vip-cell').forEach(cell => {
         cell.onmousedown = (e) => startPress(e, cell);
         cell.onmouseup = (e) => endPress(e, cell);
         cell.onmouseleave = () => clearPress();
@@ -248,7 +244,7 @@ function bindCellInteractions() {
 }
 
 function startPress(e, cellElement) {
-    if (e.type === 'mousedown' && e.button !== 0) return; // Только левая кнопка мыши
+    if (e.type === 'mousedown' && e.button !== 0) return; 
     clearPress();
 
     cellElement.dataset.pressTriggered = 'false';
@@ -268,7 +264,6 @@ function endPress(e, cellElement) {
     clearPress();
 
     if (!wasLongPress) {
-        // Это короткий клик
         const username = cellElement.dataset.user;
         const cellId = cellElement.dataset.cellId;
         handleShortClick(username, cellId);
@@ -287,7 +282,6 @@ function clearPress() {
 // 1. Короткий клик: вывод прямых рефералов в правую боковую панель
 async function handleShortClick(username, cellId) {
     if (!username || username === '-') {
-        // Клик по пустой ячейке переключает фокус матрицы
         if (cellId && !cellId.startsWith('G') && !cellId.startsWith('S')) {
             switchFocus(cellId);
         }
@@ -324,7 +318,7 @@ async function handleShortClick(username, cellId) {
     }
 }
 
-// 2. Долгий клик: Вызов Карточки Модерации + расчет индикатора дней БЕЗ ЦЕПОЧКИ СПОНСОРОВ
+// 2. Долгий клик: Вызов Карточки Модерации (без цепочек спонсоров)
 async function handleLongPress(username, cellId) {
     if (!userModalCard) return;
     
@@ -339,7 +333,6 @@ async function handleLongPress(username, cellId) {
         const data = await res.json();
 
         if (data.success) {
-            // Расчет дней активности (До 31 дня включительно — акцентный цвет, далее — обычный)
             const regDate = data.createdAt ? new Date(data.createdAt) : new Date();
             const daysActive = Math.floor((Date.now() - regDate.getTime()) / (1000 * 60 * 60 * 24));
             const dayClass = daysActive <= 31 ? 'days-active-accent' : 'days-active-normal';
@@ -352,7 +345,7 @@ async function handleLongPress(username, cellId) {
                 
                 <div style="display:flex; gap:10px; margin-top:15px;">
                     <button onclick="freezeUserPayments('${data.username}')" style="flex:1; padding:8px; background:#ffd700; color:#111; font-weight:bold; border:none; border-radius:4px; cursor:pointer; font-size:12px;">ЗАМОРОЗИТЬ</button>
-                    <button onclick="deleteUserFromMatrix('${data.username}', '${cellId}')" style="flex:1; padding:8px; background:#e43f5a; color:#fff; font-weight:bold; border:none; border-radius:4px; cursor:pointer; font-size:12px;">УДfolderЛИТЬ</button>
+                    <button onclick="deleteUserFromMatrix('${data.username}', '${cellId}')" style="flex:1; padding:8px; background:#e43f5a; color:#fff; font-weight:bold; border:none; border-radius:4px; cursor:pointer; font-size:12px;">УДАЛИТЬ</button>
                 </div>
             `;
             
