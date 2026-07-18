@@ -209,7 +209,7 @@
             100% { transform: scale(1.05); }
         }
 
-        /* --- МОДАЛЬНОЕ ОКНО (КАРТОЧКА ПОЛЬЗОВАТЕЛЯ НА ДОЛГИЙ КЛИК) --- */
+        /* --- МОДАЛЬНОЕ ОКНО --- */
         .modal-card {
             display: none;
             position: fixed;
@@ -271,13 +271,13 @@
         .btn-delete { background: #e43f5a; color: #fff; }
         .btn-close-modal { background: #444; color: #fff; margin-top: 5px; }
 
-        /* --- СТИЛИ ДЛЯ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ РЕФЕРАЛОВ --- */
+        /* --- СТИЛИ ДЛЯ ТАБЛИЦЫ РЕФЕРАЛОВ --- */
         .table-container {
             width: 100%;
             margin-top: 10px;
             background: #162447;
             border-radius: 8px;
-            padding: 10px;
+            padding: 15px;
             box-sizing: border-box;
             overflow-x: auto;
         }
@@ -340,11 +340,7 @@
             </div>
         </div>
 
-        <div class="table-container" style="max-width: 800px; margin: 0 auto;">
-            <table style="width:100%; border-collapse:collapse;">
-                <tbody id="interactiveRefTableBody">
-                </tbody>
-            </table>
+        <div class="table-container" id="interactiveRefTableBody" style="max-width: 800px; margin: 0 auto;">
         </div>
     </div>
 
@@ -364,7 +360,6 @@
         </div>
     </div>
 
-    <script src="matrix.js"></script>
-    <script src="table.js"></script>
+    <script src="script.js"></script>
 </body>
-</html>
+    </html>
