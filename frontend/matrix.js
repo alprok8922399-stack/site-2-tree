@@ -16,6 +16,34 @@ let searchTargetUser = '';
 let globalTreeCached = null; 
 let lastTreeJsonString = ''; 
 
+// Внедрение стилей динамически
+const style = document.createElement('style');
+style.innerHTML = `
+    .vip-gold {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #ffd700 !important;
+        background: #3a3000 !important;
+        border-radius: 8px;
+        width: 100px;
+        height: 60px;
+        margin: 5px;
+        cursor: pointer;
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+        color: white;
+    }
+    #vipRowContainer {
+        width: 100%;
+        text-align: center;
+        padding: 10px;
+        border-bottom: 1px solid #ffd700;
+        margin-bottom: 20px;
+    }
+    `;
+document.head.appendChild(style);
+
 // Модальное окно
 let modal = document.getElementById('infoModal');
 if (!modal) {
