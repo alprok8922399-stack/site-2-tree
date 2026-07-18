@@ -1,107 +1,84 @@
 // backend/static.js
 
-// === 1. ГЛОБАЛЬНЫЕ КОНСТАНТЫ ===
-const MITRON_RATE_USD = 130 / 1000; // 1 Митрон = 0.13 USD (исходя из константы 1000 Митронов = 130 USD)
-// РУБЛИ ПОЛНОСТЬЮ УДАЛЕНЫ ИЗ СИСТЕМЫ
-
-// === 2. СТАТИЧЕСКИЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
-
 /**
- * Преобразует индекс уровня в буквенное обозначение (0 -> A, 1 -> B, 27 -> AB)
+ * Конвертирует индекс уровня в соответствующую букву алфавита (0 -> A, 1 -> B, 2 -> C, и т.д.)
+ * Поддерживает корректный переход на динамические уровни.
  */
 function getLevelLetter(levelIndex) {
-    let letter = '';
-    let temp = levelIndex;
-    while (temp >= 0) {
-        letter = String.fromCharCode((temp % 26) + 65) + letter;
-        temp = Math.floor(temp / 26) - 1;
-    }
-    return letter;
+    return String.fromCharCode(65 + levelIndex);
 }
 
 /**
- * Преобразует ID ячейки (например, "C1") в её глобальный порядковый индекс в бинаре
+ * Математический перевод строкового ID ячейки (например, 'A1', 'B2', 'C4') 
+ * в единый глобальный сквозной индекс бинарного дерева (0, 1, 2...).
+ * Гарантирует точность привязки дочерних элементов по формуле дерева.
  */
-function cellIdToGlobalIndex(id) {
-    const match = id.match(/^([A-Z]+)(\d+)$/);
-    if (!match) return 0;
-    const letter = match[1];
-    const num = parseInt(match[2], 10);
+function cellIdToGlobalIndex(cellId) {
+    if (!cellId) return 0;
     
-    let levelIndex = 0;
-    for (let i = 0; i < letter.length; i++) {
-        levelIndex = levelIndex * 26 + (letter.charCodeAt(i) - 64);
-    }
-    levelIndex -= 1;
+    const letterPart = cellId.match(/^[A-Z]+/)[0];
+    const numberPart = parseInt(cellId.match(/\d+$/)[0], 10);
     
+    // Вычисляем индекс уровня (A -> 0, B -> 1, C -> 2...)
+    const levelIndex = letterPart.charCodeAt(0) - 65;
+    
+    // Смещение начала текущего уровня в глобальном массиве: (2^L) - 1
     const levelStartGlobalIndex = (1 << levelIndex) - 1;
-    return levelStartGlobalIndex + (num - 1);
+    
+    // Глобальный индекс = смещение уровня + позиция внутри уровня (с нуля)
+    return levelStartGlobalIndex + (numberPart - 1);
 }
 
 /**
- * Конвертирует Митроны в Доллары США
+ * Хардкодный курс конвертации Митронов в USD согласно ТЗ.
+ * 1000 Митронов = 130 USD. Любые рубли полностью стерты.
  */
 function mitronsToUsd(mitrons) {
-    return (mitrons * MITRON_RATE_USD).toFixed(2);
+    const RATE = 130 / 1000;
+    return (mitrons * RATE).toFixed(2);
 }
 
-// === 3. ИНИЦИАЛИЗАЦИЯ ДЕФОЛТНЫХ СУЩНОСТЕЙ (АРХИТЕКТУРА ДАННЫХ) ===
-
 /**
- * Генерирует дефолтную карточку Покупателя со всеми новыми полями под ТЗ
+ * Возвращает дефолтную чистую структуру карточки покупателя для базы данных маркетплейса.
+ * Реализована полная поддержка 5 ЗОЛОТЫХ ЯЧЕЕК (XYZ_1 - XYZ_5).
  */
 function createNewUserCard(username) {
     return {
         username: username,
-        isPaid: false,               // Флаг оплаты сертификата
-        paymentDate: null,           // Точная дата оплаты (для расчета 31 дня)
-        isRealBuyer: false,          // Стал ли покупатель "Реальным" (31 день + подтверждение товара)
-        
-        // Балансы пользователя (Только Митроны и USD)
+        isPaid: false,
+        paymentDate: null,
         balances: {
-            mitrons: 0,              // Внутренний баланс в Митронах
-            usd: 0                   // Отображаемый баланс в USD
+            mitrons: 0,
+            usd: 0
         },
-        
-        // Поля для Золотых мест (XYZ_1 - XYZ_5)
-        goldenStatus: {
-            isActive: false,         // Активировано ли Золотое место (требуется 10 Реальных в 1-й линии)
-            activatedAt: null,       // Время активации статуса
-            realDirectReferralsCount: 0 // Счетчик Реальных покупателей, приглашенных ЛИЧНО
-        },
-        
-        // Матричный след (где юзер сейчас находится для рендеринга и триггера)
         matrixPosition: {
-            currentCellId: null,     // ID ячейки (например, 'C1')
-            status: 'pending'        // 'pending', 'active', 'divided'
+            currentCellId: null,
+            status: 'inactive' // active / inactive
+        },
+        // Данные для квалификации Золотых Мест
+        goldenStatus: {
+            realDirectReferralsCount: 0, // Количество реальных людей в первой линии
+            unlockedGoldenCells: []       // Список активированных ячеек из пула [XYZ_1..XYZ_5]
         }
     };
 }
 
 /**
- * Начальное состояние трехконтурного сейфа кошельков
+ * Инициализация системных контуров сейфов-кошельков распределения ликвидности (70% на 30%)
  */
 function createInitialWallets() {
     return {
-        // Контур 1: Сверхсекретное холодное хранилище прибыли Создателя (30% = 300 Митронов с каждого чека покупки места)
-        myWallet: {
-            address: "0xCreatorColdWalletAddress...",
-            balanceMitrons: 0
-        },
-        // Контур 2: Главный резерв ликвидности / Маркетплейс (70% = 700 Митронов с каждой оплаты уходят сюда)
+        // Резерв выплат маркетплейса (сюда поступает 70% от активаций = 700 Митронов)
         payoutReserveWallet: {
-            address: "0xPayoutReserveWalletAddress...",
             balanceMitrons: 0
         },
-        // Контур 3: Операционный транзитный горячий кошелек (всегда пуст, наполняется строго под транзакцию)
-        bufferWallet: {
-            address: "0xBufferWalletAddress...",
+        // Холодный сейф создателя системы (сюда поступает 30% от активаций = 300 Митронов)
+        myWallet: {
             balanceMitrons: 0
         }
     };
 }
 
-// Экспортируем все наши функции и константы наружу
 module.exports = {
     getLevelLetter,
     cellIdToGlobalIndex,
