@@ -41,9 +41,8 @@ style.innerHTML = `
         border-bottom: 1px solid #ffd700;
         margin-bottom: 20px;
     }
-    `;
+`;
 document.head.appendChild(style);
-
 // Модальное окно
 let modal = document.getElementById('infoModal');
 if (!modal) {
