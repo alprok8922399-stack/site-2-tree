@@ -12,25 +12,46 @@ const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 
 let currentRootId = 'A1'; 
-let searchTargetUser = ''; // Цель для подсветки в Матрицах
-
-// КЭШ ДЛЯ ОПТИМИЗАЦИИ СЕТИ И ПРЕДОТВРАЩЕНИЯ МЕРЦАНИЯ DOM
+let searchTargetUser = ''; 
 let globalTreeCached = null; 
 let lastTreeJsonString = ''; 
 
-// Создаем HTML-структуру для всплывающего окна информации по матричной ячейке
+// Внедрение стилей динамически
+const style = document.createElement('style');
+style.innerHTML = `
+    .vip-gold {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #ffd700 !important;
+        background: #3a3000 !important;
+        border-radius: 8px;
+        width: 100px;
+        height: 60px;
+        margin: 5px;
+        cursor: pointer;
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+        color: white;
+    }
+    #vipRowContainer {
+        width: 100%;
+        text-align: center;
+        padding: 10px;
+        border-bottom: 1px solid #ffd700;
+        margin-bottom: 20px;
+    }
+`;
+document.head.appendChild(style);
+// Модальное окно
 let modal = document.getElementById('infoModal');
 if (!modal) {
     modal = document.createElement('div');
     modal.id = 'infoModal';
-    modal.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-        background: rgba(0,0,0,0.85); display: none; justify-content: center;
-        align-items: center; z-index: 9999; font-family: sans-serif; padding: 20px; box-sizing: border-box;
-    `;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 9999; font-family: sans-serif; padding: 20px; box-sizing: border-box;`;
     modal.innerHTML = `
         <div style="background: #162447; border: 2px solid #00fff0; padding: 20px; border-radius: 12px; max-width: 450px; width: 100%; box-shadow: 0 0 20px rgba(0,255,240,0.3); color: #fff; position: relative;">
-            <h3 id="modalTitle" style="margin-top:0; color:#00fff0; font-size:20px; border-bottom:1px solid #0f4c81; padding-bottom:10px;">Информация о партнере</h3>
+            <h3 id="modalTitle" style="margin-top:0; color:#00fff0; font-size:20px; border-bottom:1px solid #0f4c81; padding-bottom:10px;">Информация</h3>
             <div id="modalBody" style="font-size:15px; line-height:1.6; margin-bottom:20px;">Загрузка...</div>
             <button onclick="document.getElementById('infoModal').style.display='none'" style="width:100%; padding:10px; background:#e43f5a; border:none; color:white; font-weight:bold; border-radius:6px; cursor:pointer;">ЗАКРЫТЬ</button>
         </div>
@@ -38,370 +59,181 @@ if (!modal) {
     document.body.appendChild(modal);
 }
 
-// --- УПРАВЛЕНИЕ МАСШТАБОМ (ZOOM) ---
+// Управление масштабом
 function setZoom(scaleValue) {
-    if (zoomSlider) {
-        zoomSlider.value = scaleValue;
-    }
+    if (zoomSlider) zoomSlider.value = scaleValue;
     if (mainTreeDisplay) {
         mainTreeDisplay.style.transform = `scale(${scaleValue})`;
         mainTreeDisplay.style.width = '100%';
     }
 }
 
-if (zoomSlider) {
-    zoomSlider.addEventListener('input', (e) => {
-        setZoom(e.target.value);
-    });
-}
+if (zoomSlider) zoomSlider.addEventListener('input', (e) => setZoom(e.target.value));
 
-if (screenContainer) {
-    screenContainer.addEventListener('click', (e) => {
-        if (e.target === screenContainer || e.target === mainTreeDisplay || e.target.classList.contains('matrices-row')) {
-            setZoom(0.8);
-        }
-    });
-}
-
-// --- ПОИСК И ФОКУСИРОВКА В МАТРИЦАХ ---
+// Поиск
 if (searchBtn) {
     searchBtn.addEventListener('click', () => {
         const val = searchInput.value.trim();
-        if (val) {
-            findUserAndFocus(val);
-        } else {
-            currentRootId = 'A1';
-            searchTargetUser = '';
-            setZoom(0.8); 
-            fetchTree(true); 
-        }
+        if (val) findUserAndFocus(val);
+        else { currentRootId = 'A1'; searchTargetUser = ''; setZoom(0.8); fetchTree(true); }
     });
 }
 
-// Плавный скролл к найденной ячейке в Матрицах
 function scrollToFocusedCell() {
     setTimeout(() => {
         const focusedCell = document.querySelector('.focused-cell');
-        if (focusedCell) {
-            focusedCell.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-                inline: 'center'
-            });
-        }
+        if (focusedCell) focusedCell.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
     }, 100);
 }
 
-// Получение данных матрицы с сервера
 async function fetchTree(forceRender = false) {
     try {
         const res = await fetch(`${API_URL}/tree`);
         const data = await res.json();
-        
         const currentTreeStr = JSON.stringify(data) + `_root:${currentRootId}_target:${searchTargetUser}`;
         globalTreeCached = data; 
-        
-        if (currentTreeStr === lastTreeJsonString && !forceRender) {
-            return; 
-        }
-        
+        if (currentTreeStr === lastTreeJsonString && !forceRender) return;
         lastTreeJsonString = currentTreeStr;
         renderDynamicSplitting(data);
-    } catch (err) {
-        console.error('Ошибка загрузки данных дерева:', err);
-    }
+    } catch (err) { console.error('Ошибка:', err); }
 }
 
-// Поиск ячейки по логину пользователя
 function findUserAndFocus(username) {
-    fetch(`${API_URL}/tree`)
-        .then(res => res.json())
-        .then(tree => {
-            let foundCellId = null;
-            let exactUsername = '';
-
-            for (const [id, cell] of Object.entries(tree)) {
-                if (cell && cell.user && cell.user.toLowerCase() === username.toLowerCase()) {
-                    foundCellId = id;
-                    exactUsername = cell.user;
-                    break;
-                }
+    fetch(`${API_URL}/tree`).then(res => res.json()).then(tree => {
+        let foundCellId = null;
+        for (const [id, cell] of Object.entries(tree)) {
+            if (cell && cell.user && cell.user.toLowerCase() === username.toLowerCase()) {
+                foundCellId = id; break;
             }
-            
-            if (foundCellId) {
-                const parsed = parseCell(foundCellId);
-                let rootId = foundCellId; 
-                
-                function getPrevLevelLetter(letter) {
-                    if (letter.length > 1) return letter.substring(0, letter.length - 1);
-                    if (letter === 'A') return 'A';
-                    return String.fromCharCode(letter.charCodeAt(0) - 1);
-                }
-                
-                let currentLetter = parsed.letter;
-                let currentNum = parsed.num;
-                
-                let step1Letter = getPrevLevelLetter(currentLetter);
-                let step1Num = Math.floor((currentNum + 1) / 2);
-                
-                let step2Letter = getPrevLevelLetter(step1Letter);
-                let step2Num = Math.floor((step1Num + 1) / 2);
-                
-                let candidateRoot = `${step2Letter}${step2Num}`;
-                
-                if (step2Letter === 'A' || tree[candidateRoot]) {
-                    rootId = candidateRoot;
-                } else {
-                    let candidateRoot2 = `${step1Letter}${step1Num}`;
-                    rootId = candidateRoot2;
-                }
-                
-                if (parsed.letter === 'A') rootId = 'A1';
-
-                currentRootId = rootId;
-                searchTargetUser = exactUsername; 
-                
-                setZoom(0.8); 
-                fetchTree(true); 
-                scrollToFocusedCell();
-            } else {
-                alert(`Пользователь "${username}" не найден в матричной структуре`);
-            }
-        });
+        }
+        if (foundCellId) {
+            const parsed = parseCell(foundCellId);
+            if (!parsed) return;
+            currentRootId = foundCellId; 
+            searchTargetUser = username; 
+            setZoom(0.8); fetchTree(true); scrollToFocusedCell();
+        } else alert(`Пользователь "${username}" не найден`);
+    });
 }
 
-// Вывод детальной информации о ячейке во всплывающем окне
 window.showUserDetails = async function(username, cellId, event) {
     if (event) event.stopPropagation(); 
-    
-    if (!username || username === '-') {
-        currentRootId = cellId;
-        setZoom(0.8);
-        fetchTree(true);
-        return;
-    }
-
+    if (!username || username === '-') { currentRootId = cellId; setZoom(0.8); fetchTree(true); return; }
     const modalView = document.getElementById('infoModal');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalBody = document.getElementById('modalBody');
-    
-    modalTitle.textContent = `Карточка: ${username}`;
-    modalBody.innerHTML = `<i>Загрузка связей...</i>`;
+    document.getElementById('modalTitle').textContent = `Карточка: ${username}`;
+    document.getElementById('modalBody').innerHTML = `<i>Загрузка...</i>`;
     modalView.style.display = 'flex';
-
     try {
         const res = await fetch(`${API_URL}/user-details/${encodeURIComponent(username)}`);
         const data = await res.json();
-        
         if (data.success) {
-            const cellsList = data.cells.join(', ');
-            const chainLine = data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Корневой аккаунт';
-            
-            modalBody.innerHTML = `
+            document.getElementById('modalBody').innerHTML = `
                 <p>👤 <strong>Логин:</strong> ${data.username}</p>
-                <p>🏠 <strong>Занятые ячейки:</strong> ${cellsList}</p>
-                <p>🤝 <strong>Прямой Спонсор:</strong> <span style="color:#ffd700;">${data.sponsor}</span></p>
+                <p>🏠 <strong>Ячейки:</strong> ${data.cells.join(', ')}</p>
+                <p>🤝 <strong>Спонсор:</strong> <span style="color:#ffd700;">${data.sponsor}</span></p>
                 <div style="background:#1f4068; padding:10px; border-radius:6px; margin-top:15px; border:1px dashed #00fff0;">
-                    <strong style="color:#00fff0; display:block; margin-bottom:5px;">Линия спонсоров вверх («Кто-за-кем»):</strong>
-                    <div style="word-break: break-all; font-size:14px; color:#e2e2e2;">${chainLine}</div>
+                    <strong style="color:#00fff0;">Линия спонсоров:</strong>
+                    <div style="word-break: break-all; font-size:14px; color:#e2e2e2;">${data.chain.join(' ➔ ')}</div>
                 </div>
             `;
-            
-            currentRootId = cellId;
-            searchTargetUser = username;
-            renderDynamicSplitting(globalTreeCached);
-            scrollToFocusedCell(); 
-        } else {
-            modalBody.innerHTML = `<span style="color:#e43f5a;">Ошибка: ${data.error}</span>`;
+            currentRootId = cellId; searchTargetUser = username; renderDynamicSplitting(globalTreeCached); scrollToFocusedCell();
         }
-    } catch (err) {
-        modalBody.innerHTML = `<span style="color:#e43f5a;">Не удалось связаться с сервером деталей</span>`;
-    }
+    } catch (err) { document.getElementById('modalBody').innerHTML = 'Ошибка'; }
 };
 
-// Генерация HTML отдельной ячейки
 function getCellHTML(cell, roleClass, fallbackId = '-') {
-    if (!cell) {
-        return `<div class="cell ${roleClass}" onclick="switchFocus('${fallbackId}')"><div class="cell-id">${fallbackId}</div><div class="cell-user">-</div></div>`;
-    }
-    const isOccupied = cell.user ? 'occupied' : '';
-    const displayUser = cell.user ? cell.user : '-';
+    if (!cell) return `<div class="cell ${roleClass}" onclick="switchFocus('${fallbackId}')"><div class="cell-id">${fallbackId}</div><div class="cell-user">-</div></div>`;
     const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
-
-    return `
-        <div class="cell ${roleClass} ${isOccupied} ${isFocused}" onclick="showUserDetails('${displayUser}', '${cell.id}', event)">
-            <div class="cell-id">${cell.id}</div>
-            <div class="cell-user">${displayUser}</div>
-        </div>
-    `;
+    return `<div class="cell ${roleClass} ${cell.user ? 'occupied' : ''} ${isFocused}" onclick="showUserDetails('${cell.user || '-'}', '${cell.id}', event)"><div class="cell-id">${cell.id}</div><div class="cell-user">${cell.user || '-'}</div></div>`;
 }
 
-window.switchFocus = function(cellId) {
-    currentRootId = cellId;
-    setZoom(0.8); 
-    fetchTree(true);
-};
+window.switchFocus = function(cellId) { currentRootId = cellId; setZoom(0.8); fetchTree(true); };
 
-// --- ГЕНЕРАЦИЯ СЕМЁРКИ (3 РЯДА: ВЕРХУШКА, ПЛЕЧИ, НИЗ) ---
 function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids) {
     return `
         <div class="semerka-matrix" onclick="setZoom(0.8); event.stopPropagation();">
             <div class="matrix-row">${getCellHTML(topCell, 'level-1', ids.top)}</div>
-            <div class="matrix-row">
-                ${getCellHTML(leftShoulder, 'level-2', ids.left)}
-                ${getCellHTML(rightShoulder, 'level-2', ids.right)}
-            </div>
-            <div class="matrix-row">
-                ${getCellHTML(bottom4[0], 'level-3', ids.b1)}
-                ${getCellHTML(bottom4[1], 'level-3', ids.b2)}
-                ${getCellHTML(bottom4[2], 'level-3', ids.b3)}
-                ${getCellHTML(bottom4[3], 'level-3', ids.b4)}
-            </div>
+            <div class="matrix-row">${getCellHTML(leftShoulder, 'level-2', ids.left)}${getCellHTML(rightShoulder, 'level-2', ids.right)}</div>
+            <div class="matrix-row">${getCellHTML(bottom4[0], 'level-3', ids.b1)}${getCellHTML(bottom4[1], 'level-3', ids.b2)}${getCellHTML(bottom4[2], 'level-3', ids.b3)}${getCellHTML(bottom4[3], 'level-3', ids.b4)}</div>
         </div>
     `;
 }
 
-function parseCell(id) {
-    const match = id.match(/^([A-Z]+)(\d+)$/);
-    if (!match) return null;
-    return { letter: match[1], num: parseInt(match[2], 10) };
-}
-
+function parseCell(id) { const m = id.match(/^([A-Z]+)(\d+)$/); return m ? { letter: m[1], num: parseInt(m[2], 10) } : null; }
 function getNextLevelLetter(letter) {
     let i = letter.length - 1;
     while (i >= 0) {
-        if (letter[i] !== 'Z') {
-            return letter.substring(0, i) + String.fromCharCode(letter.charCodeAt(i) + 1) + 'A'.repeat(letter.length - 1 - i);
-        }
+        if (letter[i] !== 'Z') return letter.substring(0, i) + String.fromCharCode(letter.charCodeAt(i) + 1) + 'A'.repeat(letter.length - 1 - i);
         i--;
     }
     return 'A'.repeat(letter.length + 1);
 }
 
-// --- ДИНАМИЧЕСКИЙ РАСЧЕТ И ДЕЛЕНИЕ МАТРИЦ (SPLITTING) ---
+// --- ОСНОВНАЯ ФУНКЦИЯ РЕНДЕРИНГА ---
 function renderDynamicSplitting(tree) {
     globalTreeCached = tree;
 
-    // 🔥 ДОБАВЛЕНИЕ 5 ЗОЛОТЫХ МЕСТ В НАЧАЛО СТРАНИЦЫ
-    const vipContainer = document.getElementById('vipRowContainer');
-    if (vipContainer) {
-        let goldHTML = '';
-        for (let i = 1; i <= 5; i++) {
-            const cellId = `G${i}`;
-            const cell = tree[cellId] || null;
-            const isOccupied = cell && cell.user;
-            const displayUser = isOccupied ? cell.user : 'Выплата Создателю';
-            const focusedClass = (isOccupied && cell.user === searchTargetUser) ? 'focused-cell' : '';
-
-            goldHTML += `
-                <div class="vip-cell vip-gold ${isOccupied ? 'occupied' : ''} ${focusedClass}" 
-                     style="background: ${isOccupied ? '#3a3000' : '#1f4068'}; border: 2px solid #ffd700; border-radius: 8px; padding: 10px; text-align: center; width: 110px; height: 70px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-sizing: border-box; transition: all 0.2s ease; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3);"
-                     onclick="showUserDetails('${isOccupied ? cell.user : '-'}', '${cellId}', event)">
-                    <div style="font-size: 11px; color: #ffd700; font-weight: bold; margin-bottom: 4px;">${cellId}</div>
-                    <div style="font-size: 12px; font-weight: bold; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${displayUser}">${displayUser}</div>
-                </div>
-            `;
-        }
-        vipContainer.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:10px; width:100%; align-items:center; margin-bottom:20px;">
-                <div style="color:#ffd700; font-weight:bold; font-size:14px; text-shadow: 0 0 5px #ffd700;">👑 ЗОЛОТОЙ VIP-РЯД (5 МЕСТ)</div>
-                <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">${goldHTML}</div>
-            </div>
-        `;
+    // ГЕНЕРАЦИЯ VIP-РЯДА (XYZ_1 - XYZ_5)
+    const vipIds = [];
+    for (let i = 1; i <= 5; i++) {
+        vipIds.push(`XYZ_${i}`);
     }
 
+    let goldHTML = '';
+    vipIds.forEach(id => {
+        const cell = tree[id] || null;
+        const occ = cell && cell.user;
+        goldHTML += `
+            <div class="vip-gold ${occ ? 'occupied' : ''} ${occ && cell.user === searchTargetUser ? 'focused-cell' : ''}" 
+                 onclick="showUserDetails('${occ ? cell.user : '-'}', '${id}', event)"
+                 style="background: ${occ ? '#3a3000' : '#1f4068'}; border: 2px solid #ffd700; border-radius: 8px; padding: 10px; text-align: center; width: 100px; cursor: pointer; margin: 5px;">
+                <div style="font-size: 11px; color: #ffd700; font-weight: bold;">${id}</div>
+                <div style="font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis;">${occ ? cell.user : '-'}</div>
+            </div>`;
+    });
+
+    // Расчет матриц
     let activeMatricesHTML = [];
     let queue = [currentRootId]; 
-    let processedNodes = new Set();
-
+    let processed = new Set();
     while (queue.length > 0) {
-        const currentId = queue.shift();
-        if (processedNodes.has(currentId)) continue;
-        processedNodes.add(currentId);
-
-        const topCell = tree[currentId] || null;
-        const parsed = parseCell(currentId);
-        if (!parsed) continue;
-
-        const nextLetter = getNextLevelLetter(parsed.letter);       
-        const bottomLetter = getNextLevelLetter(nextLetter);        
-
-        const leftLNum = parsed.num * 2 - 1;
-        const rightLNum = parsed.num * 2;
-
-        const leftShoulderId = `${nextLetter}${leftLNum}`;
-        const rightShoulderId = `${nextLetter}${rightLNum}`;
-
-        const b1 = `${bottomLetter}${leftLNum * 2 - 1}`;
-        const b2 = `${bottomLetter}${leftLNum * 2}`;
-        const b3 = `${bottomLetter}${rightLNum * 2 - 1}`;
-        const b4 = `${bottomLetter}${rightLNum * 2}`;
-
-        const leftShoulder = tree[leftShoulderId] || null;
-        const rightShoulder = tree[rightShoulderId] || null;
-        const bottom4 = [
-            tree[b1] || null,
-            tree[b2] || null,
-            tree[b3] || null,
-            tree[b4] || null
-        ];
-
-        const isMatrixClosed = bottom4.every(cell => cell && cell.user);
-
-        if (isMatrixClosed) {
-            queue.push(leftShoulderId);
-            queue.push(rightShoulderId);
-        } else {
-            const ids = { top: currentId, left: leftShoulderId, right: rightShoulderId, b1, b2, b3, b4 };
-            activeMatricesHTML.push(buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids));
-        }
+        const curId = queue.shift();
+        if (processed.has(curId)) continue;
+        processed.add(curId);
+        const top = tree[curId] || null;
+        const p = parseCell(curId);
+        if (!p) continue;
+        const nL = getNextLevelLetter(p.letter), bL = getNextLevelLetter(nL);
+        const lN = p.num * 2 - 1, rN = p.num * 2;
+        const ids = { top: curId, left: `${nL}${lN}`, right: `${nL}${rN}`, b1: `${bL}${lN*2-1}`, b2: `${bL}${lN*2}`, b3: `${bL}${rN*2-1}`, b4: `${bL}${rN*2}` };
+        const bottom4 = [tree[ids.b1], tree[ids.b2], tree[ids.b3], tree[ids.b4]];
+        if (bottom4.every(c => c && c.user)) { queue.push(ids.left, ids.right); } 
+        else { activeMatricesHTML.push(buildSemerkaHTML(top, tree[ids.left], tree[ids.right], bottom4, ids)); }
     }
 
+    // Вывод в DOM
     if (mainTreeDisplay) {
         mainTreeDisplay.innerHTML = `
-            <div id="vipRowContainer"></div>
-            <div class="matrices-row">
-                ${activeMatricesHTML.join('')}
+            <div id="vipRowContainer" style="display:flex; flex-direction:column; align-items:center; margin-bottom:20px; width:100%;">
+                <div style="color:#ffd700; font-weight:bold; margin-bottom:10px;">👑 VIP-РЯД</div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">${goldHTML}</div>
             </div>
+            <div class="matrices-row">${activeMatricesHTML.join('')}</div>
         `;
-        // Повторно рендерим VIP-зону внутри вставленного контейнера
-        const innerVipContainer = document.getElementById('vipRowContainer');
-        if (innerVipContainer && vipContainer) {
-            innerVipContainer.innerHTML = vipContainer.innerHTML;
-            innerVipContainer.style.width = '100%';
-            innerVipContainer.style.display = 'flex';
-            innerVipContainer.style.flexDirection = 'column';
-            innerVipContainer.style.alignItems = 'center';
-            innerVipContainer.style.marginBottom = '25px';
-        }
-
-        const currentScale = zoomSlider ? zoomSlider.value : 0.8;
-        mainTreeDisplay.style.transform = `scale(${currentScale})`;
+        const scale = zoomSlider ? zoomSlider.value : 0.8;
+        mainTreeDisplay.style.transform = `scale(${scale})`;
         mainTreeDisplay.style.width = '100%';
     }
 }
 
-// --- СБРОС СИСТЕМЫ ---
+// Сброс базы
 if (resetBtn) {
     resetBtn.addEventListener('click', async () => {
-        if (!confirm('Очистить базу данных дерева?')) return;
-        try {
-            const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                alert('База успешно сброшена!');
-                currentRootId = 'A1';
-                searchTargetUser = '';
-                lastTreeJsonString = ''; 
-                setZoom(0.8);
-                fetchTree(true);
-            }
-        } catch (err) {
-            alert('Ошибка при сбросе');
-        }
+        if (!confirm('Очистить базу?')) return;
+        const res = await fetch(`${API_URL}/reset`, { method: 'POST' });
+        if ((await res.json()).success) { alert('База сброшена'); currentRootId = 'A1'; fetchTree(true); }
     });
 }
 
-// Первичный запуск и автообновление матриц
 fetchTree(true);
 setInterval(fetchTree, 2000);
