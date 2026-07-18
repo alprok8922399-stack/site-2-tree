@@ -112,7 +112,7 @@
             cursor: pointer;
         }
 
-        /* --- КОНТЕЙНЕР ЭКРАНА (МАТРИЦЫ ВО ВСЮ ШИРИНУ) --- */
+        /* --- КОНТЕЙНЕР ЭКРАНА --- */
         .workspace {
             display: flex;
             width: 100%;
@@ -141,7 +141,7 @@
             width: max-content; 
         }
 
-        /* --- СТИЛИ ДЛЯ VIP ЗОНЫ (ЗОЛОТЫЕ И СЕРЕБРЯНЫЕ МЕСТА) --- */
+        /* --- СТИЛИ ДЛЯ VIP ЗОНЫ --- */
         .vip-row-container {
             display: flex;
             gap: 15px;
@@ -151,26 +151,6 @@
             border: 1px dashed rgba(0, 255, 240, 0.2);
             border-radius: 10px;
             width: max-content;
-        }
-        .vip-cell {
-            min-width: 70px;
-            padding: 8px;
-            text-align: center;
-            border-radius: 6px;
-            font-weight: bold;
-            box-sizing: border-box;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .vip-gold {
-            border: 2px solid #ffd700;
-            background: linear-gradient(135deg, #4a3b00, #1a1500);
-            box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
-        }
-        .vip-silver {
-            border: 2px solid #bdc3c7;
-            background: linear-gradient(135deg, #2c3e50, #111d28);
-            box-shadow: 0 0 10px rgba(189, 195, 199, 0.3);
         }
         
         /* --- СТИЛИ ДЛЯ СТРУКТУРНЫХ МАТРИЦ --- */
@@ -271,7 +251,6 @@
             border: 1px solid #0f4c81;
         }
         
-        /* Цвета для счетчика дней */
         .days-active-accent { color: #ffd700; font-weight: bold; text-shadow: 0 0 5px #ffd700; }
         .days-active-normal { color: #ffffff; }
 
@@ -300,24 +279,15 @@
             border-radius: 8px;
             padding: 10px;
             box-sizing: border-box;
+            overflow-x: auto;
         }
-        .ref-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-        .ref-table th, .ref-table td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #1f4068;
-        }
-        .ref-table th { background: #0f4c81; color: white; }
         
-        /* Подсветка строки в таблице красным при совпадении поиска */
-        .ref-table tr.table-matched {
-            background: #ff3366 !important;
-            color: white !important;
-            font-weight: bold;
+        .ref-node-focused { 
+            animation: tablePulse 1s infinite alternate;
+        }
+        @keyframes tablePulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.02); }
         }
     </style>
 </head>
@@ -371,15 +341,7 @@
         </div>
 
         <div class="table-container" style="max-width: 800px; margin: 0 auto;">
-            <table class="ref-table">
-                <thead>
-                    <tr>
-                        <th>Пользователь (User)</th>
-                        <th>Спонсор (Sponsor)</th>
-                        <th>Дата регистрации</th>
-                        <th>Личники</th>
-                    </tr>
-                </thead>
+            <table style="width:100%; border-collapse:collapse;">
                 <tbody id="interactiveRefTableBody">
                 </tbody>
             </table>
@@ -402,6 +364,7 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="matrix.js"></script>
+    <script src="table.js"></script>
 </body>
-                                   </html>
+</html>
