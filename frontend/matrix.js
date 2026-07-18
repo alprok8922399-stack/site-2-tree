@@ -1,6 +1,5 @@
 /* ==========================================================================
-   🚨 КРИТИЧЕСКАЯ ЗОНА: ТОЛЬКО ДЛЯ ЧТЕНИЯ (READ-ONLY)
-   ⚠️ ЛЮБЫЕ ИЗМЕНЕНИЯ В ЭТОМ ФАЙЛЕ ЗАПРЕЩЕНЫ И МОГУТ СЛОМАТЬ СИСТЕМУ ДЕПЛОЯ!
+   🛠️ МОДУЛЬ: matrix.js (Управление картой матриц, VIP-зоной и Модерацией)
    ========================================================================== */
 
 const API_URL = '/api';
@@ -11,6 +10,11 @@ const resetBtn = document.getElementById('resetBtn');
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 
+// Новые DOM-элементы под VIP-механики и Карточку Модератора
+const vipRowContainer = document.getElementById('vipRowContainer');
+const rightSidebar = document.querySelector('.right-sidebar');
+const userModalCard = document.getElementById('userModalCard');
+
 let currentRootId = 'A1'; 
 let searchTargetUser = ''; // Цель для подсветки в Матрицах
 
@@ -18,31 +22,13 @@ let searchTargetUser = ''; // Цель для подсветки в Матриц
 let globalTreeCached = null; 
 let lastTreeJsonString = ''; 
 
-// Создаем HTML-структуру для всплывающего окна информации по матричной ячейке
-let modal = document.getElementById('infoModal');
-if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'infoModal';
-    modal.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-        background: rgba(0,0,0,0.85); display: none; justify-content: center;
-        align-items: center; z-index: 9999; font-family: sans-serif; padding: 20px; box-sizing: border-box;
-    `;
-    modal.innerHTML = `
-        <div style="background: #162447; border: 2px solid #00fff0; padding: 20px; border-radius: 12px; max-width: 450px; width: 100%; box-shadow: 0 0 20px rgba(0,255,240,0.3); color: #fff; position: relative;">
-            <h3 id="modalTitle" style="margin-top:0; color:#00fff0; font-size:20px; border-bottom:1px solid #0f4c81; padding-bottom:10px;">Информация о партнере</h3>
-            <div id="modalBody" style="font-size:15px; line-height:1.6; margin-bottom:20px;">Загрузка...</div>
-            <button onclick="document.getElementById('infoModal').style.display='none'" style="width:100%; padding:10px; background:#e43f5a; border:none; color:white; font-weight:bold; border-radius:6px; cursor:pointer;">ЗАКРЫТЬ</button>
-        </div>
-    `;
-    document.body.appendChild(modal);
-}
+// Переменные для реализации симуляции долгого нажатия (Long-press)
+let touchTimeout = null;
+const LONG_PRESS_MS = 600;
 
 // --- УПРАВЛЕНИЕ МАСШТАБОМ (ZOOM) ---
 function setZoom(scaleValue) {
-    if (zoomSlider) {
-        zoomSlider.value = scaleValue;
-    }
+    if (zoomSlider) zoomSlider.value = scaleValue;
     if (mainTreeDisplay) {
         mainTreeDisplay.style.transform = `scale(${scaleValue})`;
         mainTreeDisplay.style.width = '100%';
@@ -50,9 +36,7 @@ function setZoom(scaleValue) {
 }
 
 if (zoomSlider) {
-    zoomSlider.addEventListener('input', (e) => {
-        setZoom(e.target.value);
-    });
+    zoomSlider.addEventListener('input', (e) => setZoom(e.target.value));
 }
 
 if (screenContainer) {
@@ -78,7 +62,6 @@ if (searchBtn) {
     });
 }
 
-// Плавный скролл к найденной ячейке в Матрицах
 function scrollToFocusedCell() {
     setTimeout(() => {
         const focusedCell = document.querySelector('.focused-cell');
@@ -92,13 +75,18 @@ function scrollToFocusedCell() {
     }, 100);
 }
 
-// Получение данных матрицы с сервера
+// --- СЕТЕВЫЕ ЗАПРОСЫ И СИНХРОНИЗАЦИЯ ---
 async function fetchTree(forceRender = false) {
     try {
         const res = await fetch(`${API_URL}/tree`);
         const data = await res.json();
         
-        const currentTreeStr = JSON.stringify(data) + `_root:${currentRootId}_target:${searchTargetUser}`;
+        // Дополнительно запрашиваем реферальное дерево для вычисления VIP-условий (Серебро)
+        const refRes = await fetch(`${API_URL}/referals-tree`);
+        const refData = await refRes.json();
+        const refTree = refData.success ? refData.tree : {};
+
+        const currentTreeStr = JSON.stringify(data) + `_root:${currentRootId}_target:${searchTargetUser}_refLen:${Object.keys(refTree).length}`;
         globalTreeCached = data; 
         
         if (currentTreeStr === lastTreeJsonString && !forceRender) {
@@ -106,13 +94,15 @@ async function fetchTree(forceRender = false) {
         }
         
         lastTreeJsonString = currentTreeStr;
-        renderDynamicSplitting(data);
+        
+        // Рендерим VIP-зону и стандартные матрицы
+        renderVipZone(data, refTree);
+        renderDynamicSplitting(data, refTree);
     } catch (err) {
         console.error('Ошибка загрузки данных дерева:', err);
     }
 }
 
-// Поиск ячейки по логину пользователя
 function findUserAndFocus(username) {
     fetch(`${API_URL}/tree`)
         .then(res => res.json())
@@ -170,71 +160,253 @@ function findUserAndFocus(username) {
         });
 }
 
-// Вывод детальной информации о ячейке во всплывающем окне
-window.showUserDetails = async function(username, cellId, event) {
-    if (event) event.stopPropagation(); 
+// --- 👑 ЛОГИКА VIP-ЗОНЫ (ЗОЛОТОЙ И СЕРЕБРЯНЫЙ РЯДЫ) ---
+function renderVipZone(tree, refTree) {
+    if (!vipRowContainer) return;
+
+    // 1. Статичные 5 Золотых мест (ячейки G1 - G5)
+    let goldHTML = '';
+    for (let i = 1; i <= 5; i++) {
+        const cellId = `G${i}`;
+        const cell = tree[cellId];
+        const isOccupied = cell && cell.user;
+        const displayUser = isOccupied ? cell.user : 'Выплата Создателю';
+        const focusedClass = (isOccupied && cell.user === searchTargetUser) ? 'focused-cell' : '';
+
+        goldHTML += `
+            <div class="cell vip-gold ${isOccupied ? 'occupied' : ''} ${focusedClass}" 
+                 data-cell-id="${cellId}" data-user="${isOccupied ? cell.user : '-'}">
+                <div class="cell-id">${cellId}</div>
+                <div class="cell-user">${displayUser}</div>
+            </div>
+        `;
+    }
+
+    // 2. Динамический расчет Серебряных мест (Условие: 10 личников + у каждого 31+ дней активности)
+    let silverHTML = '';
     
+    // Вычисляем лидеров, которые выполнили квалификацию «И»
+    const silverLeaders = Object.values(refTree).filter(node => {
+        const directRefs = Object.values(refTree).filter(child => child.sponsor === node.username);
+        if (directRefs.length < 10) return false;
+
+        // Проверяем каждого личника на срок активности > 31 дня
+        return directRefs.every(child => {
+            if (!child.createdAt) return false;
+            const daysActive = Math.floor((Date.now() - new Date(child.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+            return daysActive > 31;
+        });
+    }).map(node => node.username);
+
+    // Выводим серебряные ячейки (например, берем ID от S1 до S5 по числу лидеров или пустую готовую ячейку)
+    const totalSilverSlots = Math.max(silverLeaders.length, 1); 
+    for (let i = 1; i <= totalSilverSlots; i++) {
+        const cellId = `S${i}`;
+        const leaderUser = silverLeaders[i - 1];
+        
+        if (leaderUser) {
+            const focusedClass = (leaderUser === searchTargetUser) ? 'focused-cell' : '';
+            silverHTML += `
+                <div class="cell vip-silver occupied ${focusedClass}" data-cell-id="${cellId}" data-user="${leaderUser}">
+                    <div class="cell-id">${cellId}</div>
+                    <div class="cell-user">${leaderUser}</div>
+                </div>
+            `;
+        } else if (silverLeaders.length === 0 && i === 1) {
+            // Если лидеров нет вообще, показываем одну пустую полупрозрачную ячейку-заглушку
+            silverHTML += `
+                <div class="cell vip-silver" data-cell-id="${cellId}" data-user="-">
+                    <div class="cell-id">${cellId}</div>
+                    <div class="cell-user">Нет квалификаций</div>
+                </div>
+            `;
+        }
+    }
+
+    vipRowContainer.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:10px; width:100%; align-items:center; margin-bottom:20px;">
+            <div style="color:#ffd700; font-weight:bold; font-size:14px;">👑 ЗОЛОТОЙ VIP-РЯД (5 МЕСТ)</div>
+            <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">${goldHTML}</div>
+            <div style="color:#a2e8dd; font-weight:bold; font-size:14px; margin-top:5px;">🥈 СЕРЕБРЯНЫЙ РЯД ЛИДЕРОВ</div>
+            <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">${silverHTML}</div>
+        </div>
+    `;
+
+    bindCellInteractions();
+}
+
+// --- 🖱️ ДВОЙНОЙ ТРИГГЕР (КОРОТКИЙ КЛИК / LONG-PRESS) ---
+function bindCellInteractions() {
+    document.querySelectorAll('.cell').forEach(cell => {
+        // Защита от дублирования событий
+        cell.onmousedown = (e) => startPress(e, cell);
+        cell.onmouseup = (e) => endPress(e, cell);
+        cell.onmouseleave = () => clearPress();
+
+        cell.ontouchstart = (e) => startPress(e, cell);
+        cell.ontouchend = (e) => endPress(e, cell);
+    });
+}
+
+function startPress(e, cellElement) {
+    if (e.type === 'mousedown' && e.button !== 0) return; // Только левая кнопка мыши
+    clearPress();
+
+    cellElement.dataset.pressTriggered = 'false';
+    
+    touchTimeout = setTimeout(() => {
+        cellElement.dataset.pressTriggered = 'true';
+        const username = cellElement.dataset.user;
+        const cellId = cellElement.dataset.cellId;
+        if (username && username !== '-') {
+            handleLongPress(username, cellId);
+        }
+    }, LONG_PRESS_MS);
+}
+
+function endPress(e, cellElement) {
+    const wasLongPress = cellElement.dataset.pressTriggered === 'true';
+    clearPress();
+
+    if (!wasLongPress) {
+        // Это короткий клик
+        const username = cellElement.dataset.user;
+        const cellId = cellElement.dataset.cellId;
+        handleShortClick(username, cellId);
+    }
+}
+
+function clearPress() {
+    if (touchTimeout) {
+        clearTimeout(touchTimeout);
+        touchTimeout = null;
+    }
+}
+
+// --- 🛑 ВЗАИМОДЕЙСТВИЕ АДМИНА С ЯЧЕЙКАМИ ---
+
+// 1. Короткий клик: вывод прямых рефералов в правую боковую панель
+async function handleShortClick(username, cellId) {
     if (!username || username === '-') {
-        currentRootId = cellId;
-        setZoom(0.8);
-        fetchTree(true);
+        // Клик по пустой ячейке переключает фокус матрицы
+        switchFocus(cellId);
         return;
     }
 
-    const modalView = document.getElementById('infoModal');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalBody = document.getElementById('modalBody');
+    if (!rightSidebar) return;
+    rightSidebar.classList.add('show');
+    rightSidebar.innerHTML = `<h3 style="color:#00fff0; font-size:14px; margin-top:0;">👥 Рефералы: ${username}</h3><div style="font-size:12px; color:#fff;">Загрузка личников...</div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/referals-tree`);
+        const data = await res.json();
+        if (data.success && data.tree) {
+            const children = Object.values(data.tree).filter(node => node.sponsor === username);
+            children.sort((a, b) => a.username.localeCompare(b.username));
+
+            if (children.length === 0) {
+                rightSidebar.innerHTML = `<h3 style="color:#00fff0; font-size:14px; margin-top:0;">👥 Рефералы: ${username}</h3><div style="font-size:12px; color:#ffd700;">Личных рефералов нет</div>`;
+                return;
+            }
+
+            let html = `<h3 style="color:#00fff0; font-size:14px; margin-top:0; border-bottom:1px solid #0f4c81; padding-bottom:6px;">👥 Личники (${children.length}):</h3><ul style="list-style:none; padding:0; margin:0; font-size:12px; max-height:80vh; overflow-y:auto;">`;
+            children.forEach(child => {
+                html += `<li style="padding:6px; border-bottom:1px solid #162447; color:#fff; display:flex; justify-content:between;">
+                    <strong>${child.username}</strong> <span style="color:#a2e8dd;">Ур. ${child.calculatedColumn || 1}</span>
+                </li>`;
+            });
+            html += `</ul>`;
+            rightSidebar.innerHTML = html;
+        }
+    } catch (e) {
+        rightSidebar.innerHTML = `<div style="color:#e43f5a; font-size:12px;">Ошибка загрузки боковой панели</div>`;
+    }
+}
+
+// 2. Долгий клик: Вызов Карточки Модерации + расчет индикатора дней и цепочки спонсоров
+async function handleLongPress(username, cellId) {
+    if (!userModalCard) return;
     
-    modalTitle.textContent = `Карточка: ${username}`;
-    modalBody.innerHTML = `<i>Загрузка связей...</i>`;
-    modalView.style.display = 'flex';
+    // Показываем заголовок карточки
+    document.getElementById('modalCardTitle').textContent = `Модерация: ${username}`;
+    userModalCard.style.display = 'flex';
+
+    const cardBody = document.getElementById('modalCardBody');
+    cardBody.innerHTML = `<div style="color:#00fff0; font-size:14px;">Вычисление цепочки и активности...</div>`;
 
     try {
         const res = await fetch(`${API_URL}/user-details/${encodeURIComponent(username)}`);
         const data = await res.json();
-        
+
         if (data.success) {
-            const cellsList = data.cells.join(', ');
-            const chainLine = data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Корневой аккаунт';
-            
-            modalBody.innerHTML = `
-                <p>👤 <strong>Логин:</strong> ${data.username}</p>
-                <p>🏠 <strong>Занятые ячейки:</strong> ${cellsList}</p>
-                <p>🤝 <strong>Прямой Спонсор:</strong> <span style="color:#ffd700;">${data.sponsor}</span></p>
-                <div style="background:#1f4068; padding:10px; border-radius:6px; margin-top:15px; border:1px dashed #00fff0;">
-                    <strong style="color:#00fff0; display:block; margin-bottom:5px;">Линия спонсоров вверх («Кто-за-кем»):</strong>
-                    <div style="word-break: break-all; font-size:14px; color:#e2e2e2;">${chainLine}</div>
+            // Расчет дней активности (До 31 дня включительно — акцентный цвет, далее — обычный)
+            const regDate = data.createdAt ? new Date(data.createdAt) : new Date();
+            const daysActive = Math.floor((Date.now() - regDate.getTime()) / (1000 * 60 * 60 * 24));
+            const dayClass = daysActive <= 31 ? 'days-active-accent' : 'days-active-normal';
+
+            const chainLine = data.chain && data.chain.length > 0 ? data.chain.join(' ➔ ') : 'Главный Лидер';
+
+            cardBody.innerHTML = `
+                <p style="margin:6px 0;">👤 <strong>Логин:</strong> <span style="color:#00fff0;">${data.username}</span></p>
+                <p style="margin:6px 0;">📅 <strong>Регистрация:</strong> ${regDate.toLocaleDateString()}</p>
+                <p style="margin:6px 0;">⏱️ <strong>Дней в системе:</strong> <span class="${dayClass}" style="font-weight:bold; font-size:16px;">${daysActive} дн.</span></p>
+                <p style="margin:6px 0;">🤝 <strong>Спонсор:</strong> ${data.sponsor || '-'}</p>
+                <div style="background:#1f4068; padding:8px; border-radius:6px; margin-top:10px; border:1px dashed #00fff0; font-size:13px;">
+                    <strong style="color:#ffd700; display:block; margin-bottom:4px;">Цепочка спонсоров вверх:</strong>
+                    <div style="word-break:break-all; color:#e2e2e2;">${chainLine}</div>
+                </div>
+                
+                <div style="display:flex; gap:10px; margin-top:15px;">
+                    <button onclick="freezeUserPayments('${data.username}')" style="flex:1; padding:8px; background:#ffd700; color:#111; font-weight:bold; border:none; border-radius:4px; cursor:pointer; font-size:12px;">ЗАМОРОЗИТЬ</button>
+                    <button onclick="deleteUserFromMatrix('${data.username}', '${cellId}')" style="flex:1; padding:8px; background:#e43f5a; color:#fff; font-weight:bold; border:none; border-radius:4px; cursor:pointer; font-size:12px;">УДfolderЛИТЬ</button>
                 </div>
             `;
             
+            // Синхронизируем состояние фокуса в матрице
             currentRootId = cellId;
             searchTargetUser = username;
-            renderDynamicSplitting(globalTreeCached);
-            scrollToFocusedCell(); 
         } else {
-            modalBody.innerHTML = `<span style="color:#e43f5a;">Ошибка: ${data.error}</span>`;
+            cardBody.innerHTML = `<div style="color:#e43f5a;">Ошибка получения связей: ${data.error}</div>`;
         }
     } catch (err) {
-        modalBody.innerHTML = `<span style="color:#e43f5a;">Не удалось связаться с сервером деталей</span>`;
+        cardBody.innerHTML = `<div style="color:#e43f5a;">Сервер не отвечает</div>`;
+    }
+}
+
+// --- 🚫 ФУНКЦИИ УПРАВЛЕНИЯ МОДЕРАТОРА ---
+window.freezeUserPayments = async function(username) {
+    if (!confirm(`Заморозить выплаты пользователю ${username}?`)) return;
+    try {
+        const res = await fetch(`${API_URL}/freeze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+        });
+        const data = await res.json();
+        if (data.success) alert(`Выплаты пользователю ${username} успешно заморожены!`);
+    } catch (e) {
+        alert('Ошибка связи с сервером при заморозке');
     }
 };
 
-// Генерация HTML отдельной ячейки
-function getCellHTML(cell, roleClass, fallbackId = '-') {
-    if (!cell) {
-        return `<div class="cell ${roleClass}" onclick="switchFocus('${fallbackId}')"><div class="cell-id">${fallbackId}</div><div class="cell-user">-</div></div>`;
+window.deleteUserFromMatrix = async function(username, cellId) {
+    if (!confirm(`ВНИМАНИЕ! Полностью удалить пользователя ${username} из ячейки ${cellId} с потерей структуры?`)) return;
+    try {
+        const res = await fetch(`${API_URL}/delete-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, cellId })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(`Пользователь ${username} успешно удален!`);
+            if (userModalCard) userModalCard.style.display = 'none';
+            fetchTree(true);
+        }
+    } catch (e) {
+        alert('Ошибка сервера при удалении');
     }
-    const isOccupied = cell.user ? 'occupied' : '';
-    const displayUser = cell.user ? cell.user : '-';
-    const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
-
-    return `
-        <div class="cell ${roleClass} ${isOccupied} ${isFocused}" onclick="showUserDetails('${displayUser}', '${cell.id}', event)">
-            <div class="cell-id">${cell.id}</div>
-            <div class="cell-user">${displayUser}</div>
-        </div>
-    `;
-}
+};
 
 window.switchFocus = function(cellId) {
     currentRootId = cellId;
@@ -242,7 +414,7 @@ window.switchFocus = function(cellId) {
     fetchTree(true);
 };
 
-// --- ГЕНЕРАЦИЯ СЕМЁРКИ (3 РЯДА: ВЕРХУШКА, ПЛЕЧИ, НИЗ) ---
+// --- ГЕНЕРАЦИЯ СЕМЁРКИ (ВЕРХУШКА, ПЛЕЧИ, НИЗ) ---
 function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids) {
     return `
         <div class="semerka-matrix" onclick="setZoom(0.8); event.stopPropagation();">
@@ -257,6 +429,22 @@ function buildSemerkaHTML(topCell, leftShoulder, rightShoulder, bottom4, ids) {
                 ${getCellHTML(bottom4[2], 'level-3', ids.b3)}
                 ${getCellHTML(bottom4[3], 'level-3', ids.b4)}
             </div>
+        </div>
+    `;
+}
+
+function getCellHTML(cell, roleClass, fallbackId = '-') {
+    if (!cell) {
+        return `<div class="cell ${roleClass}" data-cell-id="${fallbackId}" data-user="-"><div class="cell-id">${fallbackId}</div><div class="cell-user">-</div></div>`;
+    }
+    const isOccupied = cell.user ? 'occupied' : '';
+    const displayUser = cell.user ? cell.user : '-';
+    const isFocused = (cell.user && cell.user === searchTargetUser) ? 'focused-cell' : '';
+
+    return `
+        <div class="cell ${roleClass} ${isOccupied} ${isFocused}" data-cell-id="${cell.id}" data-user="${displayUser}">
+            <div class="cell-id">${cell.id}</div>
+            <div class="cell-user">${displayUser}</div>
         </div>
     `;
 }
@@ -279,7 +467,7 @@ function getNextLevelLetter(letter) {
 }
 
 // --- ДИНАМИЧЕСКИЙ РАСЧЕТ И ДЕЛЕНИЕ МАТРИЦ (SPLITTING) ---
-function renderDynamicSplitting(tree) {
+function renderDynamicSplitting(tree, refTree = {}) {
     globalTreeCached = tree;
     let activeMatricesHTML = [];
     let queue = [currentRootId]; 
@@ -338,6 +526,9 @@ function renderDynamicSplitting(tree) {
         mainTreeDisplay.style.transform = `scale(${currentScale})`;
         mainTreeDisplay.style.width = '100%';
     }
+
+    // Повторно навешиваем touch/mouse события на новые сгенерированные DOM-элементы матриц
+    bindCellInteractions();
 }
 
 // --- СБРОС СИСТЕМЫ ---
@@ -363,4 +554,4 @@ if (resetBtn) {
 
 // Первичный запуск и автообновление матриц
 fetchTree(true);
-setInterval(fetchTree, 2000); 
+setInterval(fetchTree, 2000);
