@@ -1,213 +1,122 @@
-/* ==========================================================================
-   🛠️ МОДУЛЬ: table.js (Изолированная интерактивная таблица рефералов)
-   ========================================================================== */
+// frontend/table.js
 
-const API_URL = '/api';
+const API_BASE_URL = window.location.origin;
 
-// --- ЭЛЕМЕНТЫ УПРАВЛЕНИЯ ТАБЛИЦЕЙ ---
-const menuToggleBtn = document.getElementById('menuToggleBtn');
-const menuContent = document.getElementById('menuContent');
-const openTableBtn = document.getElementById('openTableBtn');
-const tableOverlay = document.getElementById('tableOverlay');
-const closeOverlayBtn = document.getElementById('closeOverlayBtn');
-const interactiveRefTableBody = document.getElementById('interactiveRefTableBody');
+// === ФИКСИРОВАННЫЙ КУРС ВАЛЮТЫ ===
+// 1000 Митронов = 130 USD по умолчанию. Рубли полностью удалены.
+const MITRON_TO_USD_RATE = 130 / 1000; 
 
-// Элементы поиска внутри таблицы рефералов
-const refSearchInput = document.getElementById('refSearchInput');
-const refSearchBtn = document.getElementById('refSearchBtn');
-const refSearchResetBtn = document.getElementById('refSearchResetBtn');
-
-let refSearchTargetUser = ''; // Цель для подсветки в Таблице рефералов
-let expandedNodes = new Set(); // Помнит, какие ветки развернуты
-let lastRefTreeJsonString = ''; 
-
-// --- ЛОГИКА ОТКРЫТИЯ/ЗАКРЫТИЯ МЕНЮ И ТАБЛИЦЫ ---
-if (menuToggleBtn && menuContent) {
-    menuToggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        menuContent.classList.toggle('show');
-    });
+/**
+ * Конвертирует Митроны в USD для отображения в таблице
+ */
+function convertToUsd(mitrons) {
+    return (mitrons * MITRON_TO_USD_RATE).toFixed(2);
 }
 
-if (openTableBtn && tableOverlay && menuContent) {
-    openTableBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        tableOverlay.classList.add('show');
-        menuContent.classList.remove('show');
-        buildInteractiveRefTable(true); // Перерисовываем при открытии
-    });
-}
+/**
+ * Загрузка реферального дерева и построение таблицы пользователей
+ */
+async function loadReferalsTable() {
+    const tableBody = document.getElementById('referals-table-body');
+    if (!tableBody) return;
 
-if (closeOverlayBtn && tableOverlay) {
-    closeOverlayBtn.addEventListener('click', () => {
-        tableOverlay.classList.remove('show');
-    });
-}
-
-document.addEventListener('click', (e) => {
-    if (menuContent && menuContent.classList.contains('show')) {
-        if (!menuContent.contains(e.target) && e.target !== menuToggleBtn) {
-            menuContent.classList.remove('show');
-        }
-    }
-});
-
-// --- ПОИСК В ТАБЛИЦЕ РЕФЕРАЛОВ ---
-if (refSearchBtn) {
-    refSearchBtn.addEventListener('click', () => {
-        const val = refSearchInput.value.trim();
-        if (val) {
-            findReferalAndExpand(val);
-        }
-    });
-}
-
-if (refSearchResetBtn) {
-    refSearchResetBtn.addEventListener('click', () => {
-        if (refSearchInput) refSearchInput.value = '';
-        refSearchTargetUser = '';
-        expandedNodes.clear(); 
-        buildInteractiveRefTable(true); 
-    });
-}
-
-// Скролл к найденной карточке внутри контейнера таблицы
-function scrollToFocusedReferal() {
-    setTimeout(() => {
-        const focusedCard = document.querySelector('.ref-node-focused');
-        if (focusedCard) {
-            focusedCard.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-                inline: 'nearest'
-            });
-        }
-    }, 500); 
-}
-
-// Поиск реферала на сервере с раскрытием всех родителей вверх (без влияния на матрицы)
-async function findReferalAndExpand(username) {
-    try {
-        const res = await fetch(`${API_URL}/referals-tree`);
-        const data = await res.json();
-        if (!data.success || !data.tree) return;
-
-        const refTree = data.tree;
-        let targetNode = Object.values(refTree).find(node => node.username.toLowerCase() === username.toLowerCase());
-        
-        if (targetNode) {
-            refSearchTargetUser = targetNode.username; 
-            
-            let currentSponsor = targetNode.sponsor;
-            while (currentSponsor && refTree[currentSponsor]) {
-                expandedNodes.add(currentSponsor); 
-                currentSponsor = refTree[currentSponsor].sponsor;
-            }
-            
-            buildInteractiveRefTable(true);
-            scrollToFocusedReferal();
-        } else {
-            alert(`Реферал "${username}" не найден в структуре таблицы`);
-        }
-    } catch (err) {
-        console.error('Ошибка поиска реферала:', err);
-    }
-}
-
-// --- ПОСТРОЕНИЕ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ ---
-async function buildInteractiveRefTable(forceRender = false) {
-    if (!interactiveRefTableBody) return;
+    tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Загрузка структуры данных...</td></tr>';
 
     try {
-        const res = await fetch(`${API_URL}/referals-tree`);
-        const data = await res.json();
-        if (!data.success || !data.tree) {
-            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Ошибка структуры</td></tr>';
+        // Получаем структуру дерева с расчитанными колонками (уровнями)
+        const response = await fetch(`${API_BASE_URL}/api/referals-tree`);
+        const result = await response.json();
+
+        if (!result.success || !result.tree) {
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Ошибка загрузки структуры рефералов</td></tr>';
             return;
         }
 
-        const refTree = data.tree;
-        const currentRefTreeStr = JSON.stringify(data) + `_expanded:${Array.from(expandedNodes).join(',')}_target:${refSearchTargetUser}`;
-        
-        if (currentRefTreeStr === lastRefTreeJsonString && !forceRender) {
-            return; 
+        tableBody.innerHTML = ''; // Очищаем заглушку перед рендерингом
+
+        // Перебираем всех пользователей из полученной структуры
+        for (const username of Object.keys(result.tree)) {
+            const userNode = result.tree[username];
+            
+            // Запрашиваем индивидуальные детали по каждому пользователю для вывода баланса и Золотого статуса
+            let details = { 
+                profile: { 
+                    balances: { mitrons: 0 }, 
+                    isPaid: false, 
+                    goldenStatus: { realDirectReferralsCount: 0 } 
+                } 
+            };
+            
+            try {
+                const detailRes = await fetch(`${API_BASE_URL}/api/user-details/${username}`);
+                if (detailRes.ok) {
+                    details = await detailRes.json();
+                }
+            } catch (e) {
+                console.error(`Не удалось загрузить детальный профиль для пользователя: ${username}`, e);
+            }
+
+            const tr = document.createElement('tr');
+
+            // 1. Колонка: Логин участника
+            const tdUser = document.createElement('td');
+            tdUser.innerHTML = `<strong>${username}</strong>`;
+            tr.appendChild(tdUser);
+
+            // 2. Колонка: Спонсор (Пригласитель)
+            const tdSponsor = document.createElement('td');
+            tdSponsor.innerText = userNode.sponsor || 'SYSTEM_ROOT';
+            tr.appendChild(tdSponsor);
+
+            // 3. Колонка: Глубина в реферальной системе
+            const tdColumn = document.createElement('td');
+            tdColumn.innerText = `Уровень ${userNode.calculatedColumn}`;
+            tr.appendChild(tdColumn);
+
+            // 4. Колонка: Текущий баланс (Только Митроны и эквивалент в USD)
+            const tdBalance = document.createElement('td');
+            const mitrons = details.profile.balances.mitrons || 0;
+            tdBalance.innerHTML = `<span>${mitrons} Mitrons</span><br><small style="color: #28a745;">($${convertToUsd(mitrons)})</small>`;
+            tr.appendChild(tdBalance);
+
+            // 5. Колонка: Статус 5 ЗОЛОТЫХ ЯЧЕЕК (XYZ_1 - XYZ_5)
+            const tdGolden = document.createElement('td');
+            const realCount = details.profile.goldenStatus.realDirectReferralsCount || 0;
+            
+            // Каждые 2 Реальных покупателя активируют одну Золотую Ячейку из пяти доступных
+            let activeGoldenCount = Math.min(5, Math.floor(realCount / 2));
+            
+            if (activeGoldenCount > 0) {
+                tdGolden.innerHTML = `
+                    <span style="color: #d4af37; font-weight: bold; text-shadow: 0px 0px 2px rgba(0,0,0,0.2);">
+                        🏆 ЗОЛОТО (XYZ_1 - XYZ_${activeGoldenCount})
+                    </span><br>
+                    <small style="color: #666;">Реальных в 1-й линии: ${realCount}/10</small>
+                `;
+            } else {
+                tdGolden.innerHTML = `
+                    <span style="color: #999; font-style: italic;">🔒 XYZ_1 - XYZ_5 заблокированы</span><br>
+                    <small style="color: #666;">Реальных в 1-й линии: ${realCount}/10</small>
+                `;
+            }
+            tr.appendChild(tdGolden);
+
+            tableBody.appendChild(tr);
         }
-        lastRefTreeJsonString = currentRefTreeStr;
-        
-        function buildUserNodeHTML(username) {
-            let children = Object.values(refTree).filter(node => node.sponsor === username);
-            children.sort((a, b) => a.username.localeCompare(b.username));
 
-            let hasChildren = children.length > 0;
-            let currentColumn = refTree[username] ? refTree[username].calculatedColumn : 1;
-            let directRefCount = children.length;
-            let isExpanded = expandedNodes.has(username); 
-
-            const isTarget = username.toLowerCase() === refSearchTargetUser.toLowerCase();
-
-            // Если это искомый пользователь — красим в красный цвет по ТЗ
-            let isFoundTargetStyle = isTarget 
-                ? 'border: 2px solid #ff3366; box-shadow: 0 0 15px #ff3366; background: #ff3366;' 
-                : 'border: 1px solid #00fff0; background: #1f4068; box-shadow: 0 1px 3px rgba(0,0,0,0.2);';
-
-            let html = `
-                <div class="ref-node ${isTarget ? 'ref-node-focused' : ''}" style="display: flex; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
-                    <div class="user-card" style="padding: 4px 6px; border-radius: 4px; min-width: 100px; max-width: 120px; box-sizing: border-box; ${isFoundTargetStyle}">
-                        <div style="font-weight: bold; color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${username}">${username}</div>
-                        <div style="font-size: 9px; color: #ffd700;">Уровень: ${currentColumn}</div>
-                        <div style="font-size: 9px; color: #a2e8dd; margin-top: 1px;">👥 Рефы: <strong>${directRefCount}</strong></div>
-                        ${hasChildren ? `<button class="tree-toggle-btn" onclick="toggleRefBranch('${username}', this)" style="margin-top: 4px; background: #00fff0; border: none; color: #111; font-size: 9px; padding: 1px 4px; border-radius: 3px; cursor: pointer; font-weight: bold; width: 100%; display: block; text-align: center;">${isExpanded ? '▲' : '▼'}</button>` : ''}
-                    </div>
-                    
-                    ${hasChildren ? `
-                        <div id="children_of_${username}" class="children-container" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; border-left: 1px dashed #00fff0; padding-left: 8px; gap: 4px;">
-                            ${children.map(child => buildUserNodeHTML(child.username)).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-            return html;
-        }
-
-        if (refTree['SYSTEM_ROOT']) {
-            let fullTreeHTML = `
-                <tr>
-                    <td colspan="2" style="padding: 10px; overflow-x: auto;">
-                        <div style="display: flex; min-width: max-content;">
-                            ${buildUserNodeHTML('SYSTEM_ROOT')}
-                        </div>
-                    </td>
-                </tr>
-            `;
-            interactiveRefTableBody.innerHTML = fullTreeHTML;
-        } else {
-            interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">SYSTEM_ROOT не найден</td></tr>';
-        }
-
-    } catch (e) {
-        interactiveRefTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center; color: #e43f5a;">Не удалось загрузить реферальное дерево</td></tr>';
+    } catch (error) {
+        console.error('Ошибка при генерации таблицы рефералов:', error);
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Критическая ошибка на стороне клиента</td></tr>';
     }
 }
 
-window.toggleRefBranch = function(username, btn) {
-    const container = document.getElementById(`children_of_${username}`);
-    if (!container) return;
-
-    if (container.style.display === 'none') {
-        container.style.display = 'flex';
-        btn.innerHTML = '▲';
-        expandedNodes.add(username); 
-    } else {
-        container.style.display = 'none';
-        btn.innerHTML = '▼';
-        expandedNodes.delete(username); 
+// Автоматическая инициализация таблицы при полной загрузке DOM-структуры страницы
+document.addEventListener('DOMContentLoaded', () => {
+    loadReferalsTable();
+    
+    // Поддержка кнопки ручного обновления данных на интерфейсе
+    const refreshBtn = document.getElementById('refresh-table-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', loadReferalsTable);
     }
-    buildInteractiveRefTable(true); 
-};
-
-// Запуск фонового обновления структуры таблицы, только когда окно открыто
-setInterval(() => {
-    if (tableOverlay && tableOverlay.classList.contains('show')) {
-        buildInteractiveRefTable();
-    }
-}, 2000);
+});
