@@ -141,18 +141,41 @@
             width: max-content; 
         }
 
-        /* --- СТИЛИ ДЛЯ VIP ЗОНЫ --- */
-        .vip-row-container {
+        /* --- 🔥 СТИЛИ ДЛЯ VIP ЯЧЕЕК (КВАДРАТОВ) --- */
+        #vipRowContainer {
+            width: 100%;
             display: flex;
-            gap: 15px;
-            margin-bottom: 40px;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px dashed rgba(0, 255, 240, 0.2);
-            border-radius: 10px;
-            width: max-content;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 25px;
+            box-sizing: border-box;
         }
+
+        .vip-cell {
+            background: #1f4068;
+            border: 2px solid #0f4c81;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            width: 110px;
+            height: 70px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .vip-cell:active { transform: scale(0.95); }
         
+        .vip-gold { border: 2px solid #ffd700; background: #3a3000; }
+        .vip-silver { border: 2px solid #a2e8dd; background: #002b36; }
+        
+        .vip-id { font-size: 11px; color: #aaa; font-weight: bold; margin-bottom: 4px; }
+        .vip-user { font-size: 12px; font-weight: bold; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
         /* --- СТИЛИ ДЛЯ СТРУКТУРНЫХ МАТРИЦ --- */
         .matrices-row {
             display: grid !important;
@@ -225,8 +248,8 @@
             width: 90%;
             max-width: 380px;
             box-sizing: border-box;
+            flex-direction: column;
         }
-        .modal-card.show { display: block; }
         .modal-card-header {
             font-size: 16px;
             font-weight: bold;
@@ -234,21 +257,6 @@
             margin-bottom: 15px;
             border-bottom: 1px solid #ff3366;
             padding-bottom: 5px;
-        }
-        .modal-info-row {
-            font-size: 14px;
-            margin-bottom: 8px;
-        }
-        .sponsor-chain {
-            background: #111122;
-            padding: 8px;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #ccc;
-            max-height: 80px;
-            overflow-y: auto;
-            margin-top: 5px;
-            border: 1px solid #0f4c81;
         }
         
         .days-active-accent { color: #ffd700; font-weight: bold; text-shadow: 0 0 5px #ffd700; }
@@ -281,14 +289,6 @@
             box-sizing: border-box;
             overflow-x: auto;
         }
-        
-        .ref-node-focused { 
-            animation: tablePulse 1s infinite alternate;
-        }
-        @keyframes tablePulse {
-            0% { transform: scale(1); }
-            100% { transform: scale(1.02); }
-        }
     </style>
 </head>
 <body>
@@ -316,7 +316,7 @@
         <div class="screen-container" id="screenContainer">
             <div id="mainTreeDisplay">
                 
-                <div class="vip-row-container" id="vipRowContainer"></div>
+                <div id="vipRowContainer"></div>
 
                 <div class="matrices-row" id="matricesRowContainer"></div>
 
@@ -345,21 +345,14 @@
     </div>
 
     <div class="modal-card" id="userModalCard">
-        <div class="modal-card-header">🛠️ КАРТОЧКА МОДЕРАЦИИ</div>
-        <div class="modal-info-row"><strong>Логин:</strong> <span id="modalUsername">-</span></div>
-        <div class="modal-info-row"><strong>Зарегистрирован:</strong> <span id="modalRegDate">-</span></div>
-        <div class="modal-info-row"><strong>Дней активности:</strong> <span id="modalDaysCount" class="days-active-normal">-</span></div>
-        <div class="modal-info-row">
-            <strong>Цепочка спонсоров вверх:</strong>
-            <div class="sponsor-chain" id="modalSponsorChain"></div>
-        </div>
+        <div class="modal-card-header" id="modalCardTitle">🛠️ КАРТОЧКА МОДЕРАЦИИ</div>
+        <div id="modalCardBody">
+            </div>
         <div class="modal-actions">
-            <button class="admin-btn btn-freeze" id="modalFreezeBtn">Заморозить выплаты</button>
-            <button class="admin-btn btn-delete" id="modalDeleteBtn">Удалить Пользователя</button>
-            <button class="admin-btn btn-close-modal" id="modalCloseBtn">Закрыть окно</button>
+            <button class="admin-btn btn-close-modal" id="modalCloseBtn" onclick="document.getElementById('userModalCard').style.display='none';">Закрыть окно</button>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="matrix.js"></script>
 </body>
-</html>
+                </html>
