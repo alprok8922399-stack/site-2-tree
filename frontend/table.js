@@ -1,6 +1,5 @@
 /* ==========================================================================
-   🚨 КРИТИЧЕСКАЯ ЗОНА: ТОЛЬКО ДЛЯ ЧТЕНИЯ (READ-ONLY)
-   ⚠️ ЛЮБЫЕ ИЗМЕНЕНИЯ В ЭТОМ ФАЙЛЕ ЗАПРЕЩЕНЫ И МОГУТ СЛОМАТЬ СИСТЕМУ ДЕПЛОЯ!
+   🛠️ МОДУЛЬ: table.js (Изолированная интерактивная таблица рефералов)
    ========================================================================== */
 
 const API_URL = '/api';
@@ -72,7 +71,7 @@ if (refSearchResetBtn) {
     });
 }
 
-// Скролл к найденной карточке в таблице
+// Скролл к найденной карточке внутри контейнера таблицы
 function scrollToFocusedReferal() {
     setTimeout(() => {
         const focusedCard = document.querySelector('.ref-node-focused');
@@ -86,7 +85,7 @@ function scrollToFocusedReferal() {
     }, 500); 
 }
 
-// Поиск реферала на сервере с раскрытием всех родителей вверх
+// Поиск реферала на сервере с раскрытием всех родителей вверх (без влияния на матрицы)
 async function findReferalAndExpand(username) {
     try {
         const res = await fetch(`${API_URL}/referals-tree`);
@@ -146,6 +145,7 @@ async function buildInteractiveRefTable(forceRender = false) {
 
             const isTarget = username.toLowerCase() === refSearchTargetUser.toLowerCase();
 
+            // Если это искомый пользователь — красим в красный цвет по ТЗ
             let isFoundTargetStyle = isTarget 
                 ? 'border: 2px solid #ff3366; box-shadow: 0 0 15px #ff3366; background: #ff3366;' 
                 : 'border: 1px solid #00fff0; background: #1f4068; box-shadow: 0 1px 3px rgba(0,0,0,0.2);';
@@ -205,7 +205,7 @@ window.toggleRefBranch = function(username, btn) {
     buildInteractiveRefTable(true); 
 };
 
-// Запуск фонового обновления структуры таблицы
+// Запуск фонового обновления структуры таблицы, только когда окно открыто
 setInterval(() => {
     if (tableOverlay && tableOverlay.classList.contains('show')) {
         buildInteractiveRefTable();
