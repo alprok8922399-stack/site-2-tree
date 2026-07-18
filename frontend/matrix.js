@@ -16,6 +16,7 @@ let searchTargetUser = '';
 let globalTreeCached = null; 
 let lastTreeJsonString = ''; 
 
+// Модальное окно
 let modal = document.getElementById('infoModal');
 if (!modal) {
     modal = document.createElement('div');
@@ -23,7 +24,7 @@ if (!modal) {
     modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 9999; font-family: sans-serif; padding: 20px; box-sizing: border-box;`;
     modal.innerHTML = `
         <div style="background: #162447; border: 2px solid #00fff0; padding: 20px; border-radius: 12px; max-width: 450px; width: 100%; box-shadow: 0 0 20px rgba(0,255,240,0.3); color: #fff; position: relative;">
-            <h3 id="modalTitle" style="margin-top:0; color:#00fff0; font-size:20px; border-bottom:1px solid #0f4c81; padding-bottom:10px;">Информация о партнере</h3>
+            <h3 id="modalTitle" style="margin-top:0; color:#00fff0; font-size:20px; border-bottom:1px solid #0f4c81; padding-bottom:10px;">Информация</h3>
             <div id="modalBody" style="font-size:15px; line-height:1.6; margin-bottom:20px;">Загрузка...</div>
             <button onclick="document.getElementById('infoModal').style.display='none'" style="width:100%; padding:10px; background:#e43f5a; border:none; color:white; font-weight:bold; border-radius:6px; cursor:pointer;">ЗАКРЫТЬ</button>
         </div>
@@ -31,6 +32,7 @@ if (!modal) {
     document.body.appendChild(modal);
 }
 
+// Управление масштабом
 function setZoom(scaleValue) {
     if (zoomSlider) zoomSlider.value = scaleValue;
     if (mainTreeDisplay) {
@@ -41,12 +43,7 @@ function setZoom(scaleValue) {
 
 if (zoomSlider) zoomSlider.addEventListener('input', (e) => setZoom(e.target.value));
 
-if (screenContainer) {
-    screenContainer.addEventListener('click', (e) => {
-        if (e.target === screenContainer || e.target === mainTreeDisplay || e.target.classList.contains('matrices-row')) setZoom(0.8);
-    });
-}
-
+// Поиск
 if (searchBtn) {
     searchBtn.addEventListener('click', () => {
         const val = searchInput.value.trim();
@@ -77,25 +74,16 @@ async function fetchTree(forceRender = false) {
 function findUserAndFocus(username) {
     fetch(`${API_URL}/tree`).then(res => res.json()).then(tree => {
         let foundCellId = null;
-        let exactUsername = '';
         for (const [id, cell] of Object.entries(tree)) {
             if (cell && cell.user && cell.user.toLowerCase() === username.toLowerCase()) {
-                foundCellId = id; exactUsername = cell.user; break;
+                foundCellId = id; break;
             }
         }
         if (foundCellId) {
             const parsed = parseCell(foundCellId);
-            let rootId = foundCellId; 
-            function getPrevLevelLetter(l) { return l.length > 1 ? l.substring(0, l.length - 1) : (l === 'A' ? 'A' : String.fromCharCode(l.charCodeAt(0) - 1)); }
-            let p = parsed;
-            let s1L = getPrevLevelLetter(p.letter);
-            let s1N = Math.floor((p.num + 1) / 2);
-            let s2L = getPrevLevelLetter(s1L);
-            let s2N = Math.floor((s1N + 1) / 2);
-            let cand = `${s2L}${s2N}`;
-            rootId = (s2L === 'A' || tree[cand]) ? cand : `${s1L}${s1N}`;
-            if (p.letter === 'A') rootId = 'A1';
-            currentRootId = rootId; searchTargetUser = exactUsername; 
+            if (!parsed) return;
+            currentRootId = foundCellId; 
+            searchTargetUser = username; 
             setZoom(0.8); fetchTree(true); scrollToFocusedCell();
         } else alert(`Пользователь "${username}" не найден`);
     });
@@ -154,7 +142,7 @@ function getNextLevelLetter(letter) {
     return 'A'.repeat(letter.length + 1);
 }
 
-// --- ОСНОВНАЯ ФУНКЦИЯ ---
+// --- ОСНОВНАЯ ФУНКЦИЯ РЕНДЕРИНГА ---
 function renderDynamicSplitting(tree) {
     globalTreeCached = tree;
 
@@ -196,6 +184,7 @@ function renderDynamicSplitting(tree) {
         else { activeMatricesHTML.push(buildSemerkaHTML(top, tree[ids.left], tree[ids.right], bottom4, ids)); }
     }
 
+    // Вывод в DOM
     if (mainTreeDisplay) {
         mainTreeDisplay.innerHTML = `
             <div id="vipRowContainer" style="display:flex; flex-direction:column; align-items:center; margin-bottom:20px; width:100%;">
@@ -209,40 +198,8 @@ function renderDynamicSplitting(tree) {
         mainTreeDisplay.style.width = '100%';
     }
 }
-    // 2. Считаем матрицы
-    let activeMatricesHTML = [];
-    let queue = [currentRootId]; 
-    let processed = new Set();
-    while (queue.length > 0) {
-        const curId = queue.shift();
-        if (processed.has(curId)) continue;
-        processed.add(curId);
-        const top = tree[curId] || null;
-        const p = parseCell(curId);
-        if (!p) continue;
-        const nL = getNextLevelLetter(p.letter), bL = getNextLevelLetter(nL);
-        const lN = p.num * 2 - 1, rN = p.num * 2;
-        const ids = { top: curId, left: `${nL}${lN}`, right: `${nL}${rN}`, b1: `${bL}${lN*2-1}`, b2: `${bL}${lN*2}`, b3: `${bL}${rN*2-1}`, b4: `${bL}${rN*2}` };
-        const bottom4 = [tree[ids.b1], tree[ids.b2], tree[ids.b3], tree[ids.b4]];
-        if (bottom4.every(c => c && c.user)) { queue.push(ids.left, ids.right); } 
-        else { activeMatricesHTML.push(buildSemerkaHTML(top, tree[ids.left], tree[ids.right], bottom4, ids)); }
-    }
 
-    // 3. Выводим ВСЁ сразу
-    if (mainTreeDisplay) {
-        mainTreeDisplay.innerHTML = `
-            <div id="vipRowContainer" style="display:flex; flex-direction:column; align-items:center; margin-bottom:20px; width:100%;">
-                <div style="color:#ffd700; font-weight:bold; margin-bottom:10px;">👑 ЗОЛОТОЙ VIP-РЯД</div>
-                <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">${goldHTML}</div>
-            </div>
-            <div class="matrices-row">${activeMatricesHTML.join('')}</div>
-        `;
-        const scale = zoomSlider ? zoomSlider.value : 0.8;
-        mainTreeDisplay.style.transform = `scale(${scale})`;
-        mainTreeDisplay.style.width = '100%';
-    }
-}
-
+// Сброс базы
 if (resetBtn) {
     resetBtn.addEventListener('click', async () => {
         if (!confirm('Очистить базу?')) return;
