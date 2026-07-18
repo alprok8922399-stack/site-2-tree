@@ -1,8 +1,8 @@
-// static.js
+// backend/static.js
 
 // === 1. ГЛОБАЛЬНЫЕ КОНСТАНТЫ ===
-const MITRON_RATE_USD = 130 / 1000; // 1 Митрон = 0.13 USD (исходя из константы 1000 Митронов = 130 USDT)
-const USD_TO_RUB = 76.62;          // Текущий курс доллара к рублю (для расчетов в реальном времени)
+const MITRON_RATE_USD = 130 / 1000; // 1 Митрон = 0.13 USD (исходя из константы 1000 Митронов = 130 USD)
+// РУБЛИ ПОЛНОСТЬЮ УДАЛЕНЫ ИЗ СИСТЕМЫ
 
 // === 2. СТАТИЧЕСКИЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 
@@ -45,14 +45,6 @@ function mitronsToUsd(mitrons) {
     return (mitrons * MITRON_RATE_USD).toFixed(2);
 }
 
-/**
- * Конвертирует Митроны в Рубли (через USD)
- */
-function mitronsToRub(mitrons) {
-    const usd = mitrons * MITRON_RATE_USD;
-    return (usd * USD_TO_RUB).toFixed(2);
-}
-
 // === 3. ИНИЦИАЛИЗАЦИЯ ДЕФОЛТНЫХ СУЩНОСТЕЙ (АРХИТЕКТУРА ДАННЫХ) ===
 
 /**
@@ -65,16 +57,15 @@ function createNewUserCard(username) {
         paymentDate: null,           // Точная дата оплаты (для расчета 31 дня)
         isRealBuyer: false,          // Стал ли покупатель "Реальным" (31 день + подтверждение товара)
         
-        // Балансы пользователя
+        // Балансы пользователя (Только Митроны и USD)
         balances: {
             mitrons: 0,              // Внутренний баланс в Митронах
-            usd: 0,                  // Отображаемый баланс в USD
-            rub: 0                   // Отображаемый баланс в рублях
+            usd: 0                   // Отображаемый баланс в USD
         },
         
-        // Поля для Серебряных мест
-        silverStatus: {
-            isActive: false,         // Активировано ли Серебряное место (требуется 10 Реальных в 1-й линии)
+        // Поля для Золотых мест (XYZ_1 - XYZ_5)
+        goldenStatus: {
+            isActive: false,         // Активировано ли Золотое место (требуется 10 Реальных в 1-й линии)
             activatedAt: null,       // Время активации статуса
             realDirectReferralsCount: 0 // Счетчик Реальных покупателей, приглашенных ЛИЧНО
         },
@@ -92,12 +83,12 @@ function createNewUserCard(username) {
  */
 function createInitialWallets() {
     return {
-        // Контур 1: Сверхсекретное холодное хранилище прибыли Создателя (450 Митронов с каждого чека)
+        // Контур 1: Сверхсекретное холодное хранилище прибыли Создателя (30% = 300 Митронов с каждого чека покупки места)
         myWallet: {
             address: "0xCreatorColdWalletAddress...",
             balanceMitrons: 0
         },
-        // Контур 2: Главный резерв ликвидности (сюда уходят 550 Митронов с каждой оплаты)
+        // Контур 2: Главный резерв ликвидности / Маркетплейс (70% = 700 Митронов с каждой оплаты уходят сюда)
         payoutReserveWallet: {
             address: "0xPayoutReserveWalletAddress...",
             balanceMitrons: 0
@@ -115,7 +106,6 @@ module.exports = {
     getLevelLetter,
     cellIdToGlobalIndex,
     mitronsToUsd,
-    mitronsToRub,
     createNewUserCard,
     createInitialWallets
 };
