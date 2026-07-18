@@ -158,10 +158,14 @@ function getNextLevelLetter(letter) {
 function renderDynamicSplitting(tree) {
     globalTreeCached = tree;
 
-    // 1. Генерируем Золото (строкой)
-    let goldHTML = '';
+    // ГЕНЕРАЦИЯ VIP-РЯДА (XYZ_1 - XYZ_5)
+    const vipIds = [];
     for (let i = 1; i <= 5; i++) {
-        const id = `G${i}`;
+        vipIds.push(`XYZ_${i}`);
+    }
+
+    let goldHTML = '';
+    vipIds.forEach(id => {
         const cell = tree[id] || null;
         const occ = cell && cell.user;
         goldHTML += `
@@ -171,8 +175,40 @@ function renderDynamicSplitting(tree) {
                 <div style="font-size: 11px; color: #ffd700; font-weight: bold;">${id}</div>
                 <div style="font-size: 12px; font-weight: bold; overflow: hidden; text-overflow: ellipsis;">${occ ? cell.user : '-'}</div>
             </div>`;
+    });
+
+    // Расчет матриц
+    let activeMatricesHTML = [];
+    let queue = [currentRootId]; 
+    let processed = new Set();
+    while (queue.length > 0) {
+        const curId = queue.shift();
+        if (processed.has(curId)) continue;
+        processed.add(curId);
+        const top = tree[curId] || null;
+        const p = parseCell(curId);
+        if (!p) continue;
+        const nL = getNextLevelLetter(p.letter), bL = getNextLevelLetter(nL);
+        const lN = p.num * 2 - 1, rN = p.num * 2;
+        const ids = { top: curId, left: `${nL}${lN}`, right: `${nL}${rN}`, b1: `${bL}${lN*2-1}`, b2: `${bL}${lN*2}`, b3: `${bL}${rN*2-1}`, b4: `${bL}${rN*2}` };
+        const bottom4 = [tree[ids.b1], tree[ids.b2], tree[ids.b3], tree[ids.b4]];
+        if (bottom4.every(c => c && c.user)) { queue.push(ids.left, ids.right); } 
+        else { activeMatricesHTML.push(buildSemerkaHTML(top, tree[ids.left], tree[ids.right], bottom4, ids)); }
     }
 
+    if (mainTreeDisplay) {
+        mainTreeDisplay.innerHTML = `
+            <div id="vipRowContainer" style="display:flex; flex-direction:column; align-items:center; margin-bottom:20px; width:100%;">
+                <div style="color:#ffd700; font-weight:bold; margin-bottom:10px;">👑 VIP-РЯД</div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">${goldHTML}</div>
+            </div>
+            <div class="matrices-row">${activeMatricesHTML.join('')}</div>
+        `;
+        const scale = zoomSlider ? zoomSlider.value : 0.8;
+        mainTreeDisplay.style.transform = `scale(${scale})`;
+        mainTreeDisplay.style.width = '100%';
+    }
+}
     // 2. Считаем матрицы
     let activeMatricesHTML = [];
     let queue = [currentRootId]; 
