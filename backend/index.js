@@ -1,4 +1,3 @@
-/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД backend/index.js === */
 const express = require('express');
 const cors = require('cors');
 const app = express();
@@ -188,14 +187,30 @@ app.get('/api/user-details/:username', (req, res) => {
     });
 });
 
-// Построение линейно-реферальной структуры с безопасным расчетом колонок таблицы
+/**
+ * Архитектурный эндпоинт: Построение дерева связей для Активной Реферальной Сетки.
+ * Возвращает структурированные ноды с parentId, children и уровнем колонки (level).
+ */
 app.get('/api/referals-tree', (req, res) => {
     let structure = {};
     
+    // 1. Карта прямых личников (детей) для каждого спонсора
+    let childrenMap = {};
+    Object.keys(referalsDB).forEach(user => {
+        childrenMap[user] = [];
+    });
+    
+    Object.entries(referalsDB).forEach(([user, sponsor]) => {
+        if (sponsor && childrenMap[sponsor]) {
+            childrenMap[sponsor].push(user);
+        }
+    });
+    
+    // 2. Функция безопасного вычисления номера колонки (глубины от SYSTEM_ROOT)
     function getCalculatedLevel(user) {
         let level = 1;
         let current = user;
-        let visited = new Set(); // Защита от циклического Call Stack Overflow
+        let visited = new Set();
         
         while (current && current !== 'SYSTEM_ROOT' && !visited.has(current)) {
             visited.add(current);
@@ -210,15 +225,47 @@ app.get('/api/referals-tree', (req, res) => {
         return level;
     }
 
+    // 3. Сборка финальных объектов по стандарту ТЗ дерева связей
     Object.keys(referalsDB).forEach(username => {
         structure[username] = {
-            username: username,
-            sponsor: referalsDB[username],
-            calculatedColumn: getCalculatedLevel(username)
+            id: username,
+            login: username,
+            parentId: referalsDB[username],
+            level: getCalculatedLevel(username),
+            isExpanded: false, // Исходное состояние для фронтенда
+            children: childrenMap[username] || []
         };
     });
 
     res.json({ success: true, tree: structure });
+});
+
+/**
+ * Метод Smart Path: Возвращает точную цепочку от корня до искомого пользователя.
+ * Фронтенд использует этот массив, чтобы точечно открыть (isExpanded = true) нужные ячейки.
+ */
+app.get('/api/get-referral-chain', (req, res) => {
+    const { login } = req.query;
+    if (!login) return res.status(400).json({ error: 'Параметр login обязателен' });
+
+    // Приведение к регистру, если в БД ключ хранится в исходном виде
+    const targetUser = Object.keys(referalsDB).find(k => k.toLowerCase() === login.trim().toLowerCase());
+    if (!targetUser) return res.status(404).json({ error: 'Пользователь не найден в реферальной сети' });
+
+    let chain = [];
+    let current = targetUser;
+    let visited = new Set();
+
+    while (current && !visited.has(current)) {
+        visited.add(current);
+        chain.push(current);
+        current = referalsDB[current];
+    }
+
+    // Разворачиваем, чтобы путь шел сверху вниз: Root ➔ ... ➔ Целевой пользователь
+    chain.reverse();
+
+    res.json({ success: true, chain });
 });
 
 // ================= API МАРКЕТПЛЕЙСА (ФИНАНСЫ И АКТИВАЦИЯ) =================
