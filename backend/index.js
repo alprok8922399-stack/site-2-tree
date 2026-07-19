@@ -49,13 +49,12 @@ let treeDB = createInitialTree();
  * Уникальный алгоритм заполнения «Гребёнка» по порциям из 32 матриц (128 ячеек)
  */
 function findNextEmptyCell(tree) {
-    // Первоочередное заполнение базовой семерки лидера
     const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    let levelIndex = 3; // Начинаем перебор с уровня D (индекс 3)
+    let levelIndex = 3; 
     while (true) {
         const letter = getLevelLetter(levelIndex);
         const countInLevel = 1 << levelIndex; 
@@ -115,12 +114,10 @@ function checkAndGenerateChildren(tree, currentCellId) {
 
 // ================= API МАТРИЦЫ И ДЕРЕВА =================
 
-// Получение текущего состояния глобального дерева ячеек
 app.get('/api/tree', (req, res) => {
     res.json(treeDB);
 });
 
-// Прямая регистрация пользователя в свободную ячейку матрицы
 app.post('/api/register', (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
@@ -136,7 +133,6 @@ app.post('/api/register', (req, res) => {
     
     referalsDB[trimmedUser] = canonicalSponsor;
     
-    // СИНХРОНИЗАЦИЯ: Автоматически создаем карточку в БД магазина, чтобы балансы были доступны
     if (!shopUsersDB[trimmedUser]) {
         shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
         shopUsersDB[trimmedUser].isPaid = true;
@@ -148,7 +144,6 @@ app.post('/api/register', (req, res) => {
     res.json({ success: true, cellId, user: trimmedUser });
 });
 
-// Сброс всей экосистемы в исходное состояние (для тестов)
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
     shopUsersDB = {};
@@ -162,11 +157,9 @@ app.post('/api/reset', (req, res) => {
     res.json({ success: true });
 });
 
-// Получение детальной информации о пользователе и его спонсорской цепочке (вверх)
 app.get('/api/user-details/:username', (req, res) => {
     const usernameParam = req.params.username.trim();
     
-    // Регистронезависимый поиск точного ключа в базах данных
     const canonicalName = Object.keys(referalsDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
                           || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
                           || usernameParam;
@@ -187,12 +180,10 @@ app.get('/api/user-details/:username', (req, res) => {
         visited.add(currentSponsor);
         sponsorChain.push(currentSponsor);
         
-        // Безопасный переход к следующему предку с учетом регистра
         const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === currentSponsor.toLowerCase());
         currentSponsor = nextSponsorKey ? referalsDB[nextSponsorKey] : null;
     }
     
-    // Если карточки пользователя в БД магазина нет — генерируем и привязываем позицию
     if (!shopUsersDB[canonicalName]) {
         shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
         if (userCells.length > 0) {
@@ -212,22 +203,16 @@ app.get('/api/user-details/:username', (req, res) => {
     });
 });
 
-/**
- * Архитектурный эндпоинт: Построение дерева связей для Активной Реферальной Сетки.
- */
 app.get('/api/referals-tree', (req, res) => {
     let structure = {};
     let childrenMap = {};
     
-    // Инициализируем массивы детей для каждого зарегистрированного пользователя
     Object.keys(referalsDB).forEach(user => {
         childrenMap[user] = [];
     });
     
-    // Заполняем карту связей «Спонсор -> Массив личников» с защитой от падения
     Object.entries(referalsDB).forEach(([user, sponsor]) => {
         if (sponsor) {
-            // Находим оригинальный регистр спонсора в базе
             const canonicalSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === sponsor.toLowerCase()) || sponsor;
             if (!childrenMap[canonicalSponsor]) {
                 childrenMap[canonicalSponsor] = [];
@@ -236,7 +221,6 @@ app.get('/api/referals-tree', (req, res) => {
         }
     });
     
-    // Функция безопасного вычисления глубины вложенности от корня системы
     function getCalculatedLevel(user) {
         let level = 1;
         let current = user;
@@ -249,14 +233,12 @@ app.get('/api/referals-tree', (req, res) => {
                 level++;
                 break;
             }
-            // Переходим к спонсору с поправкой на регистр
             current = Object.keys(referalsDB).find(k => k.toLowerCase() === sponsor.toLowerCase()) || sponsor;
             level++;
         }
         return level;
     }
 
-    // Сборка финального дерева для фронтенд-таблицы
     Object.keys(referalsDB).forEach(username => {
         structure[username] = {
             id: username,
@@ -271,15 +253,12 @@ app.get('/api/referals-tree', (req, res) => {
     res.json({ success: true, tree: structure });
 });
 
-/**
- * Метод Smart Path: Возвращает точную цепочку от корня до искомого пользователя.
- */
 app.get('/api/get-referral-chain', (req, res) => {
     const { login } = req.query;
     if (!login) return res.status(400).json({ error: 'Параметр login обязателен' });
 
     const targetUser = Object.keys(referalsDB).find(k => k.toLowerCase() === login.trim().toLowerCase());
-    if (!targetUser) return res.status(404).json({ error: 'Пользователь не найден в реферальной сети' });
+    if (!targetUser) return res.status(404).json({ error: 'Пользователь не найден in реферальной сети' });
 
     let chain = [];
     let current = targetUser;
@@ -297,15 +276,20 @@ app.get('/api/get-referral-chain', (req, res) => {
     res.json({ success: true, chain });
 });
 
-// ================= API МАРКЕТПЛЕЙСА (ФИНАНСЫ И АКТИВАЦИЯ) =================
+// ================= API МАРКЕТПЛЕЙСА (ГАРАНТИРОВАННАЯ ПОСАДКА БОТОВ) =================
 
-// Регистрация нового покупателя в магазине
+// Регистрация нового покупателя в магазине (ТЕПЕРЬ СРАЗУ СТАВИТ В МАТРИЦУ!)
 app.post('/api/shop/register', (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const trimmedUser = username.trim();
-    if (shopUsersDB[trimmedUser]) return res.status(400).json({ error: 'Такой покупатель уже зарегистрирован' });
+    
+    // Если бот уже есть в матрице — просто отдаем его статус
+    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
+    if (isExist) {
+        return res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser] || createNewUserCard(trimmedUser) });
+    }
     
     shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
     
@@ -315,41 +299,49 @@ app.post('/api/shop/register', (req, res) => {
         referalsDB[trimmedUser] = lastRegisteredBot ? lastRegisteredBot : 'SYSTEM_ROOT';
     }
     lastRegisteredBot = trimmedUser; 
+
+    // ЖЕСТКАЯ АКТИВАЦИЯ: Сажаем бота в матрицу прямо при вызове register генератором трафика
+    const cellId = findNextEmptyCell(treeDB);
+    treeDB[cellId].user = trimmedUser;
     
-    res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser] });
+    shopUsersDB[trimmedUser].isPaid = true;
+    shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
+    shopUsersDB[trimmedUser].matrixPosition.status = 'active';
+    
+    checkAndGenerateChildren(treeDB, cellId);
+    
+    res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser], cellId });
 });
 
-// Оплата бизнес-места: Списание 1000 Митронов ($130) и автоматическая посадка в матрицу
+// Оплата бизнес-места
 app.post('/api/shop/pay', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
-    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase());
-    if (!canonicalName || !shopUsersDB[canonicalName]) return res.status(400).json({ error: 'Покупатель не найден' });
+    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
     
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase());
     if (isExist) return res.status(400).json({ error: 'Этот пользователь уже занял место в матрице' });
 
-    // Финансовая математика ТЗ: 1000 Митронов ($130) за место
     const TOTAL_MITRONS = 1000;
-    const MARKETPLACE_RESERVE = 700; // 70% в резерв ликвидности системы
-    const CREATOR_COLD = 300;        // 30% на холодный сейф создателя
+    const MARKETPLACE_RESERVE = 700; 
+    const CREATOR_COLD = 300;        
 
-    // Обновление балансов и статуса плательщика
+    if (!shopUsersDB[canonicalName]) {
+        shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
+    }
+
     shopUsersDB[canonicalName].isPaid = true;
     shopUsersDB[canonicalName].paymentDate = new Date().toISOString();
     shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
     shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
 
-    // Распределение средств по системным сейфам-кошелькам
     wallets.payoutReserveWallet.balanceMitrons += MARKETPLACE_RESERVE;
     wallets.myWallet.balanceMitrons += CREATOR_COLD;
 
-    // Поиск свободной ячейки по Гребёнке и посадка пользователя в глобальное дерево
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = canonicalName;
     
-    // Привязка ID полученной ячейки к профилю в маркетплейсе
     shopUsersDB[canonicalName].matrixPosition.currentCellId = cellId;
     shopUsersDB[canonicalName].matrixPosition.status = 'active';
 
@@ -368,7 +360,6 @@ app.post('/api/shop/pay', (req, res) => {
     });
 });
 
-// Дополнительный диагностический эндпоинт для проверки баланса системных сейфов
 app.get('/api/sys-wallets', (req, res) => {
     res.json({ success: true, wallets });
 });
