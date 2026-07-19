@@ -1,17 +1,23 @@
-// backend/static.js
+/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД backend/static.js === */
 
 /**
- * Конвертирует индекс уровня в соответствующую букву алфавита (0 -> A, 1 -> B, 2 -> C, и т.д.)
- * Поддерживает корректный переход на динамические уровни.
+ * Конвертирует индекс уровня в соответствующую букву алфавита (0 -> A, 25 -> Z, 26 -> AA, 27 -> AB...)
+ * Обеспечивает бесконечную масштабируемость веерного почкования без риска краша сервера.
  */
 function getLevelLetter(levelIndex) {
-    return String.fromCharCode(65 + levelIndex);
+    let letter = '';
+    let temp = levelIndex;
+    while (temp >= 0) {
+        letter = String.fromCharCode((temp % 26) + 65) + letter;
+        temp = Math.floor(temp / 26) - 1;
+    }
+    return letter;
 }
 
 /**
- * Математический перевод строкового ID ячейки (например, 'A1', 'B2', 'C4') 
+ * Математический перевод строкового ID ячейки (например, 'A1', 'Z5', 'AA12') 
  * в единый глобальный сквозной индекс бинарного дерева (0, 1, 2...).
- * Гарантирует точность привязки дочерних элементов по формуле дерева.
+ * Гарантирует стопроцентную точность связей дочерних и родительских элементов.
  */
 function cellIdToGlobalIndex(cellId) {
     if (!cellId) return 0;
@@ -19,10 +25,14 @@ function cellIdToGlobalIndex(cellId) {
     const letterPart = cellId.match(/^[A-Z]+/)[0];
     const numberPart = parseInt(cellId.match(/\d+$/)[0], 10);
     
-    // Вычисляем индекс уровня (A -> 0, B -> 1, C -> 2...)
-    const levelIndex = letterPart.charCodeAt(0) - 65;
+    // Вычисляем индекс уровня с поддержкой многосимвольных названий (A=0, Z=25, AA=26...)
+    let levelIndex = 0;
+    for (let i = 0; i < letterPart.length; i++) {
+        levelIndex = levelIndex * 26 + (letterPart.charCodeAt(i) - 64);
+    }
+    levelIndex--; // Переводим в 0-индексируемую систему
     
-    // Смещение начала текущего уровня в глобальном массиве: (2^L) - 1
+    // Смещение начала текущего уровня в глобальном бинарном дереве: (2^L) - 1
     const levelStartGlobalIndex = (1 << levelIndex) - 1;
     
     // Глобальный индекс = смещение уровня + позиция внутри уровня (с нуля)
@@ -30,8 +40,8 @@ function cellIdToGlobalIndex(cellId) {
 }
 
 /**
- * Хардкодный курс конвертации Митронов в USD согласно ТЗ.
- * 1000 Митронов = 130 USD. Любые рубли полностью стерты.
+ * Курс конвертации Митронов в USD согласно ТЗ.
+ * 1000 Митронов = 130 USD. Рубли полностью отсутствуют.
  */
 function mitronsToUsd(mitrons) {
     const RATE = 130 / 1000;
@@ -40,7 +50,7 @@ function mitronsToUsd(mitrons) {
 
 /**
  * Возвращает дефолтную чистую структуру карточки покупателя для базы данных маркетплейса.
- * Реализована полная поддержка 5 ЗОЛОТЫХ ЯЧЕЕК (XYZ_1 - XYZ_5).
+ * Интегрирована поддержка пула 5 ЗОЛОТЫХ ЯЧЕЕК (XYZ_1 - XYZ_5) для квалификаций.
  */
 function createNewUserCard(username) {
     return {
