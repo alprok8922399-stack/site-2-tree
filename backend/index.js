@@ -1,11 +1,10 @@
-// backend/index.js
-
+/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД backend/index.js === */
 const express = require('express');
 const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Импортируем наши константы, утилиты и структуры данных (без рублей)
+// Импортируем константы, утилиты и структуры данных из модуля статики
 const {
     getLevelLetter,
     cellIdToGlobalIndex,
@@ -18,7 +17,7 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static('../frontend'));
 
-// Инициализация баз данных
+// Инициализация операционных баз данных (в памяти)
 let shopUsersDB = {};
 let wallets = createInitialWallets();
 
@@ -29,9 +28,10 @@ let referalsDB = {
     'LEADER_2': 'SYSTEM_ROOT'
 };
 
-// Храним имя последнего зарегистрированного бота для создания автоматической цепочки
+// Хранилище имени последнего зарегистрированного бота для выстраивания автоцепочки
 let lastRegisteredBot = null;
 
+// Стартовое состояние корневой матрицы проекта
 function createInitialTree() {
     return {
         'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
@@ -46,14 +46,18 @@ function createInitialTree() {
 
 let treeDB = createInitialTree();
 
-// Уникальный алгоритм заполнения «Гребёнка» по порциям из 32 матриц (128 ячеек)
+/**
+ * Уникальный алгоритм заполнения «Гребёнка» по порциям из 32 матриц (128 ячеек)
+ * Идеально балансирует нагрузку по веткам, поставляя данные для веерного почкования.
+ */
 function findNextEmptyCell(tree) {
+    // Первоочередное заполнение базовой семерки лидера
     const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    let levelIndex = 3; // Начинаем с уровня D (индекс 3)
+    let levelIndex = 3; // Начинаем перебор с уровня D (индекс 3)
     while (true) {
         const letter = getLevelLetter(levelIndex);
         const countInLevel = 1 << levelIndex; 
@@ -83,6 +87,9 @@ function findNextEmptyCell(tree) {
     }
 }
 
+/**
+ * Генерация пустых дочерних элементов для сохранения целостности бинарного дерева
+ */
 function checkAndGenerateChildren(tree, currentCellId) {
     if (!currentCellId) return;
     const globalIdx = cellIdToGlobalIndex(currentCellId);
@@ -108,9 +115,14 @@ function checkAndGenerateChildren(tree, currentCellId) {
     createCellByGlobalIndex(rightChildGlobal);
 }
 
-// === API МАТРИЦЫ ===
-app.get('/api/tree', (req, res) => res.json(treeDB));
+// ================= API МАТРИЦЫ И ДЕРЕВА =================
 
+// Получение текущего состояния глобального дерева ячеек
+app.get('/api/tree', (req, res) => {
+    res.json(treeDB);
+});
+
+// Прямая регистрация пользователя в свободную ячейку матрицы
 app.post('/api/register', (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
@@ -127,6 +139,7 @@ app.post('/api/register', (req, res) => {
     res.json({ success: true, cellId, user: username });
 });
 
+// Сброс всей экосистемы в исходное состояние (для тестов)
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
     shopUsersDB = {};
@@ -140,7 +153,7 @@ app.post('/api/reset', (req, res) => {
     res.json({ success: true });
 });
 
-// Получение полных данных реферальной цепочки вверх и карточки пользователя
+// Получение детальной информации о пользователе и его спонсорской цепочке (вверх)
 app.get('/api/user-details/:username', (req, res) => {
     const username = req.params.username;
     
@@ -154,13 +167,15 @@ app.get('/api/user-details/:username', (req, res) => {
     
     let sponsorChain = [];
     let currentSponsor = referalsDB[username] || 'SYSTEM_ROOT';
+    let visited = new Set(); // Защита от бесконечных циклов в реферальной структуре
     
-    while (currentSponsor) {
+    while (currentSponsor && !visited.has(currentSponsor)) {
+        visited.add(currentSponsor);
         sponsorChain.push(currentSponsor);
         currentSponsor = referalsDB[currentSponsor];
     }
     
-    // Если карточки в БД маркетплейса нет — отдаем дефолтную структуру
+    // Если карточки пользователя в БД магазина нет — генерируем дефолтную структуру
     const userCard = shopUsersDB[username] || createNewUserCard(username);
     
     res.json({
@@ -173,15 +188,17 @@ app.get('/api/user-details/:username', (req, res) => {
     });
 });
 
-// Построение реферальной структуры с безопасным расчетом колонок без рекурсии
+// Построение линейно-реферальной структуры с безопасным расчетом колонок таблицы
 app.get('/api/referals-tree', (req, res) => {
     let structure = {};
     
     function getCalculatedLevel(user) {
         let level = 1;
         let current = user;
-        // Безопасный цикл while вместо глубокой рекурсии во избежание Call Stack Overflow
-        while (current && current !== 'SYSTEM_ROOT') {
+        let visited = new Set(); // Защита от циклического Call Stack Overflow
+        
+        while (current && current !== 'SYSTEM_ROOT' && !visited.has(current)) {
+            visited.add(current);
             let sponsor = referalsDB[current];
             if (!sponsor) {
                 level++;
@@ -204,13 +221,14 @@ app.get('/api/referals-tree', (req, res) => {
     res.json({ success: true, tree: structure });
 });
 
-// === API МАРКЕТПЛЕЙСА ===
+// ================= API МАРКЕТПЛЕЙСА (ФИНАНСЫ И АКТИВАЦИЯ) =================
+
+// Регистрация нового покупателя в магазине
 app.post('/api/shop/register', (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     if (shopUsersDB[username]) return res.status(400).json({ error: 'Такой покупатель уже зарегистрирован' });
     
-    // Используем стандартизированную структуру карточки из static.js
     shopUsersDB[username] = createNewUserCard(username);
     
     if (sponsor) {
@@ -223,6 +241,7 @@ app.post('/api/shop/register', (req, res) => {
     res.json({ success: true, shopUserStatus: shopUsersDB[username] });
 });
 
+// Оплата бизнес-места: Списание 1000 Митронов ($130) и автоматическая посадка в матрицу
 app.post('/api/shop/pay', (req, res) => {
     const { username } = req.body;
     if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Покупатель не найден' });
@@ -230,26 +249,26 @@ app.post('/api/shop/pay', (req, res) => {
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase());
     if (isExist) return res.status(400).json({ error: 'Этот пользователь уже занял место в матрице' });
 
-    // Финансовая математика ТЗ: 1000 Митронов ($130) за активацию места
+    // Финансовая математика ТЗ: 1000 Митронов ($130) за место
     const TOTAL_MITRONS = 1000;
-    const MARKETPLACE_RESERVE = 700; // 70% уходит в резерв ликвидности маркетплейса
-    const CREATOR_COLD = 300;        // 30% уходит на холодный кошелек создателя
+    const MARKETPLACE_RESERVE = 700; // 70% в резерв ликвидности системы
+    const CREATOR_COLD = 300;        // 30% на холодный сейф создателя
 
-    // Обновляем статус покупателя
+    // Обновление балансов и статуса плательщика
     shopUsersDB[username].isPaid = true;
     shopUsersDB[username].paymentDate = new Date().toISOString();
     shopUsersDB[username].balances.mitrons += TOTAL_MITRONS;
     shopUsersDB[username].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[username].balances.mitrons));
 
-    // Наполняем контуры системных сейфов-кошельков
+    // Распределение средств по системным сейфам-кошелькам
     wallets.payoutReserveWallet.balanceMitrons += MARKETPLACE_RESERVE;
     wallets.myWallet.balanceMitrons += CREATOR_COLD;
 
-    // Автоматическое нахождение и занятие места в глобальной матрице
+    // Поиск свободной ячейки по Гребёнке и посадка пользователя в глобальное дерево
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = username;
     
-    // Фиксируем след позиции ячейки в карточке
+    // Привязка ID полученной ячейки к профилю в маркетплейсе
     shopUsersDB[username].matrixPosition.currentCellId = cellId;
     shopUsersDB[username].matrixPosition.status = 'active';
 
@@ -268,4 +287,4 @@ app.post('/api/shop/pay', (req, res) => {
     });
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Backend server running on port ${PORT}`));
