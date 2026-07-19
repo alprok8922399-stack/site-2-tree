@@ -1,8 +1,7 @@
-/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД frontend/matrix.js (ПОИСК + ЗУМ + СВАЙП + СВЯЗКА С КАРТОЧКОЙ) === */
+/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД (ГАЛЕРЕЯ НЕЗАВИСИМЫХ БЛОКОВ) === */
 (function() {
     const style = document.createElement('style');
     style.innerHTML = `
-        /* Контейнер для горизонтального свайпа матриц на телефоне */
         .matrices-row {
             display: flex;
             flex-direction: row;
@@ -16,41 +15,14 @@
             -webkit-overflow-scrolling: touch;
         }
         
-        /* Столбец: Памятники истории + Активная матрица под ними */
         .matrix-column {
             display: flex;
             flex-direction: column;
             align-items: center;
             min-width: 280px;
+            flex-shrink: 0;
         }
 
-        /* Памятники истории (Верхние закрытые ячейки) */
-        .history-stack {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 5px;
-            margin-bottom: 8px;
-            width: 100%;
-        }
-
-        .cell-history {
-            opacity: 0.35;
-            filter: grayscale(40%);
-            transform: scale(0.9);
-            border: 1px dashed #ccc !important;
-            background: #222 !important;
-            box-shadow: none !important;
-        }
-
-        .history-connector {
-            color: #555;
-            font-size: 14px;
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
-
-        /* Семиместная рабочая матрица */
         .semerka-matrix {
             background: rgba(255, 255, 255, 0.03);
             border: 2px solid #334257;
@@ -72,7 +44,6 @@
             width: 100%;
         }
 
-        /* Общие стили ячеек */
         .cell {
             display: flex;
             flex-direction: column;
@@ -87,112 +58,22 @@
             transition: all 0.2s ease;
         }
 
-        .cell-id {
-            font-size: 9px;
-            opacity: 0.7;
-            margin-bottom: 2px;
-        }
+        .cell-id { font-size: 9px; opacity: 0.7; margin-bottom: 2px; }
+        .cell-user { font-size: 11px; font-weight: bold; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        .cell-user {
-            font-size: 11px;
-            font-weight: bold;
-            max-width: 90%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
+        .level-gold { background: #ffd700 !important; color: #000 !important; border: 1px solid #cca100; width: 85px; }
+        .level-skyblue { background: #87ceeb !important; color: #000 !important; border: 1px solid #5fa9c7; width: 80px; }
+        .level-gray { background: #4a4a4a !important; color: #fff !important; border: 1px solid #666; width: 62px; }
 
-        /* Цветовая гамма правила Работа_матриц */
-        .level-gold {
-            background: #ffd700 !important;
-            color: #000 !important;
-            border: 1px solid #cca100;
-            width: 85px;
-        }
-        .level-gold .cell-id { color: #444; }
-
-        .level-skyblue {
-            background: #87ceeb !important;
-            color: #000 !important;
-            border: 1px solid #5fa9c7;
-            width: 80px;
-        }
-        .level-skyblue .cell-id { color: #444; }
-
-        .level-gray {
-            background: #4a4a4a !important;
-            color: #fff !important;
-            border: 1px solid #666;
-            width: 62px;
-        }
-
-        /* Подсветка при поиске */
-        .highlight-search {
-            border: 3px solid #ff4141 !important;
-            box-shadow: 0 0 15px #ff4141 !important;
-            transform: scale(1.05);
-        }
+        .highlight-search { border: 3px solid #ff4141 !important; box-shadow: 0 0 15px #ff4141 !important; transform: scale(1.05); }
     `;
     document.head.appendChild(style);
 })();
 
 const API_URL = '/api';
 const mainTreeDisplay = document.getElementById('mainTreeDisplay');
-const zoomSlider = document.getElementById('zoomSlider');
-const resetBtn = document.getElementById('resetBtn');
-const searchInput = document.getElementById('searchInput');
-const searchBtn = document.getElementById('searchBtn');
 
-let globalTreeCached = null;
-let currentSearchQuery = '';
-
-// ================= БЛОК УПРАВЛЕНИЯ ЗУМОМ =================
-function setZoom(scaleValue) {
-    if (zoomSlider) zoomSlider.value = scaleValue;
-    if (mainTreeDisplay) {
-        mainTreeDisplay.style.transform = `scale(${scaleValue})`;
-        mainTreeDisplay.style.transformOrigin = 'top center';
-    }
-}
-
-if (zoomSlider) {
-    zoomSlider.addEventListener('input', (e) => setZoom(e.target.value));
-}
-
-if (resetBtn) {
-    resetBtn.addEventListener('click', () => setZoom(1));
-}
-
-// ================= БЛОК ПОИСКА И ФОКУСИРОВКИ =================
-if (searchBtn && searchInput) {
-    searchBtn.addEventListener('click', () => {
-        const query = searchInput.value.trim();
-        if (query) window.focusMatrixOnUser(query);
-    });
-}
-
-function scrollToHighlightedCell() {
-    const target = document.querySelector('.highlight-search');
-    if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-    }
-}
-
-// Запрос дерева с сервера
-async function fetchTree() {
-    try {
-        const res = await fetch(`${API_URL}/tree`);
-        const data = await res.json();
-        globalTreeCached = data;
-        renderDynamicSplitting(data);
-    } catch (err) {
-        console.error('Ошибка обновления матрицы:', err);
-    }
-}
-
-/**
- * Конвертирует индекс уровня в соответствующую букву алфавита (0 -> A, 25 -> Z...)
- */
+// Получение буквы уровня
 function getLevelLetter(levelIndex) {
     let letter = '';
     let temp = levelIndex;
@@ -203,12 +84,13 @@ function getLevelLetter(levelIndex) {
     return letter;
 }
 
-// ДВИЖОК АВТОНОМНОГО ВЕЕРНОГО ПОЧКОВАНИЯ
+// ДВИЖОК: Поиск только незавершенных матриц
 function renderDynamicSplitting(tree) {
     if (!mainTreeDisplay) return;
 
     let activeMatrices = [];
-    let queue = [{ level: 0, num: 1, history: [] }];
+    // Очередь: уровень, номер матрицы
+    let queue = [{ level: 0, num: 1 }]; 
     let processed = new Set();
 
     while (queue.length > 0) {
@@ -219,9 +101,8 @@ function renderDynamicSplitting(tree) {
         if (processed.has(key)) continue;
         processed.add(key);
 
-        const nextLevel = current.level + 1;
+        // Определяем индексы для проверки заполнения фундамента
         const baseLevel = current.level + 2;
-        
         const baseLetter = getLevelLetter(baseLevel);
         const baseNumStart = (current.num - 1) * 4 + 1;
         
@@ -230,24 +111,24 @@ function renderDynamicSplitting(tree) {
         const b3 = `${baseLetter}${baseNumStart + 2}`;
         const b4 = `${baseLetter}${baseNumStart + 3}`;
 
-        const isB1Filled = tree[b1] && tree[b1].user;
-        const isB2Filled = tree[b2] && tree[b2].user;
-        const isB3Filled = tree[b3] && tree[b3].user;
-        const isB4Filled = tree[b4] && tree[b4].user;
+        // ПРОВЕРКА: Весь ли ряд заполнен?
+        const isFull = (tree[b1] && tree[b1].user) && 
+                       (tree[b2] && tree[b2].user) && 
+                       (tree[b3] && tree[b3].user) && 
+                       (tree[b4] && tree[b4].user);
 
-        if (isB1Filled && isB2Filled && isB3Filled && isB4Filled) {
-            const nextHistory = [...current.history, key];
-            queue.push({ level: nextLevel, num: current.num * 2 - 1, history: nextHistory });
-            queue.push({ level: nextLevel, num: current.num * 2, history: nextHistory });
+        if (isFull) {
+            // Если ряд полон — матрица считается закрытой ("почковалась").
+            // Активной её не рендерим, ищем её детей в очереди.
+            queue.push({ level: current.level + 1, num: current.num * 2 - 1 });
+            queue.push({ level: current.level + 1, num: current.num * 2 });
         } else {
-            activeMatrices.push({
-                level: current.level,
-                num: current.num,
-                history: current.history
-            });
+            // Ряд НЕ полон — это активная матрица. Рендерим её.
+            activeMatrices.push({ level: current.level, num: current.num });
         }
     }
 
+    // Отрисовка галереи активных матриц
     let finalHTML = activeMatrices.map(m => {
         const currentLetter = getLevelLetter(m.level);
         const nextLetter = getLevelLetter(m.level + 1);
@@ -256,102 +137,53 @@ function renderDynamicSplitting(tree) {
         const idTop = `${currentLetter}${m.num}`;
         const idL = `${nextLetter}${m.num * 2 - 1}`;
         const idR = `${nextLetter}${m.num * 2}`;
-        
         const baseStart = (m.num - 1) * 4 + 1;
-        const idB1 = `${baseLetter}${baseStart}`;
-        const idB2 = `${baseLetter}${baseStart + 1}`;
-        const idB3 = `${baseLetter}${baseStart + 2}`;
-        const idB4 = `${baseLetter}${baseStart + 3}`;
-
-        let historyHTML = '';
-        if (m.history.length > 0) {
-            historyHTML += `<div class="history-stack">`;
-            m.history.forEach(histId => {
-                const u = tree[histId] ? tree[histId].user : 'Система';
-                historyHTML += `
-                    <div class="cell cell-history ${checkHighlight(u)}" onclick="handleCellClick('${u}', '${histId}', event)">
-                        <span class="cell-id">${histId}</span>
-                        <span class="cell-user">${u}</span>
-                    </div>`;
-            });
-            historyHTML += `</div><div class="history-connector">↓</div>`;
-        }
 
         return `
             <div class="matrix-column">
-                ${historyHTML}
                 <div class="semerka-matrix">
+                    <div class="matrix-row">${createCellMarkup(tree[idTop], 'level-gold', idTop)}</div>
                     <div class="matrix-row">
-                        ${createCellMarkup(tree[idTop], 'level-gold', idTop, true)}
+                        ${createCellMarkup(tree[idL], 'level-skyblue', idL)}
+                        ${createCellMarkup(tree[idR], 'level-skyblue', idR)}
                     </div>
                     <div class="matrix-row">
-                        ${createCellMarkup(tree[idL], 'level-skyblue', idL, true)}
-                        ${createCellMarkup(tree[idR], 'level-skyblue', idR, true)}
-                    </div>
-                    <div class="matrix-row">
-                        ${createCellMarkup(tree[idB1], 'level-gray', idB1, false)}
-                        ${createCellMarkup(tree[idB2], 'level-gray', idB2, false)}
-                        ${createCellMarkup(tree[idB3], 'level-gray', idB3, false)}
-                        ${createCellMarkup(tree[idB4], 'level-gray', idB4, false)}
+                        ${createCellMarkup(tree[`${baseLetter}${baseStart}`], 'level-gray', `${baseLetter}${baseStart}`)}
+                        ${createCellMarkup(tree[`${baseLetter}${baseStart + 1}`], 'level-gray', `${baseLetter}${baseStart + 1}`)}
+                        ${createCellMarkup(tree[`${baseLetter}${baseStart + 2}`], 'level-gray', `${baseLetter}${baseStart + 2}`)}
+                        ${createCellMarkup(tree[`${baseLetter}${baseStart + 3}`], 'level-gray', `${baseLetter}${baseStart + 3}`)}
                     </div>
                 </div>
             </div>
         `;
     }).join('');
 
-    mainTreeDisplay.innerHTML = `<div class="matrices-row">${finalHTML}</div>`;
+    mainTreeDisplay.innerHTML = `<div class="matrices-row">${finalHTML || '<p style="color:#fff; padding:20px;">Ожидание заполнения...</p>'}</div>`;
 }
 
-function createCellMarkup(cell, colorClass, fallbackId, isStaticFilled) {
-    let username = cell ? cell.user : null;
-    if (isStaticFilled && !username) username = 'Заполнено';
-    
-    const displayUser = username || '-';
-    const highlightClass = checkHighlight(displayUser);
-
+function createCellMarkup(cell, colorClass, fallbackId) {
+    const username = (cell && cell.user) ? cell.user : '-';
     return `
-        <div class="cell ${colorClass} ${highlightClass}" onclick="handleCellClick('${displayUser}', '${fallbackId}', event)">
+        <div class="cell ${colorClass}" onclick="handleCellClick('${username}', '${fallbackId}', event)">
             <div class="cell-id">${fallbackId}</div>
-            <div class="cell-user">${displayUser}</div>
+            <div class="cell-user">${username}</div>
         </div>
     `;
 }
 
-function checkHighlight(username) {
-    if (!currentSearchQuery || username === '-' || username === 'Заполнено') return '';
-    return username.toLowerCase().includes(currentSearchQuery) ? 'highlight-search' : '';
-}
-
-// === ИНТЕГРАЦИОННЫЙ КЛИК: Открывает мастер-карточку из script.js ===
 window.handleCellClick = function(username, cellId, event) {
     if (event) event.stopPropagation();
-    if (!username || username === '-' || username === 'Заполнено' || username === 'Система') return;
-    
-    // Если на странице загружен script.js и есть глобальная функция карточки
-    if (window.showUserCard) {
-        window.showUserCard(username);
-    } else if (document.getElementById('infoModal')) {
-        // Запасной старый вариант модалки, если script.js не подгрузился
-        document.getElementById('infoModal').style.display = 'flex';
-        document.getElementById('modalTitle').textContent = `Ячейка: ${cellId}`;
-        document.getElementById('modalBody').innerHTML = `<strong>Пользователь:</strong> ${username}`;
-    }
+    if (!username || username === '-') return;
+    if (window.showUserCard) window.showUserCard(username);
 };
 
-// === ГЛОБАЛЬНЫЙ МОСТ ДЛЯ ПОИСКА ИЗ ДРУГИХ МОДУЛЕЙ ===
-window.focusMatrixOnUser = function(username) {
-    if (!username) return;
-    currentSearchQuery = username.trim().toLowerCase();
-    
-    // Синхронизируем локальное поле ввода матрицы, если оно есть
-    if (searchInput) searchInput.value = username;
-    
-    if (globalTreeCached) {
-        renderDynamicSplitting(globalTreeCached);
-        setTimeout(scrollToHighlightedCell, 150);
-    }
-};
+async function fetchTree() {
+    try {
+        const res = await fetch(`${API_URL}/tree`);
+        const data = await res.json();
+        renderDynamicSplitting(data);
+    } catch (err) { console.error(err); }
+}
 
-// Запуск движка
 fetchTree();
 setInterval(fetchTree, 5000);
