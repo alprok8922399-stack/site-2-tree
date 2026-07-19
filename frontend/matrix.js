@@ -1,4 +1,4 @@
-/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД frontend/matrix.js (ПОИСК + ЗУМ + СВАЙП) === */
+/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД frontend/matrix.js (ПОИСК + ЗУМ + СВАЙП + СВЯЗКА С КАРТОЧКОЙ) === */
 (function() {
     const style = document.createElement('style');
     style.innerHTML = `
@@ -166,11 +166,8 @@ if (resetBtn) {
 // ================= БЛОК ПОИСКА И ФОКУСИРОВКИ =================
 if (searchBtn && searchInput) {
     searchBtn.addEventListener('click', () => {
-        currentSearchQuery = searchInput.value.trim().toLowerCase();
-        if (globalTreeCached) {
-            renderDynamicSplitting(globalTreeCached);
-            setTimeout(scrollToHighlightedCell, 150);
-        }
+        const query = searchInput.value.trim();
+        if (query) window.focusMatrixOnUser(query);
     });
 }
 
@@ -194,8 +191,7 @@ async function fetchTree() {
 }
 
 /**
- * Конвертирует индекс уровня в соответствующую букву алфавита (0 -> A, 25 -> Z, 26 -> AA...)
- * Синхронизировано с логикой бэкенда static.js
+ * Конвертирует индекс уровня в соответствующую букву алфавита (0 -> A, 25 -> Z...)
  */
 function getLevelLetter(levelIndex) {
     let letter = '';
@@ -239,13 +235,11 @@ function renderDynamicSplitting(tree) {
         const isB3Filled = tree[b3] && tree[b3].user;
         const isB4Filled = tree[b4] && tree[b4].user;
 
-        // Если четверка основания заполнена — делим матрицу дальше (в глубину)
         if (isB1Filled && isB2Filled && isB3Filled && isB4Filled) {
             const nextHistory = [...current.history, key];
             queue.push({ level: nextLevel, num: current.num * 2 - 1, history: nextHistory });
             queue.push({ level: nextLevel, num: current.num * 2, history: nextHistory });
         } else {
-            // Матрица остается активной и выводится на экран
             activeMatrices.push({
                 level: current.level,
                 num: current.num,
@@ -254,7 +248,6 @@ function renderDynamicSplitting(tree) {
         }
     }
 
-    // Рендеринг активных матриц
     let finalHTML = activeMatrices.map(m => {
         const currentLetter = getLevelLetter(m.level);
         const nextLetter = getLevelLetter(m.level + 1);
@@ -270,7 +263,6 @@ function renderDynamicSplitting(tree) {
         const idB3 = `${baseLetter}${baseStart + 2}`;
         const idB4 = `${baseLetter}${baseStart + 3}`;
 
-        // Сборка истории (Памятники истории)
         let historyHTML = '';
         if (m.history.length > 0) {
             historyHTML += `<div class="history-stack">`;
@@ -330,14 +322,33 @@ function checkHighlight(username) {
     return username.toLowerCase().includes(currentSearchQuery) ? 'highlight-search' : '';
 }
 
+// === ИНТЕГРАЦИОННЫЙ КЛИК: Открывает мастер-карточку из script.js ===
 window.handleCellClick = function(username, cellId, event) {
     if (event) event.stopPropagation();
-    if (!username || username === '-' || username === 'Заполнено') return;
+    if (!username || username === '-' || username === 'Заполнено' || username === 'Система') return;
     
-    if (document.getElementById('infoModal')) {
+    // Если на странице загружен script.js и есть глобальная функция карточки
+    if (window.showUserCard) {
+        window.showUserCard(username);
+    } else if (document.getElementById('infoModal')) {
+        // Запасной старый вариант модалки, если script.js не подгрузился
         document.getElementById('infoModal').style.display = 'flex';
         document.getElementById('modalTitle').textContent = `Ячейка: ${cellId}`;
         document.getElementById('modalBody').innerHTML = `<strong>Пользователь:</strong> ${username}`;
+    }
+};
+
+// === ГЛОБАЛЬНЫЙ МОСТ ДЛЯ ПОИСКА ИЗ ДРУГИХ МОДУЛЕЙ ===
+window.focusMatrixOnUser = function(username) {
+    if (!username) return;
+    currentSearchQuery = username.trim().toLowerCase();
+    
+    // Синхронизируем локальное поле ввода матрицы, если оно есть
+    if (searchInput) searchInput.value = username;
+    
+    if (globalTreeCached) {
+        renderDynamicSplitting(globalTreeCached);
+        setTimeout(scrollToHighlightedCell, 150);
     }
 };
 
