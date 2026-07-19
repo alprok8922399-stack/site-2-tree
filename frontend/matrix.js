@@ -1,4 +1,4 @@
-/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД matrix.js === */
+/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД matrix.js (ПОИСК + ЗУМ + СВАЙП) === */
 (function() {
     const style = document.createElement('style');
     style.innerHTML = `
@@ -138,18 +138,38 @@
 
 const API_URL = '/api';
 const mainTreeDisplay = document.getElementById('mainTreeDisplay');
+const zoomSlider = document.getElementById('zoomSlider');
+const resetBtn = document.getElementById('resetBtn');
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 
 let globalTreeCached = null;
 let currentSearchQuery = '';
 
-// Поиск и автоматическая фокусировка на экране телефона
+// ================= БЛОК УПРАВЛЕНИЯ ЗУМОМ =================
+function setZoom(scaleValue) {
+    if (zoomSlider) zoomSlider.value = scaleValue;
+    if (mainTreeDisplay) {
+        mainTreeDisplay.style.transform = `scale(${scaleValue})`;
+        mainTreeDisplay.style.transformOrigin = 'top center';
+    }
+}
+
+if (zoomSlider) {
+    zoomSlider.addEventListener('input', (e) => setZoom(e.target.value));
+}
+
+if (resetBtn) {
+    resetBtn.addEventListener('click', () => setZoom(1));
+}
+
+// ================= БЛОК ПОИСКА И ФОКУСИРОВКИ =================
 if (searchBtn && searchInput) {
     searchBtn.addEventListener('click', () => {
         currentSearchQuery = searchInput.value.trim().toLowerCase();
         if (globalTreeCached) {
             renderDynamicSplitting(globalTreeCached);
+            // Даем верстке обновиться и плавно скроллим к цели
             setTimeout(scrollToHighlightedCell, 150);
         }
     });
@@ -174,7 +194,7 @@ async function fetchTree() {
     }
 }
 
-// Утилита получения буквенного шага (A -> B -> C ... -> Z -> AA)
+// Алгоритм шага букв (A -> B -> C ... Z -> AA)
 function getNextLevelLetter(letter) {
     let i = letter.length - 1;
     while (i >= 0) {
@@ -186,7 +206,7 @@ function getNextLevelLetter(letter) {
     return 'A'.repeat(letter.length + 1);
 }
 
-// ОСНОВНОЙ ДВИЖОК АВТОНОМНОГО ВЕЕРНОГО ПОЧКОВАНИЯ
+// ДВИЖОК АВТОНОМНОГО ВЕЕРНОГО ПОЧКОВАНИЯ
 function renderDynamicSplitting(tree) {
     if (!mainTreeDisplay) return;
 
@@ -194,7 +214,6 @@ function renderDynamicSplitting(tree) {
     let queue = [{ letter: 'A', num: 1, history: [] }];
     let processed = new Set();
 
-    // Обход графа для поиска активных (неделимых) на данный момент матриц
     while (queue.length > 0) {
         const current = queue.shift();
         const key = `${current.letter}${current.num}`;
@@ -216,13 +235,13 @@ function renderDynamicSplitting(tree) {
         const isB3Filled = tree[b3] && tree[b3].user;
         const isB4Filled = tree[b4] && tree[b4].user;
 
-        // Если вся нижняя четверка основания заполнена — матрица делится (почкуется) под ними
+        // Если четверка основания заполнена — делим матрицу дальше
         if (isB1Filled && isB2Filled && isB3Filled && isB4Filled) {
             const nextHistory = [...current.history, key];
             queue.push({ letter: nextLetter, num: current.num * 2 - 1, history: nextHistory });
             queue.push({ letter: nextLetter, num: current.num * 2, history: nextHistory });
         } else {
-            // Матрица не заполнена до конца — она является АКТИВНОЙ рабочей единицей на экране
+            // Матрица активна и выводится на экран
             activeMatrices.push({
                 rootLetter: current.letter,
                 rootNum: current.num,
@@ -231,7 +250,7 @@ function renderDynamicSplitting(tree) {
         }
     }
 
-    // Рендеринг списка активных матриц в одну линию (горизонтальный свайп)
+    // Рендеринг активных матриц
     let finalHTML = activeMatrices.map(m => {
         const nextLetter = getNextLevelLetter(m.rootLetter);
         const baseLetter = getNextLevelLetter(nextLetter);
@@ -246,7 +265,7 @@ function renderDynamicSplitting(tree) {
         const idB3 = `${baseLetter}${baseStart + 2}`;
         const idB4 = `${baseLetter}${baseStart + 3}`;
 
-        // Сборка "Памятников истории" над текущей матрицей
+        // Сборка истории
         let historyHTML = '';
         if (m.history.length > 0) {
             historyHTML += `<div class="history-stack">`;
@@ -261,7 +280,6 @@ function renderDynamicSplitting(tree) {
             historyHTML += `</div><div class="history-connector">↓</div>`;
         }
 
-        // Рендеринг 7 мест строго по цветам правила: Золото -> Небесно-голубой -> Серый
         return `
             <div class="matrix-column">
                 ${historyHTML}
@@ -287,13 +305,9 @@ function renderDynamicSplitting(tree) {
     mainTreeDisplay.innerHTML = `<div class="matrices-row">${finalHTML}</div>`;
 }
 
-// Вспомогательная разметка ячеек. Верхушка и плечи АКТИВНЫХ матриц ВСЕГДА статично заполнены
 function createCellMarkup(cell, colorClass, fallbackId, isStaticFilled) {
     let username = cell ? cell.user : null;
-    
-    if (isStaticFilled && !username) {
-        username = 'Заполнено';
-    }
+    if (isStaticFilled && !username) username = 'Заполнено';
     
     const displayUser = username || '-';
     const highlightClass = checkHighlight(displayUser);
@@ -311,12 +325,10 @@ function checkHighlight(username) {
     return username.toLowerCase().includes(currentSearchQuery) ? 'highlight-search' : '';
 }
 
-// Обработка клика по ячейке матрицы
 window.handleCellClick = function(username, cellId, event) {
     if (event) event.stopPropagation();
     if (!username || username === '-' || username === 'Заполнено') return;
     
-    // Вызов стандартной карточки
     if (document.getElementById('infoModal')) {
         document.getElementById('infoModal').style.display = 'flex';
         document.getElementById('modalTitle').textContent = `Ячейка: ${cellId}`;
@@ -324,6 +336,6 @@ window.handleCellClick = function(username, cellId, event) {
     }
 };
 
-// Инициализация и автообновление
+// Запуск движка
 fetchTree();
 setInterval(fetchTree, 5000);
