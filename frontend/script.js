@@ -9,6 +9,14 @@ function convertMitronsToUsd(mitrons) {
     return (mitrons * MITRON_RATE_USD).toFixed(2);
 }
 
+// Вспомогательная функция для безопасного обновления текста в DOM (защита от падения скрипта при отсутствии ID)
+function setElementText(id, text) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.innerText = text;
+    }
+}
+
 // === 1. РАБОТА С БИНАРНОЙ МАТРИЦЕЙ ===
 
 async function loadMatrixTree() {
@@ -38,9 +46,10 @@ function renderMatrixUI(tree) {
         const rowDiv = document.createElement('div');
         rowDiv.className = `matrix-row level-${levelLetter}`;
         
+        // Исправлено: добавлен "|| 0" на случай, если в ID ячейки не окажется цифр (защита от NaN)
         levels[levelLetter].sort((a, b) => {
-            const numA = parseInt(a.id.replace(/^\D+/g, ''), 10);
-            const numB = parseInt(b.id.replace(/^\D+/g, ''), 10);
+            const numA = parseInt(a.id.replace(/^\D+/g, ''), 10) || 0;
+            const numB = parseInt(b.id.replace(/^\D+/g, ''), 10) || 0;
             return numA - numB;
         });
 
@@ -54,7 +63,7 @@ function renderMatrixUI(tree) {
                 <div class="cell-user">${cell.user ? cell.user : 'Свободно'}</div>
             `;
             
-            matrixContainer.appendChild(cellElement);
+            // Исправлено: удален избыточный matrixContainer.appendChild(cellElement)
             rowDiv.appendChild(cellElement);
         });
 
@@ -98,8 +107,12 @@ async function registerInMatrix() {
 // === 2. МОДУЛЬ МАРКЕТПЛЕЙСА И ЛОГИКА СЕЙФОВ ===
 
 async function registerShopUser() {
-    const shopUserStr = document.getElementById('shop-username').value.trim();
-    const shopSponsorStr = document.getElementById('shop-sponsor').value.trim();
+    const shopUserField = document.getElementById('shop-username');
+    const shopSponsorField = document.getElementById('shop-sponsor');
+    
+    if (!shopUserField) return;
+    const shopUserStr = shopUserField.value.trim();
+    const shopSponsorStr = shopSponsorField ? shopSponsorField.value.trim() : '';
     
     if (!shopUserStr) {
         alert('Укажите логин покупателя');
@@ -171,14 +184,16 @@ async function loadUserProfile(username) {
         const data = await response.json();
         
         if (data.success) {
-            document.getElementById('current-profile-user').innerText = data.username;
+            // Исправлено: безопасное заполнение данных через общую функцию проверки элементов
+            setElementText('current-profile-user', data.username);
+            
             const cellId = data.profile.matrixPosition.currentCellId;
-            document.getElementById('profile-cell-id').innerText = cellId || 'Нет места';
-            document.getElementById('profile-status').innerText = data.profile.isPaid ? 'Оплачен (Активен)' : 'Не оплачен';
+            setElementText('profile-cell-id', cellId || 'Нет места');
+            setElementText('profile-status', data.profile.isPaid ? 'Оплачен (Активен)' : 'Не оплачен');
             
             const mitronsBalance = data.profile.balances.mitrons;
-            document.getElementById('balance-mitrons').innerText = `${mitronsBalance} Mitrons`;
-            document.getElementById('balance-usd').innerText = `$${convertMitronsToUsd(mitronsBalance)}`;
+            setElementText('balance-mitrons', `${mitronsBalance} Mitrons`);
+            setElementText('balance-usd', `$${convertMitronsToUsd(mitronsBalance)}`);
             
             // --- УМНЫЙ АВТОФОКУС В ДЕРЕВЕ МАТРИЦЫ ---
             // 1. Убираем старую неоновую подсветку с прошлых поисков
@@ -257,13 +272,17 @@ async function resetSystem() {
         if (result.success) {
             alert('Система успешно сброшена к исходному состоянию!');
             loadMatrixTree();
-            if (document.getElementById('current-profile-user')) {
-                document.getElementById('current-profile-user').innerText = '—';
-                document.getElementById('profile-cell-id').innerText = '—';
-                document.getElementById('profile-status').innerText = '—';
-                document.getElementById('balance-mitrons').innerText = '0 Mitrons';
-                document.getElementById('balance-usd').innerText = '$0.00';
-                document.getElementById('golden-cells-status').innerHTML = '';
+            
+            // Исправлено: Безопасное обнуление полей через вспомогательную функцию
+            setElementText('current-profile-user', '—');
+            setElementText('profile-cell-id', '—');
+            setElementText('profile-status', '—');
+            setElementText('balance-mitrons', '0 Mitrons');
+            setElementText('balance-usd', '$0.00');
+            
+            const goldenContainer = document.getElementById('golden-cells-status');
+            if (goldenContainer) {
+                goldenContainer.innerHTML = '';
             }
         }
     } catch (error) {
@@ -291,8 +310,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchBtn = document.getElementById('search-profile-btn');
     if (searchBtn) {
         searchBtn.addEventListener('click', () => {
-            const inputName = document.getElementById('search-username-input').value.trim();
-            loadUserProfile(inputName);
+            const searchInput = document.getElementById('search-username-input');
+            const inputName = searchInput ? searchInput.value.trim() : '';
+            if (inputName) loadUserProfile(inputName);
         });
     }
 });
