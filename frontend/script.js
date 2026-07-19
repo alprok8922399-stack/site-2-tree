@@ -1,5 +1,3 @@
-// frontend/script.js
-
 const API_URL = window.location.origin;
 
 // === ГЛОБАЛЬНЫЙ КУРС ВАЛЮТЫ ===
@@ -9,7 +7,7 @@ function convertMitronsToUsd(mitrons) {
     return (mitrons * MITRON_RATE_USD).toFixed(2);
 }
 
-// Вспомогательная функция для безопасного обновления текста в DOM (защита от падения скрипта при отсутствии ID)
+// Вспомогательная функция для безопасного обновления текста в DOM
 function setElementText(id, text) {
     const el = document.getElementById(id);
     if (el) {
@@ -29,7 +27,6 @@ async function loadMatrixTree() {
     }
 }
 
-// Рендеринг структуры матрицы внутрь отмасштабированного контейнера
 function renderMatrixUI(tree) {
     const matrixContainer = document.getElementById('matrix-zoom-wrapper');
     if (!matrixContainer) return;
@@ -46,7 +43,6 @@ function renderMatrixUI(tree) {
         const rowDiv = document.createElement('div');
         rowDiv.className = `matrix-row level-${levelLetter}`;
         
-        // Исправлено: добавлен "|| 0" на случай, если в ID ячейки не окажется цифр (защита от NaN)
         levels[levelLetter].sort((a, b) => {
             const numA = parseInt(a.id.replace(/^\D+/g, ''), 10) || 0;
             const numB = parseInt(b.id.replace(/^\D+/g, ''), 10) || 0;
@@ -63,7 +59,6 @@ function renderMatrixUI(tree) {
                 <div class="cell-user">${cell.user ? cell.user : 'Свободно'}</div>
             `;
             
-            // Исправлено: удален избыточный matrixContainer.appendChild(cellElement)
             rowDiv.appendChild(cellElement);
         });
 
@@ -174,7 +169,7 @@ async function payCertificate() {
     }
 }
 
-// === УМНЫЙ ПОИСК, НЕОНОВЫЙ ФОКУС И АВТО-СКРОЛЛ ===
+// === 3. ПРОФИЛЬ, НЕОНОВЫЙ ФОКУС И ОБРАТНЫЙ АПЛАЙН-ТРЕКИНГ ===
 async function loadUserProfile(username) {
     if (!username) return;
     
@@ -184,7 +179,7 @@ async function loadUserProfile(username) {
         const data = await response.json();
         
         if (data.success) {
-            // Исправлено: безопасное заполнение данных через общую функцию проверки элементов
+            // Заполнение базовых текстовых полей инфо-карточки
             setElementText('current-profile-user', data.username);
             
             const cellId = data.profile.matrixPosition.currentCellId;
@@ -195,8 +190,50 @@ async function loadUserProfile(username) {
             setElementText('balance-mitrons', `${mitronsBalance} Mitrons`);
             setElementText('balance-usd', `$${convertMitronsToUsd(mitronsBalance)}`);
             
+            // --- СТРОГО В КАРТОЧКЕ: ОБРАТНЫЙ СПИСОК СПОНСОРОВ (UPLINE TRACKING) ---
+            const uplineContainer = document.getElementById('profile-upline-chain');
+            if (uplineContainer) {
+                uplineContainer.innerHTML = ''; // Очищаем старую цепочку предков
+                
+                // Делаем запрос к бэкенду для генерации пути вверх до SYSTEM_ROOT
+                try {
+                    const chainRes = await fetch(`${API_URL}/api/get-upline-chain?login=${encodeURIComponent(username)}`);
+                    const chainData = await chainRes.json();
+                    
+                    if (chainData.success && chainData.chain && chainData.chain.length > 0) {
+                        const traceDiv = document.createElement('div');
+                        traceDiv.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:10px; font-size:13px; background:#f1f3f9; padding:8px; border-radius:4px; border:1px dashed #ced4da;';
+                        
+                        // Рендерим цепочку вида: Текущий -> Спонсор 1 -> Спонсор 2 -> Root
+                        chainData.chain.forEach((uplineLogin, idx) => {
+                            const node = document.createElement('span');
+                            if (idx === 0) {
+                                node.innerHTML = `<strong style="color:#4e73df;">${uplineLogin}</strong>`;
+                            } else {
+                                node.innerText = uplineLogin;
+                                node.style.cursor = 'pointer';
+                                node.style.color = '#6e707e';
+                                node.style.textDecoration = 'underline';
+                                // Клик по спонсору в цепочке мгновенно переключает карточку на него!
+                                node.onclick = () => loadUserProfile(uplineLogin);
+                            }
+                            traceDiv.appendChild(node);
+                            
+                            if (idx < chainData.chain.length - 1) {
+                                const arrow = document.createElement('span');
+                                arrow.innerText = ' ➔ ';
+                                arrow.style.color = '#858796';
+                                traceDiv.appendChild(arrow);
+                            }
+                        });
+                        uplineContainer.appendChild(traceDiv);
+                    }
+                } catch (e) {
+                    console.error('Не удалось загрузить аплайн-цепочку спонсоров:', e);
+                }
+            }
+
             // --- УМНЫЙ АВТОФОКУС В ДЕРЕВЕ МАТРИЦЫ ---
-            // 1. Убираем старую неоновую подсветку с прошлых поисков
             document.querySelectorAll('.matrix-cell.search-highlight').forEach(el => {
                 el.classList.remove('search-highlight');
             });
@@ -208,17 +245,14 @@ async function loadUserProfile(username) {
                     const matrixWrapper = document.getElementById('matrix-zoom-wrapper');
                     const zoomValueText = document.getElementById('zoom-value');
                     
-                    // 2. Если масштаб слишком мелкий для глаз, плавно возвращаем к 80%
                     if (zoomSlider && parseFloat(zoomSlider.value) < 0.5) {
                         zoomSlider.value = 0.8;
                         if (matrixWrapper) matrixWrapper.style.transform = `scale(0.8)`;
                         if (zoomValueText) zoomValueText.innerText = `80%`;
                     }
 
-                    // 3. Включаем неоновую пульсацию на нужной ячейке
                     targetCell.classList.add('search-highlight');
 
-                    // 4. Плавно центрируем экран телефона/ПК ровно на этой ячейке
                     setTimeout(() => {
                         targetCell.scrollIntoView({
                             behavior: 'smooth',
@@ -247,7 +281,7 @@ async function loadUserProfile(username) {
                     const isCellUnlocked = countReal >= (i * 2); 
                     
                     li.className = isCellUnlocked ? 'cell-gold-active' : 'cell-gold-locked';
-                    li.innerText = `Ячейка XYZ_${i}: ${isCellUnlocked ? '🏆 АКТИВИРОВАНА (ЗОЛОТО)' : '🔒 Заблокирована (Требуется больше Реальных партнеров)'}`;
+                    li.innerText = `Ячейка XYZ_${i}: ${isCellUnlocked ? '🏆 АКТИВИРОВАНА (ЗОЛОТО)' : '🔒 Заблокирована'}`;
                     list.appendChild(li);
                 }
                 
@@ -273,7 +307,6 @@ async function resetSystem() {
             alert('Система успешно сброшена к исходному состоянию!');
             loadMatrixTree();
             
-            // Исправлено: Безопасное обнуление полей через вспомогательную функцию
             setElementText('current-profile-user', '—');
             setElementText('profile-cell-id', '—');
             setElementText('profile-status', '—');
@@ -281,20 +314,27 @@ async function resetSystem() {
             setElementText('balance-usd', '$0.00');
             
             const goldenContainer = document.getElementById('golden-cells-status');
-            if (goldenContainer) {
-                goldenContainer.innerHTML = '';
-            }
+            if (goldenContainer) goldenContainer.innerHTML = '';
+            
+            const uplineContainer = document.getElementById('profile-upline-chain');
+            if (uplineContainer) uplineContainer.innerHTML = '';
         }
     } catch (error) {
         console.error('Ошибка при сбросе системы:', error);
     }
 }
 
+// === ГЛОБАЛЬНЫЕ МОСТЫ СВЯЗИ ДЛЯ ДРУГИХ МОДУЛЕЙ (table.js и matrix.js) ===
+window.showUserCard = loadUserProfile;
+window.focusMatrixOnUser = (login) => {
+    // Вызов фокуса на матрицу перенаправляет на загрузку профиля с его авто-центрированием
+    loadUserProfile(login);
+};
+
 // Привязка событий после загрузки страницы
 document.addEventListener('DOMContentLoaded', () => {
     loadMatrixTree();
     
-    // === ОБРАБОТЧИК ДЛЯ СУПЕР-ЗУМА ДО 0.03 ===
     const zoomSlider = document.getElementById('matrix-zoom-slider');
     const zoomValueText = document.getElementById('zoom-value');
     const matrixWrapper = document.getElementById('matrix-zoom-wrapper');
