@@ -1,4 +1,4 @@
-/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД matrix.js (ПОИСК + ЗУМ + СВАЙП) === */
+/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД frontend/matrix.js (ПОИСК + ЗУМ + СВАЙП) === */
 (function() {
     const style = document.createElement('style');
     style.innerHTML = `
@@ -169,7 +169,6 @@ if (searchBtn && searchInput) {
         currentSearchQuery = searchInput.value.trim().toLowerCase();
         if (globalTreeCached) {
             renderDynamicSplitting(globalTreeCached);
-            // Даем верстке обновиться и плавно скроллим к цели
             setTimeout(scrollToHighlightedCell, 150);
         }
     });
@@ -194,16 +193,18 @@ async function fetchTree() {
     }
 }
 
-// Алгоритм шага букв (A -> B -> C ... Z -> AA)
-function getNextLevelLetter(letter) {
-    let i = letter.length - 1;
-    while (i >= 0) {
-        if (letter[i] !== 'Z') {
-            return letter.substring(0, i) + String.fromCharCode(letter.charCodeAt(i) + 1) + 'A'.repeat(letter.length - 1 - i);
-        }
-        i--;
+/**
+ * Конвертирует индекс уровня в соответствующую букву алфавита (0 -> A, 25 -> Z, 26 -> AA...)
+ * Синхронизировано с логикой бэкенда static.js
+ */
+function getLevelLetter(levelIndex) {
+    let letter = '';
+    let temp = levelIndex;
+    while (temp >= 0) {
+        letter = String.fromCharCode((temp % 26) + 65) + letter;
+        temp = Math.floor(temp / 26) - 1;
     }
-    return 'A'.repeat(letter.length + 1);
+    return letter;
 }
 
 // ДВИЖОК АВТОНОМНОГО ВЕЕРНОГО ПОЧКОВАНИЯ
@@ -211,20 +212,23 @@ function renderDynamicSplitting(tree) {
     if (!mainTreeDisplay) return;
 
     let activeMatrices = [];
-    let queue = [{ letter: 'A', num: 1, history: [] }];
+    let queue = [{ level: 0, num: 1, history: [] }];
     let processed = new Set();
 
     while (queue.length > 0) {
         const current = queue.shift();
-        const key = `${current.letter}${current.num}`;
+        const currentLetter = getLevelLetter(current.level);
+        const key = `${currentLetter}${current.num}`;
         
         if (processed.has(key)) continue;
         processed.add(key);
 
-        const nextLetter = getNextLevelLetter(current.letter);
-        const baseLetter = getNextLevelLetter(nextLetter);
+        const nextLevel = current.level + 1;
+        const baseLevel = current.level + 2;
         
+        const baseLetter = getLevelLetter(baseLevel);
         const baseNumStart = (current.num - 1) * 4 + 1;
+        
         const b1 = `${baseLetter}${baseNumStart}`;
         const b2 = `${baseLetter}${baseNumStart + 1}`;
         const b3 = `${baseLetter}${baseNumStart + 2}`;
@@ -235,16 +239,16 @@ function renderDynamicSplitting(tree) {
         const isB3Filled = tree[b3] && tree[b3].user;
         const isB4Filled = tree[b4] && tree[b4].user;
 
-        // Если четверка основания заполнена — делим матрицу дальше
+        // Если четверка основания заполнена — делим матрицу дальше (в глубину)
         if (isB1Filled && isB2Filled && isB3Filled && isB4Filled) {
             const nextHistory = [...current.history, key];
-            queue.push({ letter: nextLetter, num: current.num * 2 - 1, history: nextHistory });
-            queue.push({ letter: nextLetter, num: current.num * 2, history: nextHistory });
+            queue.push({ level: nextLevel, num: current.num * 2 - 1, history: nextHistory });
+            queue.push({ level: nextLevel, num: current.num * 2, history: nextHistory });
         } else {
-            // Матрица активна и выводится на экран
+            // Матрица остается активной и выводится на экран
             activeMatrices.push({
-                rootLetter: current.letter,
-                rootNum: current.num,
+                level: current.level,
+                num: current.num,
                 history: current.history
             });
         }
@@ -252,20 +256,21 @@ function renderDynamicSplitting(tree) {
 
     // Рендеринг активных матриц
     let finalHTML = activeMatrices.map(m => {
-        const nextLetter = getNextLevelLetter(m.rootLetter);
-        const baseLetter = getNextLevelLetter(nextLetter);
+        const currentLetter = getLevelLetter(m.level);
+        const nextLetter = getLevelLetter(m.level + 1);
+        const baseLetter = getLevelLetter(m.level + 2);
         
-        const idTop = `${m.rootLetter}${m.rootNum}`;
-        const idL = `${nextLetter}${m.rootNum * 2 - 1}`;
-        const idR = `${nextLetter}${m.rootNum * 2}`;
+        const idTop = `${currentLetter}${m.num}`;
+        const idL = `${nextLetter}${m.num * 2 - 1}`;
+        const idR = `${nextLetter}${m.num * 2}`;
         
-        const baseStart = (m.rootNum - 1) * 4 + 1;
+        const baseStart = (m.num - 1) * 4 + 1;
         const idB1 = `${baseLetter}${baseStart}`;
         const idB2 = `${baseLetter}${baseStart + 1}`;
         const idB3 = `${baseLetter}${baseStart + 2}`;
         const idB4 = `${baseLetter}${baseStart + 3}`;
 
-        // Сборка истории
+        // Сборка истории (Памятники истории)
         let historyHTML = '';
         if (m.history.length > 0) {
             historyHTML += `<div class="history-stack">`;
