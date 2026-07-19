@@ -3,269 +3,288 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Мониторинг Матриц 7-К</title>
+    <title>Mitron Matrix & Marketplace System</title>
     <style>
+        /* === ПРЕМИАЛЬНАЯ ТЁМНАЯ ТЕМА === */
         body {
-            background-color: #1a1a2e;
-            color: #ffffff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f0f12; /* Глубокий тёмный фон */
             margin: 0;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            user-select: none; 
-            -webkit-user-select: none;
+            padding: 20px;
+            color: #e3e3e8; /* Светлый текст */
         }
-        h1 { margin: 5px 0; font-size: 20px; text-shadow: 0 0 10px #00fff0; }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #232329;
+        }
+        h1 { margin: 0; color: #ffffff; }
+        h2 { color: #ffffff; border-left: 5px solid #3498db; padding-left: 10px; }
+        p { color: #a0a0ab; }
         
-        .control-panel {
-            background: #162447;
-            padding: 10px;
-            border-radius: 8px;
-            width: 100%;
-            max-width: 500px;
-            box-sizing: border-box;
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: #17171c; /* Тёмные карточки блоков */
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid #232329;
+        }
+        .form-group {
             margin-bottom: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            position: relative;
-            z-index: 10;
         }
-
-        /* --- СТИЛИ ДЛЯ ВЫПАДАЮЩЕГО МЕНЮ И ОВЕРЛЕЯ --- */
-        .menu-btn {
-            background-color: #0f4c81; color: white; border: none; padding: 10px 15px;
-            font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer;
-            width: 100%; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-            display: flex; justify-content: space-between; align-items: center;
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #a0a0ab;
         }
-        .menu-btn:hover { background-color: #1f4068; }
+        input[type="text"] {
+            width: 100%;
+            padding: 11px;
+            box-sizing: border-box;
+            border: 1px solid #2d2d35;
+            background-color: #202026; /* Тёмные поля ввода */
+            color: #ffffff;
+            border-radius: 6px;
+        }
+        input[type="text"]:focus {
+            border-color: #3498db;
+            outline: none;
+        }
         
-        .menu-content { 
-            display: none; background: #1f4068; border: 1px solid #0f4c81; 
-            border-radius: 6px; padding: 10px; margin-bottom: 10px; box-sizing: border-box;
-        }
-        .menu-content.show { display: block; }
-        
-        .menu-item-btn { 
-            background-color: #e43f5a; color: white; border: none; padding: 8px 12px; 
-            font-size: 14px; border-radius: 4px; cursor: pointer; width: 100%; 
-            text-align: left; font-weight: bold; 
-        }
-        .menu-item-btn:hover { background-color: #ff3366; }
-
-        .overlay { 
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background-color: rgba(26, 26, 46, 0.98); z-index: 9999; padding: 20px; 
-            box-sizing: border-box; overflow-y: auto; 
-        }
-        .overlay.show { display: block; }
-        .overlay-header { 
-            display: flex; justify-content: space-between; align-items: center; 
-            border-bottom: 2px solid #00fff0; padding-bottom: 10px; margin-bottom: 20px; 
-        }
-        .overlay-title { font-size: 16px; font-weight: bold; color: #00fff0; }
-        .close-overlay-btn { 
-            background-color: #e43f5a; color: white; border: none; padding: 6px 12px; 
-            font-weight: bold; border-radius: 5px; cursor: pointer; 
-        }
-        .row-toggle-btn { 
-            background: #444; color: #fff; border: none; padding: 5px 10px; 
-            border-radius: 4px; cursor: pointer; font-weight: bold;
-        }
-
-        .search-box {
+        /* Блок управления масштабом (Зум) */
+        .zoom-controls {
             display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
+            align-items: center;
+            gap: 12px;
+            background: #202026;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            width: fit-content;
+            border: 1px solid #2d2d35;
         }
-        .search-box input {
-            flex: 1;
-            padding: 8px;
-            border-radius: 5px;
-            border: 1px solid #0f4c81;
-            background: #1f4068;
-            color: #fff;
-            font-size: 16px;
-            min-width: 0; /* Позволяет инпуту уменьшаться на мобильных */
+        input[type="range"] {
+            cursor: pointer;
+            accent-color: #3498db;
         }
-        .search-box button {
-            padding: 8px 15px;
-            background: #e43f5a;
-            border: none;
+
+        button {
+            background-color: #3498db;
             color: white;
-            border-radius: 5px;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
-            white-space: nowrap; /* Защита текста кнопки от переноса */
+            transition: background 0.2s;
         }
-        .slider-zone {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            font-size: 14px;
-        }
-        .slider-zone input { flex: 1; }
-        .btn-reset {
-            background: #438a5e;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .screen-container {
-            width: 100%;
-            max-width: 100vw;
-            overflow-x: auto; 
-            overflow-y: auto; 
-            display: block;   
-            background: #111122;
+        button:hover { background-color: #2980b9; }
+        .btn-danger { background-color: #e74c3c; }
+        .btn-danger:hover { background-color: #c0392b; }
+        .btn-success { background-color: #2ecc71; }
+        .btn-success:hover { background-color: #27ae60; }
+        
+        /* Окно просмотра матрицы с поддержкой прокрутки */
+        #matrix-view-container {
+            background: #09090b;
+            padding: 30px;
             border-radius: 8px;
-            min-height: 450px;
-            box-sizing: border-box;
-            cursor: zoom-in;
-            padding: 20px;
+            overflow: auto; 
+            border: 1px solid #2d2d35;
+            min-height: 400px;
+            position: relative;
         }
         
-        #mainTreeDisplay {
-            transform-origin: top left;
-            transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
-            display: block;
-            width: max-content; 
-        }
-        
-        .matrices-row {
-            display: grid !important;
-            grid-template-columns: repeat(32, 260px) !important; 
-            gap: 30px;
-            padding: 10px;
-            box-sizing: border-box;
-        }
-
-        .semerka-matrix {
-            background: rgba(22, 36, 71, 0.9);
-            border: 2px solid #0f4c81;
-            border-radius: 12px;
-            padding: 12px;
+        /* Контейнер-обертка для применения CSS масштабирования */
+        #matrix-zoom-wrapper {
             display: flex;
             flex-direction: column;
-            gap: 12px;
             align-items: center;
-            min-width: 260px;
-            max-width: 260px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            cursor: default;
+            gap: 15px;
+            transform-origin: top center; 
+            transition: transform 0.2s ease-out;
+            width: max-content;
+            margin: 0 auto;
         }
+        
         .matrix-row {
             display: flex;
             justify-content: center;
-            gap: 12px;
+            gap: 10px;
             width: 100%;
         }
-        
-        .cell {
-            background: #1f4068;
-            border: 1px solid #0f4c81;
-            border-radius: 6px;
-            padding: 6px;
-            text-align: center;
-            min-width: 55px;
-            box-sizing: border-box;
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-        .cell:active { transform: scale(0.9) !important; }
-        .cell-id { font-size: 10px; color: #888; font-weight: bold; }
-        .cell-user { font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; }
-        
-        .level-1 { border: 2px solid #ffd700; background: #3a3000; } 
-        .level-2 { border: 2px solid #00fff0; background: #002b36; } 
-        .level-3 { border: 1px dashed #ffffff; background: #2b2b2b; } 
-        
-        .occupied { background: #16a085 !important; border-color: #1abc9c !important; }
-        .focused-cell { animation: pulse 1s infinite alternate; border-color: #ff3366 !important; box-shadow: 0 0 15px #ff3366 !important; background: #ff3366 !important; }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            100% { transform: scale(1.05); }
-        }
-
-        .table-container {
-            width: 100%;
-            max-width: 500px;
-            margin-top: 20px;
-            background: #162447;
-            border-radius: 8px;
+        .matrix-cell {
+            min-width: 80px;
             padding: 10px;
-            box-sizing: border-box;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+            transition: all 0.2s ease;
         }
-        .table-container h2 { font-size: 16px; margin: 0 0 10px 0; color: #00fff0; text-align: center; }
-        .ref-table {
+        .matrix-cell.empty { background-color: #3f3f46; color: #a1a1aa; border: 2px dashed #52525b; }
+        .matrix-cell.occupied { background-color: #1e3a1e; color: #4ade80; border: 2px solid #166534; }
+        .cell-id { font-size: 10px; opacity: 0.7; }
+
+        /* === НЕОНОВАЯ СИСТЕМА УМНОГО ФОКУСА === */
+        @keyframes neon-glow {
+            0% { box-shadow: 0 0 10px #00f0ff, inset 0 0 5px #00f0ff; border-color: #00f0ff; }
+            50% { box-shadow: 0 0 35px #00f0ff, inset 0 0 20px #00f0ff; border-color: #ffffff; transform: scale(1.15); }
+            100% { box-shadow: 0 0 10px #00f0ff, inset 0 0 5px #00f0ff; border-color: #00f0ff; }
+        }
+        .matrix-cell.search-highlight {
+            animation: neon-glow 2s infinite ease-in-out;
+            z-index: 999;
+            position: relative;
+            background-color: #003344 !important;
+            color: #00f0ff !important;
+        }
+
+        /* Профиль и 5 Золотых ячеек */
+        .profile-info p { margin: 8px 0; font-size: 16px; }
+        .balance-box { font-size: 22px; font-weight: bold; color: #4ade80; margin: 15px 0; }
+        .golden-cells-list { list-style: none; padding: 0; }
+        .golden-cells-list li {
+            padding: 10px;
+            margin-bottom: 6px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+        .cell-gold-active { background-color: #453507; color: #fbbf24; border: 1px solid #78350f; }
+        .cell-gold-locked { background-color: #27272a; color: #71717a; text-decoration: line-through; border: 1px solid #3f3f46; }
+
+        /* Аналитическая таблица */
+        table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 14px;
+            margin-top: 15px;
+            background: #17171c;
+            border-radius: 8px;
+            overflow: hidden;
         }
-        .ref-table th, .ref-table td {
-            padding: 8px;
+        th, td {
+            padding: 12px;
             text-align: left;
-            border-bottom: 1px solid #1f4068;
+            border-bottom: 1px solid #232329;
         }
-        .ref-table th { background: #0f4c81; color: white; }
-        .ref-table tr:hover { background: rgba(255,255,255,0.05); cursor: pointer; }
+        th { background-color: #202026; color: #ffffff; }
+        td { color: #e3e3e8; }
     </style>
 </head>
 <body>
 
-    <h1>Панель Управления Admin</h1>
+<div class="container">
+    <header>
+        <h1>Система Управления Матрицей и Маркетплейсом</h1>
+        <p>Расчеты в Митронах (Mitrons) и USD. Базовый пакет: 1000 Митронов ($130)</p>
+    </header>
 
-    <div class="control-panel">
-        <button class="menu-btn" id="menuToggleBtn">☰ Меню Управления <span>▼</span></button>
-        <div class="menu-content" id="menuContent">
-            <button class="menu-item-btn" id="openTableBtn">➔ Таблица рефералов</button>
-        </div>
-
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Поиск в Матрицах (логин)...">
-            <button id="searchBtn">Найти</button>
-        </div>
-        <div class="slider-zone">
-            <span>Масштаб:</span>
-            <input type="range" id="zoomSlider" min="0.03" max="1" step="0.05" value="0.8">
-            <button class="btn-reset" id="resetBtn">Сброс БД</button>
-        </div>
-    </div>
-
-    <div class="screen-container" id="screenContainer">
-        <div id="mainTreeDisplay"></div>
-    </div>
-
-    <div class="overlay" id="tableOverlay">
-        <div class="overlay-header">
-            <div class="overlay-title">📋 ИНТЕРАКТИВНАЯ ТАБЛИЦА РЕФЕРАЛОВ</div>
-            <button class="close-overlay-btn" id="closeOverlayBtn">Закрыть ✖</button>
-        </div>
-
-        <div class="control-panel" style="max-width: 500px; margin: 0 auto 15px auto; background: #162447;">
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <input type="text" id="refSearchInput" placeholder="Поиск в Таблице Рефералов (логин)..." style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #0f4c81; background: #1f4068; color: #fff; font-size: 16px; box-sizing: border-box;">
-                <div style="display: flex; gap: 10px; width: 100%;">
-                    <button id="refSearchBtn" style="flex: 1; padding: 8px; background: #00fff0; color: #111; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; white-space: nowrap;">Найти</button>
-                    <button id="refSearchResetBtn" style="flex: 1; padding: 8px; background: #444; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; white-space: nowrap;">Сброс</button>
-                </div>
+    <div class="grid">
+        <div class="card">
+            <h2>1. Кабинет Покупателя Маркетплейса</h2>
+            <div class="form-group">
+                <label for="shop-username">Логин нового покупателя:</label>
+                <input type="text" id="shop-username" placeholder="Например: ivan_bot">
             </div>
+            <div class="form-group">
+                <label for="shop-sponsor">Логин спонсора (необязательно):</label>
+                <input type="text" id="shop-sponsor" placeholder="Оставьте пустым для автоцепочки">
+            </div>
+            <button onclick="registerShopUser()">Создать аккаунт покупателя</button>
+            
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #232329;">
+            
+            <h2>2. Прямая посадка в матрицу (Админ-панель)</h2>
+            <div class="form-group">
+                <label for="matrix-username">Логин для матрицы:</label>
+                <input type="text" id="matrix-username" placeholder="Имя пользователя">
+            </div>
+            <div class="form-group">
+                <label for="matrix-sponsor">Спонсор:</label>
+                <input type="text" id="matrix-sponsor" placeholder="SYSTEM_ROOT">
+            </div>
+            <button onclick="registerInMatrix()" class="btn-success">Занять место вручную</button>
         </div>
 
-        <div class="table-container" style="max-width: 100%; margin-top: 0;">
-            <table class="ref-table">
-                <tbody id="interactiveRefTableBody">
-                </tbody>
-            </table>
+        <div class="card">
+            <h2>3. Просмотр карточки и Сейфов</h2>
+            <div class="form-group" style="display: flex; gap: 10px;">
+                <input type="text" id="search-username-input" placeholder="Введите логин для поиска...">
+                <button id="search-profile-btn">Найти</button>
+            </div>
+            
+            <div class="profile-info">
+                <p>Текущий профиль: <strong id="current-profile-user">—</strong></p>
+                <p>Позиция в глобальной матрице: <span id="profile-cell-id">—</span></p>
+                <p>Статус оплаты тарифа: <span id="profile-status">—</span></p>
+                
+                <div class="balance-box">
+                    Баланс: <span id="balance-mitrons">0 Mitrons</span> 
+                    <span id="balance-usd" style="font-size: 14px; color: #a0a0ab;">($0.00)</span>
+                </div>
+                
+                <button onclick="payCertificate()" class="btn-success">Активировать пакет (1000 Mitrons / $130)</button>
+            </div>
+
+            <div id="golden-cells-status" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #2d2d35;">
+                </div>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <div class="card" style="margin-bottom: 30px;">
+        <h2>4. Глобальная структура бинарной матрицы</h2>
+        
+        <div class="zoom-controls">
+            <label for="matrix-zoom-slider" style="margin: 0;">Масштаб дерева:</label>
+            <input type="range" id="matrix-zoom-slider" min="0.03" max="1" step="0.01" value="1">
+            <span id="zoom-value" style="font-weight: bold; color: #3498db;">100%</span>
+        </div>
+
+        <div id="matrix-view-container">
+            <div id="matrix-zoom-wrapper">
+                </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>5. Реферальная аналитика и квалификации XYZ</h2>
+            <button id="refresh-table-btn">Обновить данные</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Участник</th>
+                    <th>Пригласитель (Спонсор)</th>
+                    <th>Глубина цепочки</th>
+                    <th>Баланс аккаунта</th>
+                    <th>Статус 5 Золотых Ячеек (XYZ)</th>
+                </tr>
+            </thead>
+            <tbody id="referals-table-body">
+                </tbody>
+        </table>
+    </div>
+
+    <div style="margin-top: 40px; text-align: center;">
+        <button onclick="resetSystem()" class="btn-danger">Полный сброс всей базы данных системы</button>
+    </div>
+</div>
+
+<script src="script.js"></script>
+<script src="table.js"></script>
 </body>
 </html>
