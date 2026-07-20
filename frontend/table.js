@@ -1,59 +1,70 @@
 const API_BASE_URL = window.location.origin;
 
-// Локальное хранилище структуры реферального дерева
 let referralTreeData = {};
-// Текущий активный путь раскрытых пользователей (массив логинов)
 let activePath = [];
-// Логин пользователя, у которого сейчас открыто выпадающее меню действий
 let openDropdownUser = null;
 
-// Динамическое внедрение стилей для отображения сетки, растущей вправо
+// Динамические стили без заголовков колонок
 const style = document.createElement('style');
 style.innerHTML = `
+    .table-search-container {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 12px;
+        max-width: 400px;
+    }
+    .table-search-input {
+        flex: 1;
+        padding: 8px 12px;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 6px;
+        color: #fff;
+        font-size: 13px;
+        outline: none;
+    }
+    .table-search-input:focus {
+        border-color: #4CAF50;
+    }
+    .table-search-btn {
+        background: #2c5f2d;
+        color: #fff;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 13px;
+    }
+    .table-search-btn:hover {
+        background: #3e8e41;
+    }
     .referral-grid-wrapper {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
         align-items: flex-start !important;
-        gap: 20px !important;
+        gap: 15px !important;
         overflow-x: auto !important;
-        padding: 15px !important;
+        padding: 10px 5px !important;
         background: #181818;
         border-radius: 8px;
-        min-height: 400px;
+        min-height: 350px;
         width: 100% !important;
         box-sizing: border-box;
         scroll-behavior: smooth;
         -webkit-overflow-scrolling: touch;
     }
     .referral-column {
-        flex: 0 0 260px !important;
+        flex: 0 0 240px !important;
         background: #222222 !important;
         border: 1px solid #333333 !important;
         border-radius: 6px !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.5) !important;
         display: flex !important;
         flex-direction: column !important;
-        max-height: 600px !important;
+        max-height: 550px !important;
         overflow-y: auto !important;
-    }
-    .referral-column-header {
-        background: #2c5f2d !important;
-        color: #ffffff !important;
-        padding: 10px !important;
-        font-weight: bold !important;
-        text-align: center !important;
-        font-size: 14px !important;
-        border-top-left-radius: 5px !important;
-        border-top-right-radius: 5px !important;
-        position: sticky;
-        top: 0;
-        z-index: 2;
-    }
-    .referral-column-body {
-        padding: 10px !important;
-        display: flex !important;
-        flex-direction: column !important;
+        padding: 8px !important;
         gap: 8px !important;
     }
     .user-cell-card {
@@ -73,7 +84,7 @@ style.innerHTML = `
     .user-cell-card.active-link {
         background: #1e3a20 !important;
         border-color: #4CAF50 !important;
-        box-shadow: inset 0 0 4px rgba(76,175,80,0.4) !important;
+        box-shadow: inset 0 0 6px rgba(76,175,80,0.5) !important;
     }
     .user-cell-main {
         display: flex !important;
@@ -122,19 +133,28 @@ style.innerHTML = `
         font-style: italic !important;
         text-align: center !important;
         padding: 15px !important;
-        font-size: 13px !important;
+        font-size: 12px !important;
     }
 `;
 document.head.appendChild(style);
 
 /**
- * Загрузка данных реферальной сети
+ * Загрузка реферального дерева
  */
 async function loadReferalsTable() {
     const tableBody = document.getElementById('referals-table-body');
     if (!tableBody) return;
 
-    const container = tableBody.closest('table') || tableBody;
+    const container = tableBody.closest('table') || tableBody.parentElement || tableBody;
+
+    // Изменяем заголовок секции на "Интерактивная таблица Пользователей"
+    const sectionTitle = container.parentElement ? container.parentElement.querySelector('h2, h3, .section-title, div') : null;
+    const allHeaders = document.querySelectorAll('h1, h2, h3, h4, .card-title, .section-header');
+    allHeaders.forEach(h => {
+        if (h.innerText.includes('Реферальная аналитика')) {
+            h.innerText = '5. Интерактивная таблица Пользователей';
+        }
+    });
 
     try {
         const response = await fetch(`${API_BASE_URL}/api/referals-tree?t=${Date.now()}`);
@@ -147,7 +167,6 @@ async function loadReferalsTable() {
 
         referralTreeData = result.tree;
 
-        // Определяем корневого лидера
         const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData).find(node => !node.parentId) || Object.values(referralTreeData)[0];
 
         if (activePath.length === 0 && rootUser) {
@@ -157,70 +176,73 @@ async function loadReferalsTable() {
         renderActiveReferralGrid(container);
 
     } catch (error) {
-        console.error('Ошибка генерации реферальной сетки:', error);
-        container.innerHTML = '<div style="text-align:center; color:red; padding: 20px;">Критическая ошибка на стороне клиента</div>';
+        console.error('Ошибка загрузки интерактивной таблицы:', error);
     }
 }
 
 /**
- * Отрисовка многоколоночной структуры (Активная Реферальная Сетка)
+ * Отрисовка интерактивной таблицы (БЕЗ заглавных плашек над колонками)
  */
 function renderActiveReferralGrid(container) {
     container.innerHTML = '';
     
+    // Блок поиска по Интерактивной таблице
+    const searchBlock = document.createElement('div');
+    searchBlock.className = 'table-search-container';
+    searchBlock.innerHTML = `
+        <input type="text" id="interactiveTableSearchInput" class="table-search-input" placeholder="Поиск пользователя в таблице..." />
+        <button type="button" class="table-search-btn" onclick="window.searchTableUserByInput()">Найти</button>
+    `;
+    container.appendChild(searchBlock);
+
+    const searchInput = searchBlock.querySelector('input');
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') window.searchTableUserByInput();
+    });
+
     const wrapper = document.createElement('div');
     wrapper.className = 'referral-grid-wrapper';
     wrapper.id = 'referralGridWrapper';
 
-    // 1. Первая колонка: Корневой Лидер (Михаил / SYSTEM_ROOT)
+    // Колонка 1: Корневой Лидер
     const rootUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
-    renderColumn(wrapper, 'Корневой Лидер', rootUsers, 0);
+    renderColumn(wrapper, rootUsers, 0);
 
-    // 2. Последующие колонки: Личники пользователей из activePath
+    // Последующие колонки: Личники
     for (let i = 0; i < activePath.length; i++) {
         const currentLogin = activePath[i];
         const userNode = referralTreeData[currentLogin];
 
         if (userNode && userNode.children && userNode.children.length > 0) {
             const childrenNodes = userNode.children.map(childLogin => referralTreeData[childLogin]).filter(Boolean);
-            renderColumn(wrapper, `Личники: ${currentLogin}`, childrenNodes, i + 1);
+            renderColumn(wrapper, childrenNodes, i + 1);
         }
     }
 
     container.appendChild(wrapper);
 
-    // Автоматическая прокрутка вправо к последней открытой колонке
     setTimeout(() => {
         wrapper.scrollLeft = wrapper.scrollWidth;
     }, 50);
 }
 
 /**
- * Рендеринг отдельной вертикальной колонки
+ * Рендер отдельной колонки (БЕЗ заголовка сверху)
  */
-function renderColumn(wrapper, title, usersList, columnIndex) {
+function renderColumn(wrapper, usersList, columnIndex) {
     const column = document.createElement('div');
     column.className = 'referral-column';
-
-    const header = document.createElement('div');
-    header.className = 'referral-column-header';
-    header.innerText = title;
-    column.appendChild(header);
-
-    const body = document.createElement('div');
-    body.className = 'referral-column-body';
 
     if (!usersList || usersList.length === 0) {
         const emptyMsg = document.createElement('div');
         emptyMsg.className = 'empty-column-msg';
         emptyMsg.innerText = 'Нет зарегистрированных личников';
-        body.appendChild(emptyMsg);
+        column.appendChild(emptyMsg);
     } else {
         usersList.forEach(user => {
             const card = document.createElement('div');
             card.className = 'user-cell-card';
             
-            // Если пользователь входит в активный путь раскрытия
             if (activePath.includes(user.id)) {
                 card.classList.add('active-link');
             }
@@ -243,7 +265,7 @@ function renderColumn(wrapper, title, usersList, columnIndex) {
 
             card.appendChild(mainRow);
 
-            // Рендер выпадающего меню внутри ячейки
+            // Выпадающее меню при нажатии
             if (openDropdownUser === user.id) {
                 const dropdown = document.createElement('div');
                 dropdown.className = 'user-dropdown-menu';
@@ -257,15 +279,13 @@ function renderColumn(wrapper, title, usersList, columnIndex) {
                 card.appendChild(dropdown);
             }
 
-            // Клик по карточке пользователя
+            // Клик по ячейке
             card.addEventListener('click', (e) => {
                 e.stopPropagation();
 
-                // Отрезаем цепочку до колонки, где кликнули, и добавляем кликнутого человека
                 activePath = activePath.slice(0, columnIndex);
                 activePath.push(user.id);
 
-                // Переключаем 상태 выпадающего меню
                 if (openDropdownUser === user.id) {
                     openDropdownUser = null; 
                 } else {
@@ -274,21 +294,20 @@ function renderColumn(wrapper, title, usersList, columnIndex) {
 
                 const tableBody = document.getElementById('referals-table-body');
                 if (tableBody) {
-                    const targetContainer = tableBody.closest('table') || tableBody;
+                    const targetContainer = tableBody.closest('table') || tableBody.parentElement || tableBody;
                     renderActiveReferralGrid(targetContainer);
                 }
             });
 
-            body.appendChild(card);
+            column.appendChild(card);
         });
     }
 
-    column.appendChild(body);
     wrapper.appendChild(column);
 }
 
 /**
- * УМНЫЙ ПОИСК (Smart Path): разворачивает всю ветку предков от корня до пользователя
+ * Умный поиск пользователя по логину
  */
 async function searchReferralUser(login) {
     if (!login) return;
@@ -296,7 +315,7 @@ async function searchReferralUser(login) {
     try {
         const response = await fetch(`${API_BASE_URL}/api/get-referral-chain?login=${encodeURIComponent(login.trim())}`);
         if (!response.ok) {
-            alert('Пользователь не найден в реферальной сети!');
+            alert('Пользователь не найден в системе!');
             return;
         }
 
@@ -307,16 +326,22 @@ async function searchReferralUser(login) {
 
             const tableBody = document.getElementById('referals-table-body');
             if (tableBody) {
-                const targetContainer = tableBody.closest('table') || tableBody;
+                const targetContainer = tableBody.closest('table') || tableBody.parentElement || tableBody;
                 renderActiveReferralGrid(targetContainer);
             }
         }
     } catch (e) {
-        console.error('Ошибка работы Умного Поиска:', e);
+        console.error('Ошибка поиска по таблице:', e);
     }
 }
 
-// Экспорт триггеров взаимодействия
+window.searchTableUserByInput = () => {
+    const inp = document.getElementById('interactiveTableSearchInput');
+    if (inp && inp.value) {
+        searchReferralUser(inp.value);
+    }
+};
+
 window.searchReferralUser = searchReferralUser;
 window.refreshReferralTable = loadReferalsTable;
 
@@ -324,7 +349,7 @@ window.viewUserCardTrigger = (login) => {
     if (typeof window.showUserCard === 'function') {
         window.showUserCard(login);
     } else {
-        alert(`Логин: ${login}`);
+        alert(`Инфо-Карточка: ${login}`);
     }
 };
 
@@ -332,7 +357,7 @@ window.focusUserMatrixTrigger = (login) => {
     if (typeof window.searchMatrixUser === 'function') {
         window.searchMatrixUser(login);
     } else {
-        alert(`Поиск по матрице недоступен`);
+        alert(`Поиск по матрице для ${login}`);
     }
 };
 
@@ -341,37 +366,20 @@ window.copyToClipboardTrigger = (text, btn) => {
         const oldText = btn.innerText;
         btn.innerText = '✅ Скопировано!';
         setTimeout(() => { btn.innerText = oldText; }, 1500);
-    }).catch(err => console.error('Не удалось скопировать:', err));
+    }).catch(err => console.error('Ошибка копирования:', err));
 };
 
-// Глобальный клик для закрытия меню действий при клике вне карточки
 document.addEventListener('click', () => {
     if (openDropdownUser !== null) {
         openDropdownUser = null;
         const tableBody = document.getElementById('referals-table-body');
         if (tableBody) {
-            const targetContainer = tableBody.closest('table') || tableBody;
+            const targetContainer = tableBody.closest('table') || tableBody.parentElement || tableBody;
             renderActiveReferralGrid(targetContainer);
         }
     }
 });
 
-// Автоматическая привязка событий при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     loadReferalsTable();
-    
-    const refreshBtn = document.getElementById('refresh-table-btn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', loadReferalsTable);
-    }
-
-    const searchInput = document.getElementById('user-search-input') || document.querySelector('.search-box input');
-    const searchBtn = document.getElementById('user-search-btn') || document.querySelector('.search-box button');
-
-    if (searchBtn && searchInput) {
-        searchBtn.addEventListener('click', () => searchReferralUser(searchInput.value));
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') searchReferralUser(searchInput.value);
-        });
-    }
 });
