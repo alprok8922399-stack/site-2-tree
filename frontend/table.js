@@ -4,7 +4,7 @@ let referralTreeData = {};
 let activePath = [];
 let openDropdownUser = null;
 
-// Динамические стили без заголовков колонок
+// Динамические стили
 const style = document.createElement('style');
 style.innerHTML = `
     .table-search-container {
@@ -142,26 +142,15 @@ document.head.appendChild(style);
  * Загрузка реферального дерева
  */
 async function loadReferalsTable() {
-    const tableBody = document.getElementById('referals-table-body');
-    if (!tableBody) return;
-
-    const container = tableBody.closest('table') || tableBody.parentElement || tableBody;
-
-    // Изменяем заголовок секции на "Интерактивная таблица Пользователей"
-    const sectionTitle = container.parentElement ? container.parentElement.querySelector('h2, h3, .section-title, div') : null;
-    const allHeaders = document.querySelectorAll('h1, h2, h3, h4, .card-title, .section-header');
-    allHeaders.forEach(h => {
-        if (h.innerText.includes('Реферальная аналитика')) {
-            h.innerText = '5. Интерактивная таблица Пользователей';
-        }
-    });
+    const targetContainer = document.getElementById('referals-table-body');
+    if (!targetContainer) return;
 
     try {
         const response = await fetch(`${API_BASE_URL}/api/referals-tree?t=${Date.now()}`);
         const result = await response.json();
 
         if (!result.success || !result.tree) {
-            container.innerHTML = '<div style="text-align:center; color:red; padding: 20px;">Ошибка загрузки структуры рефералов</div>';
+            targetContainer.innerHTML = '<div style="text-align:center; color:red; padding: 20px;">Ошибка загрузки структуры рефералов</div>';
             return;
         }
 
@@ -173,7 +162,7 @@ async function loadReferalsTable() {
             activePath = [rootUser.id];
         }
 
-        renderActiveReferralGrid(container);
+        renderActiveReferralGrid(targetContainer);
 
     } catch (error) {
         console.error('Ошибка загрузки интерактивной таблицы:', error);
@@ -181,12 +170,12 @@ async function loadReferalsTable() {
 }
 
 /**
- * Отрисовка интерактивной таблицы (БЕЗ заглавных плашек над колонками)
+ * Отрисовка интерактивной таблицы
  */
 function renderActiveReferralGrid(container) {
     container.innerHTML = '';
     
-    // Блок поиска по Интерактивной таблице
+    // Поиск по Интерактивной таблице
     const searchBlock = document.createElement('div');
     searchBlock.className = 'table-search-container';
     searchBlock.innerHTML = `
@@ -208,7 +197,7 @@ function renderActiveReferralGrid(container) {
     const rootUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
     renderColumn(wrapper, rootUsers, 0);
 
-    // Последующие колонки: Личники
+    // Последующие колонки
     for (let i = 0; i < activePath.length; i++) {
         const currentLogin = activePath[i];
         const userNode = referralTreeData[currentLogin];
@@ -227,7 +216,7 @@ function renderActiveReferralGrid(container) {
 }
 
 /**
- * Рендер отдельной колонки (БЕЗ заголовка сверху)
+ * Рендер колонки
  */
 function renderColumn(wrapper, usersList, columnIndex) {
     const column = document.createElement('div');
@@ -265,7 +254,6 @@ function renderColumn(wrapper, usersList, columnIndex) {
 
             card.appendChild(mainRow);
 
-            // Выпадающее меню при нажатии
             if (openDropdownUser === user.id) {
                 const dropdown = document.createElement('div');
                 dropdown.className = 'user-dropdown-menu';
@@ -279,7 +267,6 @@ function renderColumn(wrapper, usersList, columnIndex) {
                 card.appendChild(dropdown);
             }
 
-            // Клик по ячейке
             card.addEventListener('click', (e) => {
                 e.stopPropagation();
 
@@ -292,9 +279,8 @@ function renderColumn(wrapper, usersList, columnIndex) {
                     openDropdownUser = user.id; 
                 }
 
-                const tableBody = document.getElementById('referals-table-body');
-                if (tableBody) {
-                    const targetContainer = tableBody.closest('table') || tableBody.parentElement || tableBody;
+                const targetContainer = document.getElementById('referals-table-body');
+                if (targetContainer) {
                     renderActiveReferralGrid(targetContainer);
                 }
             });
@@ -324,9 +310,8 @@ async function searchReferralUser(login) {
             activePath = result.chain;
             openDropdownUser = result.chain[result.chain.length - 1];
 
-            const tableBody = document.getElementById('referals-table-body');
-            if (tableBody) {
-                const targetContainer = tableBody.closest('table') || tableBody.parentElement || tableBody;
+            const targetContainer = document.getElementById('referals-table-body');
+            if (targetContainer) {
                 renderActiveReferralGrid(targetContainer);
             }
         }
@@ -372,13 +357,17 @@ window.copyToClipboardTrigger = (text, btn) => {
 document.addEventListener('click', () => {
     if (openDropdownUser !== null) {
         openDropdownUser = null;
-        const tableBody = document.getElementById('referals-table-body');
-        if (tableBody) {
-            const targetContainer = tableBody.closest('table') || tableBody.parentElement || tableBody;
+        const targetContainer = document.getElementById('referals-table-body');
+        if (targetContainer) {
             renderActiveReferralGrid(targetContainer);
         }
     }
 });
+
+// Автоматическое обновление каждые 3 секунды
+setInterval(() => {
+    loadReferalsTable();
+}, 3000);
 
 document.addEventListener('DOMContentLoaded', () => {
     loadReferalsTable();
