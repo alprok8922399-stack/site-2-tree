@@ -85,12 +85,10 @@ function findNextEmptyCell(tree) {
 
 // Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек
 function checkAndSplitMatrix(cellId) {
-    // Вычисляем, принадлежит ли ячейка к заполненной семерке
     const gIdx = cellIdToGlobalIndex(cellId);
     const parentGIdx = Math.floor((gIdx - 1) / 2);
     const topGIdx = Math.floor((parentGIdx - 1) / 2);
 
-    // Проверяем, заполнена ли вся четверка в основании
     const b1G = topGIdx * 2 + 1;
     const b2G = topGIdx * 2 + 2;
     const c1G = b1G * 2 + 1;
@@ -113,19 +111,16 @@ function checkAndSplitMatrix(cellId) {
     const c4 = getCellByGIdx(c4G);
 
     if (c1 && c1.user && c2 && c2.user && c3 && c3.user && c4 && c4.user) {
-        // ВЕСЬ НИЖНИЙ РЯД ЗАПОЛНЕН! Выполняем деление
         const topCell = getCellByGIdx(topGIdx);
         const b1Cell = getCellByGIdx(b1G);
         const b2Cell = getCellByGIdx(b2G);
 
         if (topCell && topCell.user) {
-            // Верхушка выходит на выплату
             if (shopUsersDB[topCell.user]) {
                 shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
             }
         }
 
-        // Обновляем список активных матриц (верхушка уходит, плечи становятся верхушками новых 2-х матриц)
         activeMatricesList = activeMatricesList.filter(id => id !== topCell.id);
         if (b1Cell && b1Cell.id) activeMatricesList.push(b1Cell.id);
         if (b2Cell && b2Cell.id) activeMatricesList.push(b2Cell.id);
@@ -146,7 +141,13 @@ app.post('/api/register', (req, res) => {
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
     
     const trimmedUser = username.trim();
-    const canonicalSponsor = sponsor ? sponsor.trim() : 'SYSTEM_ROOT';
+    
+    // Рандомный выбор спонсора, если не указан явно
+    let canonicalSponsor = sponsor ? sponsor.trim() : null;
+    if (!canonicalSponsor) {
+        const allUsers = Object.keys(referalsDB);
+        canonicalSponsor = allUsers[Math.floor(Math.random() * allUsers.length)] || 'SYSTEM_ROOT';
+    }
     
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
     if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
@@ -301,11 +302,14 @@ app.post('/api/shop/register', (req, res) => {
     
     shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
     
-    if (sponsor) {
-        referalsDB[trimmedUser] = sponsor.trim();
-    } else {
-        referalsDB[trimmedUser] = lastRegisteredBot ? lastRegisteredBot : 'SYSTEM_ROOT';
+    // Выбираем спонсора: если передан — берем его, если не передан — берем случайного из имеющихся
+    let chosenSponsor = sponsor ? sponsor.trim() : null;
+    if (!chosenSponsor) {
+        const availableSponsors = Object.keys(referalsDB);
+        chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
     }
+
+    referalsDB[trimmedUser] = chosenSponsor;
     lastRegisteredBot = trimmedUser; 
 
     const cellId = findNextEmptyCell(treeDB);
