@@ -29,7 +29,7 @@ let referalsDB = {
 
 let lastRegisteredBot = null;
 
-// Стартовое состояние корневой матрицы
+// Стартовое состояние активных матриц
 function createInitialTree() {
     return {
         'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
@@ -43,12 +43,13 @@ function createInitialTree() {
 }
 
 let treeDB = createInitialTree();
+let activeMatricesList = ['A1']; // Список верхушек активных матриц
 
 /**
- * Алгоритм веерного заполнения ячеек матрицы по ТЗ
+ * Алгоритм поиска свободной ячейки и деления матриц
  */
 function findNextEmptyCell(tree) {
-    const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
+    const orderABC = ['C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
@@ -82,35 +83,62 @@ function findNextEmptyCell(tree) {
     }
 }
 
-function checkAndGenerateChildren(tree, currentCellId) {
-    if (!currentCellId) return;
-    const globalIdx = cellIdToGlobalIndex(currentCellId);
-    
-    const leftChildGlobal = globalIdx * 2 + 1;
-    const rightChildGlobal = globalIdx * 2 + 2;
-    
-    function createCellByGlobalIndex(gIdx) {
+// Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек
+function checkAndSplitMatrix(cellId) {
+    // Вычисляем, принадлежит ли ячейка к заполненной семерке
+    const gIdx = cellIdToGlobalIndex(cellId);
+    const parentGIdx = Math.floor((gIdx - 1) / 2);
+    const topGIdx = Math.floor((parentGIdx - 1) / 2);
+
+    // Проверяем, заполнена ли вся четверка в основании
+    const b1G = topGIdx * 2 + 1;
+    const b2G = topGIdx * 2 + 2;
+    const c1G = b1G * 2 + 1;
+    const c2G = b1G * 2 + 2;
+    const c3G = b2G * 2 + 1;
+    const c4G = b2G * 2 + 2;
+
+    const getCellByGIdx = (g) => {
         let levelIndex = 0;
-        while ((1 << (levelIndex + 1)) - 1 <= gIdx) {
-            levelIndex++;
-        }
+        while ((1 << (levelIndex + 1)) - 1 <= g) levelIndex++;
         const levelStart = (1 << levelIndex) - 1;
-        const num = (gIdx - levelStart) + 1;
+        const num = (g - levelStart) + 1;
         const letter = getLevelLetter(levelIndex);
-        const id = `${letter}${num}`;
-        if (!tree[id]) {
-            tree[id] = { id, level: letter, user: null };
+        return treeDB[`${letter}${num}`];
+    };
+
+    const c1 = getCellByGIdx(c1G);
+    const c2 = getCellByGIdx(c2G);
+    const c3 = getCellByGIdx(c3G);
+    const c4 = getCellByGIdx(c4G);
+
+    if (c1 && c1.user && c2 && c2.user && c3 && c3.user && c4 && c4.user) {
+        // ВЕСЬ НИЖНИЙ РЯД ЗАПОЛНЕН! Выполняем деление
+        const topCell = getCellByGIdx(topGIdx);
+        const b1Cell = getCellByGIdx(b1G);
+        const b2Cell = getCellByGIdx(b2G);
+
+        if (topCell && topCell.user) {
+            // Верхушка выходит на выплату
+            if (shopUsersDB[topCell.user]) {
+                shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
+            }
         }
+
+        // Обновляем список активных матриц (верхушка уходит, плечи становятся верхушками новых 2-х матриц)
+        activeMatricesList = activeMatricesList.filter(id => id !== topCell.id);
+        if (b1Cell && b1Cell.id) activeMatricesList.push(b1Cell.id);
+        if (b2Cell && b2Cell.id) activeMatricesList.push(b2Cell.id);
     }
-    
-    createCellByGlobalIndex(leftChildGlobal);
-    createCellByGlobalIndex(rightChildGlobal);
 }
 
 // ================= API =================
 
 app.get('/api/tree', (req, res) => {
-    res.json(treeDB);
+    res.json({
+        ...treeDB,
+        activeMatrices: activeMatricesList
+    });
 });
 
 app.post('/api/register', (req, res) => {
@@ -135,12 +163,13 @@ app.post('/api/register', (req, res) => {
         shopUsersDB[trimmedUser].matrixPosition.status = 'active';
     }
     
-    checkAndGenerateChildren(treeDB, cellId);
+    checkAndSplitMatrix(cellId);
     res.json({ success: true, cellId, user: trimmedUser });
 });
 
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
+    activeMatricesList = ['A1'];
     shopUsersDB = {};
     wallets = createInitialWallets();
     referalsDB = {
@@ -286,7 +315,7 @@ app.post('/api/shop/register', (req, res) => {
     shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
     shopUsersDB[trimmedUser].matrixPosition.status = 'active';
     
-    checkAndGenerateChildren(treeDB, cellId);
+    checkAndSplitMatrix(cellId);
     res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser], cellId });
 });
 
@@ -320,7 +349,7 @@ app.post('/api/shop/pay', (req, res) => {
     shopUsersDB[canonicalName].matrixPosition.currentCellId = cellId;
     shopUsersDB[canonicalName].matrixPosition.status = 'active';
 
-    checkAndGenerateChildren(treeDB, cellId);
+    checkAndSplitMatrix(cellId);
 
     res.json({
         success: true,
@@ -332,21 +361,6 @@ app.post('/api/shop/pay', (req, res) => {
             daoPool: DAO_POOL
         }
     });
-});
-
-// Админ-действия: Переключение VIP, Блокировка, Удаление
-app.post('/api/admin/toggle-vip', (req, res) => {
-    const { username } = req.body;
-    if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Пользователь не найден' });
-    shopUsersDB[username].isVip = !shopUsersDB[username].isVip;
-    res.json({ success: true, isVip: shopUsersDB[username].isVip });
-});
-
-app.post('/api/admin/toggle-block', (req, res) => {
-    const { username } = req.body;
-    if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Пользователь не найден' });
-    shopUsersDB[username].isBlocked = !shopUsersDB[username].isBlocked;
-    res.json({ success: true, isBlocked: shopUsersDB[username].isBlocked });
 });
 
 app.post('/api/admin/delete-user', (req, res) => {
