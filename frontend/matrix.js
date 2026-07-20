@@ -4,36 +4,41 @@
     const style = document.createElement('style');
     style.innerHTML = `
         .matrices-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            padding: 20px;
-            justify-content: center;
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important; /* В ряд без переносов */
+            gap: 20px !important;
+            padding: 10px !important;
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
         }
 
         .matrix-block {
-            background: #1a1a1a;
-            border: 2px solid #334257;
+            background: #17171c;
+            border: 2px solid #232329;
             border-radius: 12px;
             padding: 15px;
-            width: 300px;
+            width: 280px;
+            min-width: 280px; /* Чтобы блоки не сжимались */
             display: flex;
             flex-direction: column;
             align-items: center;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
             transition: transform 0.2s ease, border-color 0.2s ease;
         }
 
         .matrix-block.highlighted {
-            border-color: #ff9800;
-            transform: scale(1.03);
+            border-color: #ffd700;
+            transform: scale(1.02);
         }
 
         .matrix-title {
-            color: #4CAF50;
+            color: #ffd700;
             font-size: 14px;
             font-weight: bold;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .matrix-row {
@@ -45,10 +50,10 @@
         }
 
         .matrix-cell {
-            background: #2a2a2a;
-            border: 1px solid #444;
-            color: #aaa;
-            padding: 6px 2px;
+            background: #202026;
+            border: 1px solid #2d2d35;
+            color: #71717a;
+            padding: 8px 2px;
             border-radius: 6px;
             flex: 1;
             text-align: center;
@@ -57,12 +62,6 @@
             user-select: none;
             word-break: break-all;
             transition: all 0.2s ease;
-        }
-
-        .matrix-cell.filled {
-            background: #1e3a20;
-            border-color: #4CAF50;
-            color: #fff;
         }
 
         .matrix-cell.searched {
@@ -84,14 +83,15 @@
         }
 
         .user-card-content {
-            background: #222;
-            border: 2px solid #4CAF50;
+            background: #17171c;
+            border: 2px solid #ffd700;
             border-radius: 12px;
             padding: 20px;
             width: 280px;
             color: #fff;
             text-align: center;
             position: relative;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
         }
 
         .user-card-close {
@@ -109,9 +109,8 @@
             display: inline-block;
         }
 
-        /* До 31 дня - один цвет (оранжевый), после 31 дня - другой (зеленый) */
         .timer-badge.active { background: #ff9800; color: #000; }
-        .timer-badge.matured { background: #4CAF50; color: #fff; }
+        .timer-badge.matured { background: #2ecc71; color: #fff; }
     `;
     document.head.appendChild(style);
 })();
@@ -141,11 +140,9 @@ function renderMatrices(treeData) {
     container.className = 'matrices-container';
     container.innerHTML = '';
 
-    // Бэкенд передает либо список активных матриц, либо структуру
     let activeTops = treeData.activeMatrices || [];
 
     if (activeTops.length === 0) {
-        // По умолчанию рисуем стартовую семерку
         activeTops = ['A1'];
     }
 
@@ -166,12 +163,12 @@ function renderSingleMatrixBlock(container, topId, treeData) {
 
     const structure = getSevenCellIds(topId);
 
-    // Ряд 1 (Вершина)
-    const row1 = createRow([structure.top], treeData);
-    // Ряд 2 (Плечи)
-    const row2 = createRow([structure.left, structure.right], treeData);
-    // Ряд 3 (Основание из 4 ячеек)
-    const row3 = createRow([structure.b1, structure.b2, structure.b3, structure.b4], treeData);
+    // Ряд 1 (Вершина - Золотой цвет)
+    const row1 = createRow([structure.top], treeData, 'cell-top');
+    // Ряд 2 (Плечи - Небесно-голубой цвет)
+    const row2 = createRow([structure.left, structure.right], treeData, 'cell-middle');
+    // Ряд 3 (Основание из 4 ячеек - Зеленый цвет)
+    const row3 = createRow([structure.b1, structure.b2, structure.b3, structure.b4], treeData, 'cell-bottom');
 
     block.appendChild(row1);
     block.appendChild(row2);
@@ -238,7 +235,7 @@ function getSevenCellIds(topId) {
     };
 }
 
-function createRow(cellIds, treeData) {
+function createRow(cellIds, treeData, levelColorClass) {
     const row = document.createElement('div');
     row.className = 'matrix-row';
 
@@ -249,7 +246,7 @@ function createRow(cellIds, treeData) {
         cellEl.id = `cell-${id}`;
 
         if (cellData.user) {
-            cellEl.classList.add('filled');
+            cellEl.classList.add('filled', levelColorClass);
             cellEl.innerText = cellData.user;
 
             if (currentSearchTerm && cellData.user.toLowerCase() === currentSearchTerm.toLowerCase()) {
@@ -315,11 +312,10 @@ async function showUserCard(username) {
         const badgeClass = isMature ? 'matured' : 'active';
         const badgeText = isMature ? `Дней в матрице: ${diffDays} (Выплата)` : `Дней в матрице: ${diffDays} / 31`;
 
-        // Строго 3 поля: 1. Логин, 2. Дата регистрации, 3. Счетчик 31 дня
         modal.innerHTML = `
             <div class="user-card-content">
                 <span class="user-card-close" onclick="document.getElementById('userCardModal').remove()">&times;</span>
-                <h3 style="margin-top:0; color:#4CAF50;">${data.username}</h3>
+                <h3 style="margin-top:0; color:#ffd700;">${data.username}</h3>
                 <p style="font-size:12px; color:#ccc; margin: 10px 0 0 0;">Дата регистрации:<br>${regDate.toLocaleDateString()}</p>
                 <div class="timer-badge ${badgeClass}">${badgeText}</div>
             </div>
