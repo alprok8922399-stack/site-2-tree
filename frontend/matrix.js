@@ -65,13 +65,6 @@
             color: #fff;
         }
 
-        .matrix-cell.mature {
-            background: #2c5f2d;
-            border-color: #8bc34a;
-            color: #fff;
-            box-shadow: 0 0 5px rgba(139, 195, 74, 0.4);
-        }
-
         .matrix-cell.searched {
             border-color: #ff4757 !important;
             background: #5f1e1e !important;
@@ -79,7 +72,7 @@
             font-weight: bold;
         }
 
-        /* Модальное окно (Карточка пользователя) */
+        /* Модальное окно (Карточка пользователя - строго 3 поля) */
         .user-card-modal {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -108,14 +101,15 @@
         }
 
         .timer-badge {
-            margin-top: 10px;
-            padding: 6px 12px;
+            margin-top: 15px;
+            padding: 8px 12px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: bold;
             display: inline-block;
         }
 
+        /* До 31 дня - один цвет (оранжевый), после 31 дня - другой (зеленый) */
         .timer-badge.active { background: #ff9800; color: #000; }
         .timer-badge.matured { background: #4CAF50; color: #fff; }
     `;
@@ -139,7 +133,54 @@ async function fetchTree() {
     }
 }
 
-// Перевод ID ячейки в глобальный индекс дерева
+// Загрузка списков активных матриц с бэкенда
+function renderMatrices(treeData) {
+    const container = document.getElementById('mainTreeDisplay');
+    if (!container) return;
+
+    container.className = 'matrices-container';
+    container.innerHTML = '';
+
+    // Бэкенд передает либо список активных матриц, либо структуру
+    let activeTops = treeData.activeMatrices || [];
+
+    if (activeTops.length === 0) {
+        // По умолчанию рисуем стартовую семерку
+        activeTops = ['A1'];
+    }
+
+    activeTops.forEach(topId => {
+        renderSingleMatrixBlock(container, topId, treeData);
+    });
+}
+
+function renderSingleMatrixBlock(container, topId, treeData) {
+    const block = document.createElement('div');
+    block.className = 'matrix-block';
+    block.id = `matrix-block-${topId}`;
+
+    const title = document.createElement('div');
+    title.className = 'matrix-title';
+    title.innerText = `Матрица ${topId}`;
+    block.appendChild(title);
+
+    const structure = getSevenCellIds(topId);
+
+    // Ряд 1 (Вершина)
+    const row1 = createRow([structure.top], treeData);
+    // Ряд 2 (Плечи)
+    const row2 = createRow([structure.left, structure.right], treeData);
+    // Ряд 3 (Основание из 4 ячеек)
+    const row3 = createRow([structure.b1, structure.b2, structure.b3, structure.b4], treeData);
+
+    block.appendChild(row1);
+    block.appendChild(row2);
+    block.appendChild(row3);
+
+    container.appendChild(block);
+}
+
+// Вспомогательные функции координат
 function cellIdToGlobalIndex(cellId) {
     if (!cellId) return 0;
     const match = cellId.match(/^([A-Z]+)(\d+)$/);
@@ -158,7 +199,6 @@ function cellIdToGlobalIndex(cellId) {
     return levelStart + (num - 1);
 }
 
-// Преобразование глобального индекса обратно в ID ячейки
 function globalIndexToCellId(gIdx) {
     let levelIndex = 0;
     while ((1 << (levelIndex + 1)) - 1 <= gIdx) {
@@ -176,7 +216,6 @@ function globalIndexToCellId(gIdx) {
     return `${letter}${num}`;
 }
 
-// Вычисление ID 7 ячеек локальной семерки для любой вершины
 function getSevenCellIds(topId) {
     const gIdx = cellIdToGlobalIndex(topId);
     
@@ -197,55 +236,6 @@ function getSevenCellIds(topId) {
         b3: globalIndexToCellId(b3G),
         b4: globalIndexToCellId(b4G)
     };
-}
-
-// Построение матриц-семерок
-function renderMatrices(treeData) {
-    const container = document.getElementById('mainTreeDisplay');
-    if (!container) return;
-    
-    container.className = 'matrices-container';
-    container.innerHTML = '';
-
-    // Находим все ячейки, где есть пользователи, чтобы отрендерить их блоки
-    const topCells = Object.keys(treeData).filter(id => treeData[id] && treeData[id].user);
-
-    if (topCells.length === 0) {
-        container.innerHTML = '<div style="color:#aaa;">Матрицы пока пусты</div>';
-        return;
-    }
-
-    // Отрисовываем стартовую семерку с A1
-    renderSingleMatrixBlock(container, 'A1', treeData);
-}
-
-function renderSingleMatrixBlock(container, topId, treeData) {
-    const topCell = treeData[topId];
-    if (!topCell) return;
-
-    const block = document.createElement('div');
-    block.className = 'matrix-block';
-    block.id = `matrix-block-${topId}`;
-
-    const title = document.createElement('div');
-    title.className = 'matrix-title';
-    title.innerText = `Матрица ${topId}`;
-    block.appendChild(title);
-
-    const structure = getSevenCellIds(topId);
-
-    // Ряд 1 (Вершина)
-    const row1 = createRow([structure.top], treeData);
-    // Ряд 2 (Плечи)
-    const row2 = createRow([structure.left, structure.right], treeData);
-    // Ряд 3 (Основание)
-    const row3 = createRow([structure.b1, structure.b2, structure.b3, structure.b4], treeData);
-
-    block.appendChild(row1);
-    block.appendChild(row2);
-    block.appendChild(row3);
-
-    container.appendChild(block);
 }
 
 function createRow(cellIds, treeData) {
@@ -276,7 +266,7 @@ function createRow(cellIds, treeData) {
     return row;
 }
 
-// События для ячеек (короткое и долгое нажатие)
+// События ячеек (клики и долгое нажатие)
 function addCellEvents(element, cellData) {
     if (!cellData.user) return;
 
@@ -296,12 +286,11 @@ function addCellEvents(element, cellData) {
     });
 }
 
-// Центрирование ячейки на экране
 function switchFocus(element) {
     element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
 }
 
-// Показ карточки пользователя
+// Карточка пользователя (СТРОГО 3 ПОЛЯ)
 async function showUserCard(username) {
     try {
         const res = await fetch(`${MATRIX_API_URL}/api/user-details/${encodeURIComponent(username)}`);
@@ -324,13 +313,14 @@ async function showUserCard(username) {
 
         const isMature = diffDays >= 31;
         const badgeClass = isMature ? 'matured' : 'active';
-        const badgeText = isMature ? `Находится в матрице: ${diffDays} дн. (Выплата)` : `Дней в матрице: ${diffDays} / 31`;
+        const badgeText = isMature ? `Дней в матрице: ${diffDays} (Выплата)` : `Дней в матрице: ${diffDays} / 31`;
 
+        // Строго 3 поля: 1. Логин, 2. Дата регистрации, 3. Счетчик 31 дня
         modal.innerHTML = `
             <div class="user-card-content">
                 <span class="user-card-close" onclick="document.getElementById('userCardModal').remove()">&times;</span>
                 <h3 style="margin-top:0; color:#4CAF50;">${data.username}</h3>
-                <p style="font-size:12px; color:#ccc;">Дата регистрации:<br>${regDate.toLocaleDateString()}</p>
+                <p style="font-size:12px; color:#ccc; margin: 10px 0 0 0;">Дата регистрации:<br>${regDate.toLocaleDateString()}</p>
                 <div class="timer-badge ${badgeClass}">${badgeText}</div>
             </div>
         `;
@@ -341,7 +331,6 @@ async function showUserCard(username) {
     }
 }
 
-// Поиск по логину
 function searchMatrixUser(login) {
     if (!login) return;
     currentSearchTerm = login.trim();
@@ -355,9 +344,29 @@ function searchMatrixUser(login) {
     });
 }
 
+// Инициализация Ползунка масштабирования (от 0.03 до 1)
+function initZoomSlider() {
+    const zoomSlider = document.getElementById('matrix-zoom-slider');
+    const zoomValue = document.getElementById('zoom-value');
+    const zoomWrapper = document.getElementById('matrix-zoom-wrapper');
+
+    if (zoomSlider && zoomWrapper) {
+        zoomSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            zoomWrapper.style.transform = `scale(${val})`;
+            if (zoomValue) {
+                zoomValue.textContent = `${Math.round(val * 100)}%`;
+            }
+        });
+    }
+}
+
 window.renderMatrixTree = fetchTree;
 window.searchMatrixUser = searchMatrixUser;
 
-// Автообновление каждые 3 секунды
+document.addEventListener('DOMContentLoaded', () => {
+    initZoomSlider();
+});
+
 setInterval(fetchTree, 3000);
 fetchTree();
