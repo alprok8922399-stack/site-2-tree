@@ -334,6 +334,37 @@ app.post('/api/shop/pay', (req, res) => {
     });
 });
 
+// Админ-действия: Переключение VIP, Блокировка, Удаление
+app.post('/api/admin/toggle-vip', (req, res) => {
+    const { username } = req.body;
+    if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Пользователь не найден' });
+    shopUsersDB[username].isVip = !shopUsersDB[username].isVip;
+    res.json({ success: true, isVip: shopUsersDB[username].isVip });
+});
+
+app.post('/api/admin/toggle-block', (req, res) => {
+    const { username } = req.body;
+    if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Пользователь не найден' });
+    shopUsersDB[username].isBlocked = !shopUsersDB[username].isBlocked;
+    res.json({ success: true, isBlocked: shopUsersDB[username].isBlocked });
+});
+
+app.post('/api/admin/delete-user', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
+    
+    delete shopUsersDB[username];
+    delete referalsDB[username];
+    
+    Object.keys(treeDB).forEach(cellId => {
+        if (treeDB[cellId].user === username) {
+            treeDB[cellId].user = null;
+        }
+    });
+    
+    res.json({ success: true });
+});
+
 app.get('/api/sys-wallets', (req, res) => {
     res.json({ success: true, wallets });
 });
