@@ -8,10 +8,10 @@
         /* === ПРЕМИАЛЬНАЯ ТЁМНАЯ ТЕМА === */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #0f0f12; /* Глубокий тёмный фон */
+            background-color: #0f0f12;
             margin: 0;
             padding: 20px;
-            color: #e3e3e8; /* Светлый текст */
+            color: #e3e3e8;
         }
         .container {
             max-width: 1200px;
@@ -34,7 +34,7 @@
             margin-bottom: 30px;
         }
         .card {
-            background: #17171c; /* Тёмные карточки блоков */
+            background: #17171c;
             padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
@@ -54,30 +54,13 @@
             padding: 11px;
             box-sizing: border-box;
             border: 1px solid #2d2d35;
-            background-color: #202026; /* Тёмные поля ввода */
+            background-color: #202026;
             color: #ffffff;
             border-radius: 6px;
         }
         input[type="text"]:focus {
             border-color: #3498db;
             outline: none;
-        }
-        
-        /* Блок управления масштабом (Зум) */
-        .zoom-controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: #202026;
-            padding: 10px 15px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-            width: fit-content;
-            border: 1px solid #2d2d35;
-        }
-        input[type="range"] {
-            cursor: pointer;
-            accent-color: #3498db;
         }
 
         button {
@@ -96,89 +79,19 @@
         .btn-success { background-color: #2ecc71; }
         .btn-success:hover { background-color: #27ae60; }
         
-        /* Окно просмотра матрицы с поддержкой прокрутки */
+        /* Окно просмотра матрицы */
         #matrix-view-container {
             background: #09090b;
-            padding: 30px;
+            padding: 20px;
             border-radius: 8px;
             overflow: auto; 
             border: 1px solid #2d2d35;
-            min-height: 400px;
-            position: relative;
-        }
-        
-        /* Контейнер-обертка для применения CSS масштабирования */
-        #matrix-zoom-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            transform-origin: top center; 
-            transition: transform 0.2s ease-out;
-            width: max-content;
-            margin: 0 auto;
-        }
-        
-        .matrix-row {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            width: 100%;
-        }
-        .matrix-cell {
-            min-width: 80px;
-            padding: 10px;
-            border-radius: 6px;
-            text-align: center;
-            font-size: 12px;
-            font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.4);
-            transition: all 0.2s ease;
-        }
-        .matrix-cell.empty { background-color: #3f3f46; color: #a1a1aa; border: 2px dashed #52525b; }
-        .matrix-cell.occupied { background-color: #1e3a1e; color: #4ade80; border: 2px solid #166534; }
-        .cell-id { font-size: 10px; opacity: 0.7; }
-
-        /* === VIP И БЛОКИРОВКА В МАТРИЦЕ === */
-        .matrix-cell.vip { 
-            border: 2px solid #fbbf24 !important; 
-            box-shadow: 0 0 15px rgba(251, 191, 36, 0.6) !important; 
-            background-color: #3b2e04 !important;
-            color: #fbbf24 !important;
-        }
-        .matrix-cell.blocked { 
-            border: 2px solid #ef4444 !important; 
-            background-color: #3b1414 !important;
-            color: #f87171 !important;
-            text-decoration: line-through;
+            min-height: 350px;
         }
 
-        /* === НЕОНОВАЯ СИСТЕМА УМНОГО ФОКУСА === */
-        @keyframes neon-glow {
-            0% { box-shadow: 0 0 10px #00f0ff, inset 0 0 5px #00f0ff; border-color: #00f0ff; }
-            50% { box-shadow: 0 0 35px #00f0ff, inset 0 0 20px #00f0ff; border-color: #ffffff; transform: scale(1.15); }
-            100% { box-shadow: 0 0 10px #00f0ff, inset 0 0 5px #00f0ff; border-color: #00f0ff; }
-        }
-        .matrix-cell.search-highlight {
-            animation: neon-glow 2s infinite ease-in-out;
-            z-index: 999;
-            position: relative;
-            background-color: #003344 !important;
-            color: #00f0ff !important;
-        }
-
-        /* Профиль и 5 Золотых ячеек */
+        /* Профиль */
         .profile-info p { margin: 8px 0; font-size: 16px; }
         .balance-box { font-size: 22px; font-weight: bold; color: #4ade80; margin: 15px 0; }
-        .golden-cells-list { list-style: none; padding: 0; }
-        .golden-cells-list li {
-            padding: 10px;
-            margin-bottom: 6px;
-            border-radius: 6px;
-            font-weight: bold;
-        }
-        .cell-gold-active { background-color: #453507; color: #fbbf24; border: 1px solid #78350f; }
-        .cell-gold-locked { background-color: #27272a; color: #71717a; text-decoration: line-through; border: 1px solid #3f3f46; }
 
         /* Аналитическая таблица */
         table {
@@ -196,6 +109,10 @@
         }
         th { background-color: #202026; color: #ffffff; }
         td { color: #e3e3e8; }
+
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -242,8 +159,8 @@
             
             <div class="profile-info">
                 <p>Текущий профиль: <strong id="current-profile-user">—</strong></p>
-                <p>Позиция в глобальной матрице: <span id="profile-cell-id">—</span></p>
-                <p>Статус оплаты тарифа: <span id="profile-status">—</span></p>
+                <p>Позиция в матрице: <span id="profile-cell-id">—</span></p>
+                <p>Статус оплаты: <span id="profile-status">—</span></p>
                 
                 <div id="profile-upline-chain"></div>
 
@@ -254,37 +171,19 @@
                 
                 <button onclick="payCertificate()" class="btn-success">Активировать пакет (1000 Mitrons / $130)</button>
             </div>
-
-            <div id="golden-cells-status" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #2d2d35;"></div>
-
-            <div id="admin-actions-block" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #e74c3c; display: none;">
-                <h3 style="color: #e74c3c; font-size: 16px; margin-top: 0; margin-bottom: 10px;">Панель администратора</h3>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button id="toggle-vip-btn" style="background-color: #fbbf24; color: #000;">Сделать VIP / Обычным</button>
-                    <button id="block-user-btn" class="btn-danger">Заблокировать</button>
-                    <button id="delete-user-btn" class="btn-danger" style="background-color: #7f1d1d;">Удалить аккаунт</button>
-                </div>
-            </div>
         </div>
     </div>
 
     <div class="card" style="margin-bottom: 30px;">
         <h2>4. Глобальная структура бинарной матрицы</h2>
-        
-        <div class="zoom-controls">
-            <label for="matrix-zoom-slider" style="margin: 0;">Масштаб дерева:</label>
-            <input type="range" id="matrix-zoom-slider" min="0.03" max="1" step="0.01" value="1">
-            <span id="zoom-value" style="font-weight: bold; color: #3498db;">100%</span>
-        </div>
-
         <div id="matrix-view-container">
-            <div id="matrix-zoom-wrapper"></div>
+            <div id="mainTreeDisplay"></div>
         </div>
     </div>
 
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>5. Реферальная аналитика и квалификации XYZ</h2>
+            <h2>5. Реферальная аналитика</h2>
             <button id="refresh-table-btn">Обновить данные</button>
         </div>
         <table>
@@ -292,9 +191,8 @@
                 <tr>
                     <th>Участник</th>
                     <th>Пригласитель (Спонсор)</th>
-                    <th>Глубина цепочки</th>
                     <th>Баланс аккаунта</th>
-                    <th>Статус 5 Золотых Ячеек (XYZ)</th>
+                    <th>Статус</th>
                 </tr>
             </thead>
             <tbody id="referals-table-body"></tbody>
@@ -310,4 +208,4 @@
 <script src="matrix.js"></script>
 <script src="table.js"></script>
 </body>
-    </html>
+</html>
