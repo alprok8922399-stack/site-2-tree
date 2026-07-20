@@ -18,7 +18,7 @@ style.innerHTML = `
         gap: 20px !important;
         overflow-x: auto !important;
         padding: 15px !important;
-        background: #f8f9fa;
+        background: #181818;
         border-radius: 8px;
         min-height: 400px;
         width: 100% !important;
@@ -28,17 +28,17 @@ style.innerHTML = `
     }
     .referral-column {
         flex: 0 0 260px !important;
-        background: #ffffff !important;
-        border: 1px solid #e3e6f0 !important;
+        background: #222222 !important;
+        border: 1px solid #333333 !important;
         border-radius: 6px !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.5) !important;
         display: flex !important;
         flex-direction: column !important;
         max-height: 600px !important;
         overflow-y: auto !important;
     }
     .referral-column-header {
-        background: #4e73df !important;
+        background: #2c5f2d !important;
         color: #ffffff !important;
         padding: 10px !important;
         font-weight: bold !important;
@@ -57,23 +57,23 @@ style.innerHTML = `
         gap: 8px !important;
     }
     .user-cell-card {
-        border: 1px solid #d1d3e2 !important;
+        border: 1px solid #444444 !important;
         border-radius: 5px !important;
         padding: 10px !important;
-        background: #ffffff !important;
+        background: #2a2a2a !important;
         cursor: pointer !important;
         transition: all 0.2s ease-in-out !important;
         position: relative !important;
         user-select: none !important;
     }
     .user-cell-card:hover {
-        background: #f1f3f9 !important;
-        border-color: #b7b9cc !important;
+        background: #333333 !important;
+        border-color: #666666 !important;
     }
     .user-cell-card.active-link {
-        background: #eaecf4 !important;
-        border-color: #4e73df !important;
-        box-shadow: inset 0 0 4px rgba(78,115,223,0.2) !important;
+        background: #1e3a20 !important;
+        border-color: #4CAF50 !important;
+        box-shadow: inset 0 0 4px rgba(76,175,80,0.4) !important;
     }
     .user-cell-main {
         display: flex !important;
@@ -83,10 +83,10 @@ style.innerHTML = `
     }
     .user-login-text {
         font-weight: 600 !important;
-        color: #2e59d9 !important;
+        color: #4CAF50 !important;
     }
     .children-badge {
-        background: #858796 !important;
+        background: #555555 !important;
         color: #fff !important;
         font-size: 11px !important;
         padding: 2px 6px !important;
@@ -96,15 +96,15 @@ style.innerHTML = `
     .user-dropdown-menu {
         margin-top: 8px !important;
         padding-top: 8px !important;
-        border-top: 1px dashed #d1d3e2 !important;
+        border-top: 1px dashed #444444 !important;
         display: flex !important;
         flex-direction: column !important;
         gap: 5px !important;
     }
     .dropdown-btn {
-        background: #f8f9fa !important;
-        border: 1px solid #d1d3e2 !important;
-        color: #3a3b45 !important;
+        background: #333333 !important;
+        border: 1px solid #555555 !important;
+        color: #ffffff !important;
         padding: 6px 8px !important;
         font-size: 12px !important;
         border-radius: 4px !important;
@@ -113,12 +113,12 @@ style.innerHTML = `
         transition: background 0.1s ease !important;
     }
     .dropdown-btn:hover {
-        background: #4e73df !important;
+        background: #4CAF50 !important;
         color: #ffffff !important;
-        border-color: #4e73df !important;
+        border-color: #4CAF50 !important;
     }
     .empty-column-msg {
-        color: #858796 !important;
+        color: #888888 !important;
         font-style: italic !important;
         text-align: center !important;
         padding: 15px !important;
@@ -135,10 +135,10 @@ async function loadReferalsTable() {
     if (!tableBody) return;
 
     const container = tableBody.closest('table') || tableBody;
-    container.innerHTML = '<div style="text-align:center; color:#4e73df; padding: 20px; width: 100%;">Загрузка активной реферальной сетки...</div>';
+    container.innerHTML = '<div style="text-align:center; color:#4CAF50; padding: 20px; width: 100%;">Загрузка активной реферальной сетки...</div>';
 
     try {
-        const response = await fetch(`${API_BASE_URL}/api/referals-tree`);
+        const response = await fetch(`${API_BASE_URL}/api/referals-tree?t=${Date.now()}`);
         const result = await response.json();
 
         if (!result.success || !result.tree) {
@@ -320,18 +320,15 @@ window.viewUserCardTrigger = (login) => {
     if (typeof window.showUserCard === 'function') {
         window.showUserCard(login);
     } else {
-        alert(`Инфо-карточка для ${login} не может быть открыта (основной скрипт не загружен).`);
+        alert(`Логин: ${login}`);
     }
 };
 
 window.focusUserMatrixTrigger = (login) => {
-    if (typeof window.focusMatrixOnUser === 'function') {
-        window.focusMatrixOnUser(login);
-        // Дополнительно переключаем юзера на вкладку Матрицы, если она есть
-        const matrixTab = document.getElementById('tab-matrix') || document.querySelector('[href="#matrix"]');
-        if (matrixTab) matrixTab.click();
+    if (typeof window.searchMatrixUser === 'function') {
+        window.searchMatrixUser(login);
     } else {
-        alert(`Матрица не найдена на странице.`);
+        alert(`Поиск по матрице недоступен`);
     }
 };
 
