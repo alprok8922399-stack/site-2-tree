@@ -2,7 +2,7 @@ const API_BASE_URL = window.location.origin;
 
 // Локальное хранилище структуры реферального дерева
 let referralTreeData = {};
-// Текущий активный путь раскрытых пользователей
+// Текущий активный путь раскрытых пользователей (массив логинов)
 let activePath = [];
 // Логин пользователя, у которого сейчас открыто выпадающее меню действий
 let openDropdownUser = null;
@@ -135,7 +135,6 @@ async function loadReferalsTable() {
     if (!tableBody) return;
 
     const container = tableBody.closest('table') || tableBody;
-    container.innerHTML = '<div style="text-align:center; color:#4CAF50; padding: 20px; width: 100%;">Загрузка активной реферальной сетки...</div>';
 
     try {
         const response = await fetch(`${API_BASE_URL}/api/referals-tree?t=${Date.now()}`);
@@ -148,12 +147,11 @@ async function loadReferalsTable() {
 
         referralTreeData = result.tree;
 
-        // Поиск корня
-        const rootNode = Object.values(referralTreeData).find(node => !node.parentId || node.parentId === 'SYSTEM_ROOT' && node.id === 'SYSTEM_ROOT') 
-                         || Object.values(referralTreeData)[0];
+        // Определяем корневого лидера
+        const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData).find(node => !node.parentId) || Object.values(referralTreeData)[0];
 
-        if (activePath.length === 0 && rootNode) {
-            activePath = [rootNode.id];
+        if (activePath.length === 0 && rootUser) {
+            activePath = [rootUser.id];
         }
 
         renderActiveReferralGrid(container);
@@ -165,7 +163,7 @@ async function loadReferalsTable() {
 }
 
 /**
- * Отрисовка многоколоночной структуры
+ * Отрисовка многоколоночной структуры (Активная Реферальная Сетка)
  */
 function renderActiveReferralGrid(container) {
     container.innerHTML = '';
@@ -174,11 +172,11 @@ function renderActiveReferralGrid(container) {
     wrapper.className = 'referral-grid-wrapper';
     wrapper.id = 'referralGridWrapper';
 
-    // 1. Первая колонка: Корневые лидеры
+    // 1. Первая колонка: Корневой Лидер (Михаил / SYSTEM_ROOT)
     const rootUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
     renderColumn(wrapper, 'Корневой Лидер', rootUsers, 0);
 
-    // 2. Последующие колонки на основе пути activePath
+    // 2. Последующие колонки: Личники пользователей из activePath
     for (let i = 0; i < activePath.length; i++) {
         const currentLogin = activePath[i];
         const userNode = referralTreeData[currentLogin];
@@ -191,7 +189,7 @@ function renderActiveReferralGrid(container) {
 
     container.appendChild(wrapper);
 
-    // УМНЫЙ МОБИЛЬНЫЙ СКРОЛЛ: автоматически крутим скроллбар вправо к самой новой колонке
+    // Автоматическая прокрутка вправо к последней открытой колонке
     setTimeout(() => {
         wrapper.scrollLeft = wrapper.scrollWidth;
     }, 50);
@@ -212,7 +210,7 @@ function renderColumn(wrapper, title, usersList, columnIndex) {
     const body = document.createElement('div');
     body.className = 'referral-column-body';
 
-    if (usersList.length === 0) {
+    if (!usersList || usersList.length === 0) {
         const emptyMsg = document.createElement('div');
         emptyMsg.className = 'empty-column-msg';
         emptyMsg.innerText = 'Нет зарегистрированных личников';
@@ -222,6 +220,7 @@ function renderColumn(wrapper, title, usersList, columnIndex) {
             const card = document.createElement('div');
             card.className = 'user-cell-card';
             
+            // Если пользователь входит в активный путь раскрытия
             if (activePath.includes(user.id)) {
                 card.classList.add('active-link');
             }
@@ -234,16 +233,17 @@ function renderColumn(wrapper, title, usersList, columnIndex) {
             loginSpan.innerText = user.login;
             mainRow.appendChild(loginSpan);
 
-            if (user.children && user.children.length > 0) {
+            const childrenCount = (user.children || []).length;
+            if (childrenCount > 0) {
                 const badge = document.createElement('span');
                 badge.className = 'children-badge';
-                badge.innerText = `L: ${user.children.length}`;
+                badge.innerText = `L: ${childrenCount}`;
                 mainRow.appendChild(badge);
             }
 
             card.appendChild(mainRow);
 
-            // Рендер выпадающего меню
+            // Рендер выпадающего меню внутри ячейки
             if (openDropdownUser === user.id) {
                 const dropdown = document.createElement('div');
                 dropdown.className = 'user-dropdown-menu';
@@ -257,13 +257,15 @@ function renderColumn(wrapper, title, usersList, columnIndex) {
                 card.appendChild(dropdown);
             }
 
-            // Клик по карточке
+            // Клик по карточке пользователя
             card.addEventListener('click', (e) => {
                 e.stopPropagation();
 
+                // Отрезаем цепочку до колонки, где кликнули, и добавляем кликнутого человека
                 activePath = activePath.slice(0, columnIndex);
                 activePath.push(user.id);
 
+                // Переключаем 상태 выпадающего меню
                 if (openDropdownUser === user.id) {
                     openDropdownUser = null; 
                 } else {
@@ -286,7 +288,7 @@ function renderColumn(wrapper, title, usersList, columnIndex) {
 }
 
 /**
- * УМНЫЙ ПОИСК (Smart Path): разворачивает всю ветку предков
+ * УМНЫЙ ПОИСК (Smart Path): разворачивает всю ветку предков от корня до пользователя
  */
 async function searchReferralUser(login) {
     if (!login) return;
@@ -316,6 +318,8 @@ async function searchReferralUser(login) {
 
 // Экспорт триггеров взаимодействия
 window.searchReferralUser = searchReferralUser;
+window.refreshReferralTable = loadReferalsTable;
+
 window.viewUserCardTrigger = (login) => {
     if (typeof window.showUserCard === 'function') {
         window.showUserCard(login);
@@ -340,7 +344,7 @@ window.copyToClipboardTrigger = (text, btn) => {
     }).catch(err => console.error('Не удалось скопировать:', err));
 };
 
-// Глобальный клик для закрытия меню действий
+// Глобальный клик для закрытия меню действий при клике вне карточки
 document.addEventListener('click', () => {
     if (openDropdownUser !== null) {
         openDropdownUser = null;
@@ -352,7 +356,7 @@ document.addEventListener('click', () => {
     }
 });
 
-// Автоматическая привязка событий
+// Автоматическая привязка событий при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     loadReferalsTable();
     
