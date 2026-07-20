@@ -245,6 +245,8 @@
                 <p>Позиция в глобальной матрице: <span id="profile-cell-id">—</span></p>
                 <p>Статус оплаты тарифа: <span id="profile-status">—</span></p>
                 
+                <div id="profile-upline-chain"></div>
+
                 <div class="balance-box">
                     Баланс: <span id="balance-mitrons">0 Mitrons</span> 
                     <span id="balance-usd" style="font-size: 14px; color: #a0a0ab;">($0.00)</span>
@@ -253,8 +255,7 @@
                 <button onclick="payCertificate()" class="btn-success">Активировать пакет (1000 Mitrons / $130)</button>
             </div>
 
-            <div id="golden-cells-status" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #2d2d35;">
-                </div>
+            <div id="golden-cells-status" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #2d2d35;"></div>
 
             <div id="admin-actions-block" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #e74c3c; display: none;">
                 <h3 style="color: #e74c3c; font-size: 16px; margin-top: 0; margin-bottom: 10px;">Панель администратора</h3>
@@ -277,8 +278,7 @@
         </div>
 
         <div id="matrix-view-container">
-            <div id="matrix-zoom-wrapper">
-                </div>
+            <div id="matrix-zoom-wrapper"></div>
         </div>
     </div>
 
@@ -297,8 +297,7 @@
                     <th>Статус 5 Золотых Ячеек (XYZ)</th>
                 </tr>
             </thead>
-            <tbody id="referals-table-body">
-                </tbody>
+            <tbody id="referals-table-body"></tbody>
         </table>
     </div>
 
@@ -308,6 +307,7 @@
 </div>
 
 <script src="script.js"></script>
+<script src="matrix.js"></script>
 <script src="table.js"></script>
 </body>
-</html>
+    </html>
