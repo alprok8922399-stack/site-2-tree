@@ -52,7 +52,7 @@ async function registerInMatrix() {
     }
 }
 
-// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА И ЛОГИКА СЕЙФОВ ===
+// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА И ОПЛАТЫ ===
 
 async function registerShopUser() {
     const shopUserField = document.getElementById('shop-username');
@@ -104,13 +104,11 @@ async function payCertificate() {
         if (result.success) {
             const splitInfo = `
 Активация успешна!
-Списано: ${result.split.totalMitrons} Митронов ($${result.split.totalUsd})
+Списано: ${result.split.totalMitrons} Митронов
 -----------------------------------------
-Распределение сейфов кошельков:
-💸 Ликвидность Маркетплейса (450): ${result.split.marketplaceMitrons || 450} Митронов
-🔒 Кошелек Создателя (450): ${result.split.myWalletMitrons || 450} Митронов
-🏆 Фонд Золотых ячеек (30): 30 Митронов
-👥 Награды Лидерам (50-10-10): 70 Митронов
+Распределение:
+💸 Логистика / Товар: ${result.split.adminLogistics} Митронов
+🔒 DAO Пул: ${result.split.daoPool} Митронов
             `;
             alert(splitInfo);
             
@@ -126,7 +124,7 @@ async function payCertificate() {
     }
 }
 
-// === 3. ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ, ДНИ ОПЛАТЫ И UPLINE TRACKING ===
+// === 3. ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И UPLINE TRACKING ===
 
 async function loadUserProfile(username) {
     if (!username || username === '—') return;
@@ -146,7 +144,7 @@ async function loadUserProfile(username) {
             const statusEl = document.getElementById('profile-status');
             if (statusEl) {
                 if (data.profile.isPaid) {
-                    const paidAt = data.profile.paidAt ? new Date(data.profile.paidAt) : new Date();
+                    const paidAt = data.profile.paymentDate ? new Date(data.profile.paymentDate) : new Date();
                     const diffTime = Math.abs(new Date() - paidAt);
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                     
@@ -179,7 +177,7 @@ async function loadUserProfile(username) {
                 uplineContainer.innerHTML = '';
                 
                 try {
-                    const chainRes = await fetch(`${API_URL}/api/get-upline-chain?login=${encodeURIComponent(username)}`);
+                    const chainRes = await fetch(`${API_URL}/api/get-referral-chain?login=${encodeURIComponent(username)}`);
                     const chainData = await chainRes.json();
                     
                     if (chainData.success && chainData.chain && chainData.chain.length > 0) {
@@ -212,35 +210,6 @@ async function loadUserProfile(username) {
                     console.error('Не удалось загрузить аплайн-цепочку спонсоров:', e);
                 }
             }
-
-            // --- СТА ТУС 5 ЗОЛОТЫХ ЯЧЕЕК ---
-            const goldenContainer = document.getElementById('golden-cells-status');
-            if (goldenContainer && data.profile.goldenStatus) {
-                goldenContainer.innerHTML = '';
-                const countReal = data.profile.goldenStatus.realDirectReferralsCount || 0;
-                
-                const title = document.createElement('h4');
-                title.innerText = `Статус 5 ЗОЛОТЫХ ЯЧЕЕК (XYZ_1 - XYZ_5):`;
-                goldenContainer.appendChild(title);
-                
-                const list = document.createElement('ul');
-                list.className = 'golden-cells-list';
-                
-                for (let i = 1; i <= 5; i++) {
-                    const li = document.createElement('li');
-                    const isCellUnlocked = countReal >= (i * 2); 
-                    
-                    li.className = isCellUnlocked ? 'cell-gold-active' : 'cell-gold-locked';
-                    li.innerText = `Ячейка XYZ_${i}: ${isCellUnlocked ? '🏆 АКТИВИРОВАНА (ЗОЛОТО)' : '🔒 Заблокирована'}`;
-                    list.appendChild(li);
-                }
-                
-                goldenContainer.appendChild(list);
-                
-                const counterText = document.createElement('p');
-                counterText.innerText = `Реальных покупателей в первой линии: ${countReal} / 10`;
-                goldenContainer.appendChild(counterText);
-            }
         }
     } catch (error) {
         console.error('Ошибка загрузки профиля:', error);
@@ -264,9 +233,6 @@ async function resetSystem() {
             setElementText('profile-status', '—');
             setElementText('balance-mitrons', '0 Mitrons');
             setElementText('balance-usd', '$0.00');
-            
-            const goldenContainer = document.getElementById('golden-cells-status');
-            if (goldenContainer) goldenContainer.innerHTML = '';
             
             const uplineContainer = document.getElementById('profile-upline-chain');
             if (uplineContainer) uplineContainer.innerHTML = '';
