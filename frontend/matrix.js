@@ -122,7 +122,7 @@
     document.head.appendChild(style);
 })();
 
-const API_URL = '/api';
+const MATRIX_API_URL = window.location.origin;
 let currentTreeData = {};
 let currentSearchTerm = '';
 let pressTimer = null;
@@ -130,13 +130,73 @@ let pressTimer = null;
 // Загрузка дерева с бэкенда
 async function fetchTree() {
     try {
-        const res = await fetch(`${API_URL}/tree?t=${Date.now()}`);
+        const res = await fetch(`${MATRIX_API_URL}/api/tree?t=${Date.now()}`);
         const data = await res.json();
         currentTreeData = data;
         renderMatrices(data);
     } catch (err) {
         console.error('Ошибка загрузки матрицы:', err);
     }
+}
+
+// Перевод ID ячейки в глобальный индекс дерева
+function cellIdToGlobalIndex(cellId) {
+    if (!cellId) return 0;
+    const match = cellId.match(/^([A-Z]+)(\d+)$/);
+    if (!match) return 0;
+    
+    const letter = match[1];
+    const num = parseInt(match[2], 10);
+    
+    let levelIndex = 0;
+    for (let i = 0; i < letter.length; i++) {
+        levelIndex = levelIndex * 26 + (letter.charCodeAt(i) - 64);
+    }
+    levelIndex -= 1;
+
+    const levelStart = (1 << levelIndex) - 1;
+    return levelStart + (num - 1);
+}
+
+// Преобразование глобального индекса обратно в ID ячейки
+function globalIndexToCellId(gIdx) {
+    let levelIndex = 0;
+    while ((1 << (levelIndex + 1)) - 1 <= gIdx) {
+        levelIndex++;
+    }
+    const levelStart = (1 << levelIndex) - 1;
+    const num = (gIdx - levelStart) + 1;
+    
+    let letter = '';
+    let temp = levelIndex;
+    while (temp >= 0) {
+        letter = String.fromCharCode((temp % 26) + 65) + letter;
+        temp = Math.floor(temp / 26) - 1;
+    }
+    return `${letter}${num}`;
+}
+
+// Вычисление ID 7 ячеек локальной семерки для любой вершины
+function getSevenCellIds(topId) {
+    const gIdx = cellIdToGlobalIndex(topId);
+    
+    const leftG = gIdx * 2 + 1;
+    const rightG = gIdx * 2 + 2;
+    
+    const b1G = leftG * 2 + 1;
+    const b2G = leftG * 2 + 2;
+    const b3G = rightG * 2 + 1;
+    const b4G = rightG * 2 + 2;
+
+    return {
+        top: topId,
+        left: globalIndexToCellId(leftG),
+        right: globalIndexToCellId(rightG),
+        b1: globalIndexToCellId(b1G),
+        b2: globalIndexToCellId(b2G),
+        b3: globalIndexToCellId(b3G),
+        b4: globalIndexToCellId(b4G)
+    };
 }
 
 // Построение матриц-семерок
@@ -147,18 +207,15 @@ function renderMatrices(treeData) {
     container.className = 'matrices-container';
     container.innerHTML = '';
 
-    // Формируем список уникальных верхушек (семерок)
-    const topCells = Object.keys(treeData).filter(id => {
-        // Каждая ячейка может быть вершиной своей 7-местной матрицы
-        return treeData[id] && treeData[id].user;
-    });
+    // Находим все ячейки, где есть пользователи, чтобы отрендерить их блоки
+    const topCells = Object.keys(treeData).filter(id => treeData[id] && treeData[id].user);
 
     if (topCells.length === 0) {
         container.innerHTML = '<div style="color:#aaa;">Матрицы пока пусты</div>';
         return;
     }
 
-    // Рендерим стартовую семерку A1
+    // Отрисовываем стартовую семерку с A1
     renderSingleMatrixBlock(container, 'A1', treeData);
 }
 
@@ -175,7 +232,6 @@ function renderSingleMatrixBlock(container, topId, treeData) {
     title.innerText = `Матрица ${topId}`;
     block.appendChild(title);
 
-    // Дочерние ячейки (вершина, плечи, основание)
     const structure = getSevenCellIds(topId);
 
     // Ряд 1 (Вершина)
@@ -190,23 +246,6 @@ function renderSingleMatrixBlock(container, topId, treeData) {
     block.appendChild(row3);
 
     container.appendChild(block);
-}
-
-// Расчет ID ячеек для 7-местной матрицы от любого ID
-function getSevenCellIds(topId) {
-    // Упрощенное сопоставление для уровня A/B/C
-    if (topId === 'A1') {
-        return {
-            top: 'A1',
-            left: 'B1', right: 'B2',
-            b1: 'C1', b2: 'C2', b3: 'C3', b4: 'C4'
-        };
-    }
-    return {
-        top: topId,
-        left: `${topId}_L`, right: `${topId}_R`,
-        b1: `${topId}_1`, b2: `${topId}_2`, b3: `${topId}_3`, b4: `${topId}_4`
-    };
 }
 
 function createRow(cellIds, treeData) {
@@ -230,7 +269,6 @@ function createRow(cellIds, treeData) {
             cellEl.innerText = id;
         }
 
-        // Обработка клика и долгого нажатия
         addCellEvents(cellEl, cellData);
         row.appendChild(cellEl);
     });
@@ -242,13 +280,11 @@ function createRow(cellIds, treeData) {
 function addCellEvents(element, cellData) {
     if (!cellData.user) return;
 
-    // Поддержка обычного клика
     element.addEventListener('click', () => {
         switchFocus(element);
         showUserCard(cellData.user);
     });
 
-    // Долгое нажатие для тач-скринов
     element.addEventListener('touchstart', () => {
         pressTimer = setTimeout(() => {
             showUserCard(cellData.user);
@@ -268,7 +304,7 @@ function switchFocus(element) {
 // Показ карточки пользователя
 async function showUserCard(username) {
     try {
-        const res = await fetch(`${API_URL}/user-details/${encodeURIComponent(username)}`);
+        const res = await fetch(`${MATRIX_API_URL}/api/user-details/${encodeURIComponent(username)}`);
         const data = await res.json();
         
         if (!data.success) return;
@@ -319,9 +355,9 @@ function searchMatrixUser(login) {
     });
 }
 
-// Глобальные вызовы
+window.renderMatrixTree = fetchTree;
 window.searchMatrixUser = searchMatrixUser;
 
-// Запуск интервала
-setInterval(fetchTree, 2000);
+// Автообновление каждые 3 секунды
+setInterval(fetchTree, 3000);
 fetchTree();
