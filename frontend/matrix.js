@@ -1,90 +1,327 @@
-/* === ФИНАЛЬНАЯ ВЕРСИЯ: ИЗОЛИРОВАННЫЕ БЛОКИ + АНТИ-КЭШ === */
+/* === ИЗОЛИРОВАННЫЕ БЛОКИ МАТРИЦ + КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И ПОИСК === */
+
 (function() {
     const style = document.createElement('style');
     style.innerHTML = `
-        /* Контейнер для горизонтальной галереи */
         .matrices-container {
             display: flex;
             flex-wrap: wrap;
             gap: 20px;
             padding: 20px;
+            justify-content: center;
         }
 
-        /* Каждый блок — это независимая семиместная матрица */
         .matrix-block {
             background: #1a1a1a;
             border: 2px solid #334257;
             border-radius: 12px;
             padding: 15px;
-            width: 280px; /* Фиксированная ширина блока */
+            width: 300px;
             display: flex;
             flex-direction: column;
             align-items: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            transition: transform 0.2s ease, border-color 0.2s ease;
         }
 
-        .row {
+        .matrix-block.highlighted {
+            border-color: #ff9800;
+            transform: scale(1.03);
+        }
+
+        .matrix-title {
+            color: #4CAF50;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .matrix-row {
             display: flex;
             justify-content: center;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 8px;
+            margin-bottom: 8px;
             width: 100%;
         }
 
-        .cell {
+        .matrix-cell {
             background: #2a2a2a;
             border: 1px solid #444;
-            color: #fff;
-            padding: 5px;
-            border-radius: 5px;
-            width: 50px;
+            color: #aaa;
+            padding: 6px 2px;
+            border-radius: 6px;
+            flex: 1;
             text-align: center;
-            font-size: 10px;
+            font-size: 11px;
+            cursor: pointer;
+            user-select: none;
+            word-break: break-all;
+            transition: all 0.2s ease;
         }
-        
-        .cell.filled {
-            background: #2c5f2d; /* Зеленый, если занято */
+
+        .matrix-cell.filled {
+            background: #1e3a20;
             border-color: #4CAF50;
+            color: #fff;
         }
+
+        .matrix-cell.mature {
+            background: #2c5f2d;
+            border-color: #8bc34a;
+            color: #fff;
+            box-shadow: 0 0 5px rgba(139, 195, 74, 0.4);
+        }
+
+        .matrix-cell.searched {
+            border-color: #ff4757 !important;
+            background: #5f1e1e !important;
+            color: #fff !important;
+            font-weight: bold;
+        }
+
+        /* Модальное окно (Карточка пользователя) */
+        .user-card-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .user-card-content {
+            background: #222;
+            border: 2px solid #4CAF50;
+            border-radius: 12px;
+            padding: 20px;
+            width: 280px;
+            color: #fff;
+            text-align: center;
+            position: relative;
+        }
+
+        .user-card-close {
+            position: absolute;
+            top: 10px; right: 15px;
+            color: #aaa; font-size: 20px; cursor: pointer;
+        }
+
+        .timer-badge {
+            margin-top: 10px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .timer-badge.active { background: #ff9800; color: #000; }
+        .timer-badge.matured { background: #4CAF50; color: #fff; }
     `;
     document.head.appendChild(style);
 })();
 
 const API_URL = '/api';
+let currentTreeData = {};
+let currentSearchTerm = '';
+let pressTimer = null;
 
-// Главная функция: рисуем блоки
+// Загрузка дерева с бэкенда
 async function fetchTree() {
     try {
-        // Добавляем ?t=${Date.now()}, чтобы браузер не брал старые данные из кэша
         const res = await fetch(`${API_URL}/tree?t=${Date.now()}`);
         const data = await res.json();
+        currentTreeData = data;
         renderMatrices(data);
     } catch (err) {
-        console.error('Ошибка:', err);
+        console.error('Ошибка загрузки матрицы:', err);
     }
 }
 
+// Построение матриц-семерок
 function renderMatrices(treeData) {
     const container = document.getElementById('mainTreeDisplay');
+    if (!container) return;
+    
     container.className = 'matrices-container';
-    container.innerHTML = ''; // Очищаем всё перед отрисовкой
+    container.innerHTML = '';
 
-    // Логика: рисуем блоки для каждой активной матрицы
-    // Предполагаем, что treeData - это плоский список или объект всех ячеек
-    // Здесь нужно отфильтровать только те, которые активны
-    
-    // ВАШЕ ЗАДАНИЕ: Если сервер присылает все ячейки, 
-    // рисуем только те, которые нужны (например, активную матрицу)
-    
-    // Пример отрисовки одного блока (для теста):
+    // Формируем список уникальных верхушек (семерок)
+    const topCells = Object.keys(treeData).filter(id => {
+        // Каждая ячейка может быть вершиной своей 7-местной матрицы
+        return treeData[id] && treeData[id].user;
+    });
+
+    if (topCells.length === 0) {
+        container.innerHTML = '<div style="color:#aaa;">Матрицы пока пусты</div>';
+        return;
+    }
+
+    // Рендерим стартовую семерку A1
+    renderSingleMatrixBlock(container, 'A1', treeData);
+}
+
+function renderSingleMatrixBlock(container, topId, treeData) {
+    const topCell = treeData[topId];
+    if (!topCell) return;
+
     const block = document.createElement('div');
     block.className = 'matrix-block';
-    
-    // Здесь должна быть логика формирования 7 ячеек из treeData
-    // ... (логика отрисовки A1, B1, B2, C1-C4)
-    
+    block.id = `matrix-block-${topId}`;
+
+    const title = document.createElement('div');
+    title.className = 'matrix-title';
+    title.innerText = `Матрица ${topId}`;
+    block.appendChild(title);
+
+    // Дочерние ячейки (вершина, плечи, основание)
+    const structure = getSevenCellIds(topId);
+
+    // Ряд 1 (Вершина)
+    const row1 = createRow([structure.top], treeData);
+    // Ряд 2 (Плечи)
+    const row2 = createRow([structure.left, structure.right], treeData);
+    // Ряд 3 (Основание)
+    const row3 = createRow([structure.b1, structure.b2, structure.b3, structure.b4], treeData);
+
+    block.appendChild(row1);
+    block.appendChild(row2);
+    block.appendChild(row3);
+
     container.appendChild(block);
 }
 
-// Запуск обновления каждые 2 секунды
+// Расчет ID ячеек для 7-местной матрицы от любого ID
+function getSevenCellIds(topId) {
+    // Упрощенное сопоставление для уровня A/B/C
+    if (topId === 'A1') {
+        return {
+            top: 'A1',
+            left: 'B1', right: 'B2',
+            b1: 'C1', b2: 'C2', b3: 'C3', b4: 'C4'
+        };
+    }
+    return {
+        top: topId,
+        left: `${topId}_L`, right: `${topId}_R`,
+        b1: `${topId}_1`, b2: `${topId}_2`, b3: `${topId}_3`, b4: `${topId}_4`
+    };
+}
+
+function createRow(cellIds, treeData) {
+    const row = document.createElement('div');
+    row.className = 'matrix-row';
+
+    cellIds.forEach(id => {
+        const cellData = treeData[id] || { id, user: null };
+        const cellEl = document.createElement('div');
+        cellEl.className = 'matrix-cell';
+        cellEl.id = `cell-${id}`;
+
+        if (cellData.user) {
+            cellEl.classList.add('filled');
+            cellEl.innerText = cellData.user;
+
+            if (currentSearchTerm && cellData.user.toLowerCase() === currentSearchTerm.toLowerCase()) {
+                cellEl.classList.add('searched');
+            }
+        } else {
+            cellEl.innerText = id;
+        }
+
+        // Обработка клика и долгого нажатия
+        addCellEvents(cellEl, cellData);
+        row.appendChild(cellEl);
+    });
+
+    return row;
+}
+
+// События для ячеек (короткое и долгое нажатие)
+function addCellEvents(element, cellData) {
+    if (!cellData.user) return;
+
+    // Поддержка обычного клика
+    element.addEventListener('click', () => {
+        switchFocus(element);
+        showUserCard(cellData.user);
+    });
+
+    // Долгое нажатие для тач-скринов
+    element.addEventListener('touchstart', () => {
+        pressTimer = setTimeout(() => {
+            showUserCard(cellData.user);
+        }, 500);
+    });
+
+    element.addEventListener('touchend', () => {
+        clearTimeout(pressTimer);
+    });
+}
+
+// Центрирование ячейки на экране
+function switchFocus(element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+}
+
+// Показ карточки пользователя
+async function showUserCard(username) {
+    try {
+        const res = await fetch(`${API_URL}/user-details/${encodeURIComponent(username)}`);
+        const data = await res.json();
+        
+        if (!data.success) return;
+
+        const profile = data.profile || {};
+        const regDateStr = profile.paymentDate || new Date().toISOString();
+        const regDate = new Date(regDateStr);
+        const now = new Date();
+        const diffDays = Math.floor((now - regDate) / (1000 * 60 * 60 * 24));
+
+        let modal = document.getElementById('userCardModal');
+        if (modal) modal.remove();
+
+        modal = document.createElement('div');
+        modal.id = 'userCardModal';
+        modal.className = 'user-card-modal';
+
+        const isMature = diffDays >= 31;
+        const badgeClass = isMature ? 'matured' : 'active';
+        const badgeText = isMature ? `Находится в матрице: ${diffDays} дн. (Выплата)` : `Дней в матрице: ${diffDays} / 31`;
+
+        modal.innerHTML = `
+            <div class="user-card-content">
+                <span class="user-card-close" onclick="document.getElementById('userCardModal').remove()">&times;</span>
+                <h3 style="margin-top:0; color:#4CAF50;">${data.username}</h3>
+                <p style="font-size:12px; color:#ccc;">Дата регистрации:<br>${regDate.toLocaleDateString()}</p>
+                <div class="timer-badge ${badgeClass}">${badgeText}</div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+    } catch (err) {
+        console.error('Ошибка загрузки карточки пользователя:', err);
+    }
+}
+
+// Поиск по логину
+function searchMatrixUser(login) {
+    if (!login) return;
+    currentSearchTerm = login.trim();
+    fetchTree().then(() => {
+        const searchedEl = document.querySelector('.matrix-cell.searched');
+        if (searchedEl) {
+            switchFocus(searchedEl);
+        } else {
+            alert(`Пользователь "${login}" не найден в матрицах.`);
+        }
+    });
+}
+
+// Глобальные вызовы
+window.searchMatrixUser = searchMatrixUser;
+
+// Запуск интервала
 setInterval(fetchTree, 2000);
 fetchTree();
