@@ -1,357 +1,439 @@
-/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД frontend/matrix.js (ПОИСК + ЗУМ + СВАЙП + СВЯЗКА С КАРТОЧКОЙ) === */
+/* === ИЗОЛИРОВАННЫЕ БЛОКИ МАТРИЦ + КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И ПОИСК === */
+
 (function() {
     const style = document.createElement('style');
     style.innerHTML = `
-        /* Контейнер для горизонтального свайпа матриц на телефоне */
-        .matrices-row {
-            display: flex;
-            flex-direction: row;
-            flex-wrap: nowrap;
-            overflow-x: auto;
-            gap: 25px;
-            padding: 15px 10px;
-            justify-content: flex-start;
-            align-items: flex-start;
-            scroll-behavior: smooth;
-            -webkit-overflow-scrolling: touch;
-        }
-        
-        /* Столбец: Памятники истории + Активная матрица под ними */
-        .matrix-column {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-width: 280px;
+        .matrices-container {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important; /* В ряд без переносов */
+            gap: 20px !important;
+            padding: 10px !important;
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
         }
 
-        /* Памятники истории (Верхние закрытые ячейки) */
-        .history-stack {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 5px;
-            margin-bottom: 8px;
-            width: 100%;
-        }
-
-        .cell-history {
-            opacity: 0.35;
-            filter: grayscale(40%);
-            transform: scale(0.9);
-            border: 1px dashed #ccc !important;
-            background: #222 !important;
-            box-shadow: none !important;
-        }
-
-        .history-connector {
-            color: #555;
-            font-size: 14px;
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
-
-        /* Семиместная рабочая матрица */
-        .semerka-matrix {
-            background: rgba(255, 255, 255, 0.03);
-            border: 2px solid #334257;
+        .matrix-block {
+            background: #17171c;
+            border: 2px solid #232329;
             border-radius: 12px;
-            padding: 12px;
+            padding: 15px;
+            width: 280px;
+            min-width: 280px; /* Чтобы блоки не сжимались */
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
-            width: 100%;
-            box-sizing: border-box;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .matrix-block.highlighted {
+            border-color: #ffd700;
+            transform: scale(1.02);
+        }
+
+        .matrix-title {
+            color: #ffd700;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .matrix-row {
             display: flex;
             justify-content: center;
-            align-items: center;
             gap: 8px;
+            margin-bottom: 8px;
             width: 100%;
         }
 
-        /* Общие стили ячеек */
-        .cell {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+        .matrix-cell {
+            background: #202026;
+            border: 1px solid #2d2d35;
+            color: #71717a;
+            padding: 8px 2px;
             border-radius: 6px;
-            height: 50px;
-            box-sizing: border-box;
-            color: #fff;
-            font-family: sans-serif;
+            flex: 1;
+            text-align: center;
+            font-size: 11px;
             cursor: pointer;
+            user-select: none;
+            word-break: break-all;
             transition: all 0.2s ease;
         }
 
-        .cell-id {
-            font-size: 9px;
-            opacity: 0.7;
-            margin-bottom: 2px;
-        }
-
-        .cell-user {
-            font-size: 11px;
-            font-weight: bold;
-            max-width: 90%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        /* Цветовая гамма правила Работа_матриц */
-        .level-gold {
-            background: #ffd700 !important;
-            color: #000 !important;
-            border: 1px solid #cca100;
-            width: 85px;
-        }
-        .level-gold .cell-id { color: #444; }
-
-        .level-skyblue {
-            background: #87ceeb !important;
-            color: #000 !important;
-            border: 1px solid #5fa9c7;
-            width: 80px;
-        }
-        .level-skyblue .cell-id { color: #444; }
-
-        .level-gray {
-            background: #4a4a4a !important;
+        .matrix-cell.searched {
+            border-color: #ff4757 !important;
+            background: #5f1e1e !important;
             color: #fff !important;
-            border: 1px solid #666;
-            width: 62px;
+            font-weight: bold;
         }
 
-        /* Подсветка при поиске */
-        .highlight-search {
-            border: 3px solid #ff4141 !important;
-            box-shadow: 0 0 15px #ff4141 !important;
-            transform: scale(1.05);
+        /* Модальное окно (Карточка пользователя с цепочкой спонсоров) */
+        .user-card-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .user-card-content {
+            background: #17171c;
+            border: 2px solid #ffd700;
+            border-radius: 12px;
+            padding: 20px;
+            width: 310px;
+            max-width: 90vw;
+            color: #fff;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+        }
+
+        .user-card-close {
+            position: absolute;
+            top: 10px; right: 15px;
+            color: #aaa; font-size: 20px; cursor: pointer;
+        }
+
+        .timer-badge {
+            margin-top: 12px;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .timer-badge.active { background: #ff9800; color: #000; }
+        .timer-badge.matured { background: #2ecc71; color: #fff; }
+
+        .modal-upline-box {
+            margin-top: 15px;
+            background: #202028;
+            border: 1px dashed #444455;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: left;
+        }
+        .modal-upline-title {
+            color: #aaa;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .modal-upline-chain {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            align-items: center;
         }
     `;
     document.head.appendChild(style);
 })();
 
-const API_URL = '/api';
-const mainTreeDisplay = document.getElementById('mainTreeDisplay');
-const zoomSlider = document.getElementById('zoomSlider');
-const resetBtn = document.getElementById('resetBtn');
-const searchInput = document.getElementById('searchInput');
-const searchBtn = document.getElementById('searchBtn');
+const MATRIX_API_URL = window.location.origin;
+let currentTreeData = {};
+let currentSearchTerm = '';
+let pressTimer = null;
 
-let globalTreeCached = null;
-let currentSearchQuery = '';
-
-// ================= БЛОК УПРАВЛЕНИЯ ЗУМОМ =================
-function setZoom(scaleValue) {
-    if (zoomSlider) zoomSlider.value = scaleValue;
-    if (mainTreeDisplay) {
-        mainTreeDisplay.style.transform = `scale(${scaleValue})`;
-        mainTreeDisplay.style.transformOrigin = 'top center';
+// Загрузка дерева с бэкенда
+async function fetchTree() {
+    try {
+        const res = await fetch(`${MATRIX_API_URL}/api/tree?t=${Date.now()}`);
+        const data = await res.json();
+        currentTreeData = data;
+        renderMatrices(data);
+    } catch (err) {
+        console.error('Ошибка загрузки матрицы:', err);
     }
 }
 
-if (zoomSlider) {
-    zoomSlider.addEventListener('input', (e) => setZoom(e.target.value));
-}
+// Загрузка списков активных матриц с бэкенда
+function renderMatrices(treeData) {
+    const container = document.getElementById('mainTreeDisplay');
+    if (!container) return;
 
-if (resetBtn) {
-    resetBtn.addEventListener('click', () => setZoom(1));
-}
+    container.className = 'matrices-container';
+    container.innerHTML = '';
 
-// ================= БЛОК ПОИСКА И ФОКУСИРОВКИ =================
-if (searchBtn && searchInput) {
-    searchBtn.addEventListener('click', () => {
-        const query = searchInput.value.trim();
-        if (query) window.focusMatrixOnUser(query);
+    let activeTops = treeData.activeMatrices || [];
+
+    if (activeTops.length === 0) {
+        activeTops = ['A1'];
+    }
+
+    activeTops.forEach(topId => {
+        renderSingleMatrixBlock(container, topId, treeData);
     });
 }
 
-function scrollToHighlightedCell() {
-    const target = document.querySelector('.highlight-search');
-    if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-    }
+function renderSingleMatrixBlock(container, topId, treeData) {
+    const block = document.createElement('div');
+    block.className = 'matrix-block';
+    block.id = `matrix-block-${topId}`;
+
+    const title = document.createElement('div');
+    title.className = 'matrix-title';
+    title.innerText = `Матрица ${topId}`;
+    block.appendChild(title);
+
+    const structure = getSevenCellIds(topId);
+
+    // Ряд 1 (Вершина - Золотой цвет)
+    const row1 = createRow([structure.top], treeData, 'cell-top');
+    // Ряд 2 (Плечи - Небесно-голубой цвет)
+    const row2 = createRow([structure.left, structure.right], treeData, 'cell-middle');
+    // Ряд 3 (Основание из 4 ячеек - Зеленый цвет)
+    const row3 = createRow([structure.b1, structure.b2, structure.b3, structure.b4], treeData, 'cell-bottom');
+
+    block.appendChild(row1);
+    block.appendChild(row2);
+    block.appendChild(row3);
+
+    container.appendChild(block);
 }
 
-// Запрос дерева с сервера
-async function fetchTree() {
-    try {
-        const res = await fetch(`${API_URL}/tree`);
-        const data = await res.json();
-        globalTreeCached = data;
-        renderDynamicSplitting(data);
-    } catch (err) {
-        console.error('Ошибка обновления матрицы:', err);
+// Вспомогательные функции координат
+function cellIdToGlobalIndex(cellId) {
+    if (!cellId) return 0;
+    const match = cellId.match(/^([A-Z]+)(\d+)$/);
+    if (!match) return 0;
+    
+    const letter = match[1];
+    const num = parseInt(match[2], 10);
+    
+    let levelIndex = 0;
+    for (let i = 0; i < letter.length; i++) {
+        levelIndex = levelIndex * 26 + (letter.charCodeAt(i) - 64);
     }
+    levelIndex -= 1;
+
+    const levelStart = (1 << levelIndex) - 1;
+    return levelStart + (num - 1);
 }
 
-/**
- * Конвертирует индекс уровня в соответствующую букву алфавита (0 -> A, 25 -> Z...)
- */
-function getLevelLetter(levelIndex) {
+function globalIndexToCellId(gIdx) {
+    let levelIndex = 0;
+    while ((1 << (levelIndex + 1)) - 1 <= gIdx) {
+        levelIndex++;
+    }
+    const levelStart = (1 << levelIndex) - 1;
+    const num = (gIdx - levelStart) + 1;
+    
     let letter = '';
     let temp = levelIndex;
     while (temp >= 0) {
         letter = String.fromCharCode((temp % 26) + 65) + letter;
         temp = Math.floor(temp / 26) - 1;
     }
-    return letter;
+    return `${letter}${num}`;
 }
 
-// ДВИЖОК АВТОНОМНОГО ВЕЕРНОГО ПОЧКОВАНИЯ
-function renderDynamicSplitting(tree) {
-    if (!mainTreeDisplay) return;
+function getSevenCellIds(topId) {
+    const gIdx = cellIdToGlobalIndex(topId);
+    
+    const leftG = gIdx * 2 + 1;
+    const rightG = gIdx * 2 + 2;
+    
+    const b1G = leftG * 2 + 1;
+    const b2G = leftG * 2 + 2;
+    const b3G = rightG * 2 + 1;
+    const b4G = rightG * 2 + 2;
 
-    let activeMatrices = [];
-    let queue = [{ level: 0, num: 1, history: [] }];
-    let processed = new Set();
+    return {
+        top: topId,
+        left: globalIndexToCellId(leftG),
+        right: globalIndexToCellId(rightG),
+        b1: globalIndexToCellId(b1G),
+        b2: globalIndexToCellId(b2G),
+        b3: globalIndexToCellId(b3G),
+        b4: globalIndexToCellId(b4G)
+    };
+}
 
-    while (queue.length > 0) {
-        const current = queue.shift();
-        const currentLetter = getLevelLetter(current.level);
-        const key = `${currentLetter}${current.num}`;
-        
-        if (processed.has(key)) continue;
-        processed.add(key);
+function createRow(cellIds, treeData, levelColorClass) {
+    const row = document.createElement('div');
+    row.className = 'matrix-row';
 
-        const nextLevel = current.level + 1;
-        const baseLevel = current.level + 2;
-        
-        const baseLetter = getLevelLetter(baseLevel);
-        const baseNumStart = (current.num - 1) * 4 + 1;
-        
-        const b1 = `${baseLetter}${baseNumStart}`;
-        const b2 = `${baseLetter}${baseNumStart + 1}`;
-        const b3 = `${baseLetter}${baseNumStart + 2}`;
-        const b4 = `${baseLetter}${baseNumStart + 3}`;
+    cellIds.forEach(id => {
+        const cellData = treeData[id] || { id, user: null };
+        const cellEl = document.createElement('div');
+        cellEl.className = 'matrix-cell';
+        cellEl.id = `cell-${id}`;
 
-        const isB1Filled = tree[b1] && tree[b1].user;
-        const isB2Filled = tree[b2] && tree[b2].user;
-        const isB3Filled = tree[b3] && tree[b3].user;
-        const isB4Filled = tree[b4] && tree[b4].user;
+        if (cellData.user) {
+            cellEl.classList.add('filled', levelColorClass);
+            cellEl.innerText = cellData.user;
 
-        if (isB1Filled && isB2Filled && isB3Filled && isB4Filled) {
-            const nextHistory = [...current.history, key];
-            queue.push({ level: nextLevel, num: current.num * 2 - 1, history: nextHistory });
-            queue.push({ level: nextLevel, num: current.num * 2, history: nextHistory });
+            if (currentSearchTerm && cellData.user.toLowerCase() === currentSearchTerm.toLowerCase()) {
+                cellEl.classList.add('searched');
+            }
         } else {
-            activeMatrices.push({
-                level: current.level,
-                num: current.num,
-                history: current.history
-            });
-        }
-    }
-
-    let finalHTML = activeMatrices.map(m => {
-        const currentLetter = getLevelLetter(m.level);
-        const nextLetter = getLevelLetter(m.level + 1);
-        const baseLetter = getLevelLetter(m.level + 2);
-        
-        const idTop = `${currentLetter}${m.num}`;
-        const idL = `${nextLetter}${m.num * 2 - 1}`;
-        const idR = `${nextLetter}${m.num * 2}`;
-        
-        const baseStart = (m.num - 1) * 4 + 1;
-        const idB1 = `${baseLetter}${baseStart}`;
-        const idB2 = `${baseLetter}${baseStart + 1}`;
-        const idB3 = `${baseLetter}${baseStart + 2}`;
-        const idB4 = `${baseLetter}${baseStart + 3}`;
-
-        let historyHTML = '';
-        if (m.history.length > 0) {
-            historyHTML += `<div class="history-stack">`;
-            m.history.forEach(histId => {
-                const u = tree[histId] ? tree[histId].user : 'Система';
-                historyHTML += `
-                    <div class="cell cell-history ${checkHighlight(u)}" onclick="handleCellClick('${u}', '${histId}', event)">
-                        <span class="cell-id">${histId}</span>
-                        <span class="cell-user">${u}</span>
-                    </div>`;
-            });
-            historyHTML += `</div><div class="history-connector">↓</div>`;
+            cellEl.innerText = id;
         }
 
-        return `
-            <div class="matrix-column">
-                ${historyHTML}
-                <div class="semerka-matrix">
-                    <div class="matrix-row">
-                        ${createCellMarkup(tree[idTop], 'level-gold', idTop, true)}
-                    </div>
-                    <div class="matrix-row">
-                        ${createCellMarkup(tree[idL], 'level-skyblue', idL, true)}
-                        ${createCellMarkup(tree[idR], 'level-skyblue', idR, true)}
-                    </div>
-                    <div class="matrix-row">
-                        ${createCellMarkup(tree[idB1], 'level-gray', idB1, false)}
-                        ${createCellMarkup(tree[idB2], 'level-gray', idB2, false)}
-                        ${createCellMarkup(tree[idB3], 'level-gray', idB3, false)}
-                        ${createCellMarkup(tree[idB4], 'level-gray', idB4, false)}
-                    </div>
+        addCellEvents(cellEl, cellData);
+        row.appendChild(cellEl);
+    });
+
+    return row;
+}
+
+// События ячеек (клики и долгое нажатие)
+function addCellEvents(element, cellData) {
+    if (!cellData.user) return;
+
+    element.addEventListener('click', () => {
+        switchFocus(element);
+        showUserCard(cellData.user);
+    });
+
+    element.addEventListener('touchstart', () => {
+        pressTimer = setTimeout(() => {
+            showUserCard(cellData.user);
+        }, 500);
+    });
+
+    element.addEventListener('touchend', () => {
+        clearTimeout(pressTimer);
+    });
+}
+
+function switchFocus(element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+}
+
+// Карточка пользователя С ЦЕПОЧКОЙ СПОНСОРОВ
+async function showUserCard(username) {
+    try {
+        const res = await fetch(`${MATRIX_API_URL}/api/user-details/${encodeURIComponent(username)}`);
+        const data = await res.json();
+        
+        if (!data.success) return;
+
+        const profile = data.profile || {};
+        const regDateStr = profile.paymentDate || new Date().toISOString();
+        const regDate = new Date(regDateStr);
+        const now = new Date();
+        const diffDays = Math.floor((now - regDate) / (1000 * 60 * 60 * 24));
+
+        let modal = document.getElementById('userCardModal');
+        if (modal) modal.remove();
+
+        modal = document.createElement('div');
+        modal.id = 'userCardModal';
+        modal.className = 'user-card-modal';
+
+        const isMature = diffDays >= 31;
+        const badgeClass = isMature ? 'matured' : 'active';
+        const badgeText = isMature ? `Дней в матрице: ${diffDays} (Выплата)` : `Дней в матрице: ${diffDays} / 31`;
+
+        // Получаем цепочку спонсоров с бэкенда
+        let uplineHtml = '<div style="color:#777; font-size:11px;">Загрузка спонсоров...</div>';
+        
+        modal.innerHTML = `
+            <div class="user-card-content">
+                <span class="user-card-close" onclick="document.getElementById('userCardModal').remove()">&times;</span>
+                <h3 style="margin-top:0; color:#ffd700;">${data.username}</h3>
+                <p style="font-size:12px; color:#ccc; margin: 10px 0 0 0;">Дата регистрации:<br>${regDate.toLocaleDateString()}</p>
+                <div class="timer-badge ${badgeClass}">${badgeText}</div>
+                
+                <div class="modal-upline-box">
+                    <div class="modal-upline-title">Кто пригласил (Спонсоры):</div>
+                    <div class="modal-upline-chain" id="modalUplineContainer">${uplineHtml}</div>
                 </div>
             </div>
         `;
-    }).join('');
 
-    mainTreeDisplay.innerHTML = `<div class="matrices-row">${finalHTML}</div>`;
-}
+        document.body.appendChild(modal);
 
-function createCellMarkup(cell, colorClass, fallbackId, isStaticFilled) {
-    let username = cell ? cell.user : null;
-    if (isStaticFilled && !username) username = 'Заполнено';
-    
-    const displayUser = username || '-';
-    const highlightClass = checkHighlight(displayUser);
+        // Загружаем спонсорскую цепочку асинхронно
+        try {
+            const chainRes = await fetch(`${MATRIX_API_URL}/api/get-referral-chain?login=${encodeURIComponent(username)}`);
+            const chainData = await chainRes.json();
+            const container = document.getElementById('modalUplineContainer');
+            
+            if (container && chainData.success && chainData.chain && chainData.chain.length > 0) {
+                container.innerHTML = '';
+                chainData.chain.forEach((uplineLogin, idx) => {
+                    const node = document.createElement('span');
+                    if (idx === chainData.chain.length - 1) {
+                        node.innerHTML = `<strong style="color:#2ecc71;">${uplineLogin}</strong>`;
+                    } else {
+                        node.innerText = uplineLogin;
+                        node.style.color = '#3498db';
+                        node.style.cursor = 'pointer';
+                        node.style.textDecoration = 'underline';
+                        node.onclick = () => {
+                            document.getElementById('userCardModal').remove();
+                            showUserCard(uplineLogin);
+                        };
+                    }
+                    container.appendChild(node);
 
-    return `
-        <div class="cell ${colorClass} ${highlightClass}" onclick="handleCellClick('${displayUser}', '${fallbackId}', event)">
-            <div class="cell-id">${fallbackId}</div>
-            <div class="cell-user">${displayUser}</div>
-        </div>
-    `;
-}
+                    if (idx < chainData.chain.length - 1) {
+                        const arrow = document.createElement('span');
+                        arrow.innerText = ' ➔ ';
+                        arrow.style.color = '#555';
+                        container.appendChild(arrow);
+                    }
+                });
+            } else if (container) {
+                container.innerHTML = '<span style="color:#777;">Нет вышестоящих спонсоров</span>';
+            }
+        } catch (chainErr) {
+            console.error('Ошибка загрузки цепочки в попап:', chainErr);
+        }
 
-function checkHighlight(username) {
-    if (!currentSearchQuery || username === '-' || username === 'Заполнено') return '';
-    return username.toLowerCase().includes(currentSearchQuery) ? 'highlight-search' : '';
-}
-
-// === ИНТЕГРАЦИОННЫЙ КЛИК: Открывает мастер-карточку из script.js ===
-window.handleCellClick = function(username, cellId, event) {
-    if (event) event.stopPropagation();
-    if (!username || username === '-' || username === 'Заполнено' || username === 'Система') return;
-    
-    // Если на странице загружен script.js и есть глобальная функция карточки
-    if (window.showUserCard) {
-        window.showUserCard(username);
-    } else if (document.getElementById('infoModal')) {
-        // Запасной старый вариант модалки, если script.js не подгрузился
-        document.getElementById('infoModal').style.display = 'flex';
-        document.getElementById('modalTitle').textContent = `Ячейка: ${cellId}`;
-        document.getElementById('modalBody').innerHTML = `<strong>Пользователь:</strong> ${username}`;
+    } catch (err) {
+        console.error('Ошибка загрузки карточки пользователя:', err);
     }
-};
+}
 
-// === ГЛОБАЛЬНЫЙ МОСТ ДЛЯ ПОИСКА ИЗ ДРУГИХ МОДУЛЕЙ ===
-window.focusMatrixOnUser = function(username) {
-    if (!username) return;
-    currentSearchQuery = username.trim().toLowerCase();
-    
-    // Синхронизируем локальное поле ввода матрицы, если оно есть
-    if (searchInput) searchInput.value = username;
-    
-    if (globalTreeCached) {
-        renderDynamicSplitting(globalTreeCached);
-        setTimeout(scrollToHighlightedCell, 150);
+function searchMatrixUser(login) {
+    if (!login) return;
+    currentSearchTerm = login.trim();
+    fetchTree().then(() => {
+        const searchedEl = document.querySelector('.matrix-cell.searched');
+        if (searchedEl) {
+            switchFocus(searchedEl);
+        } else {
+            alert(`Пользователь "${login}" не найден в матрицах.`);
+        }
+    });
+}
+
+// Инициализация Ползунка масштабирования (от 0.03 до 1)
+function initZoomSlider() {
+    const zoomSlider = document.getElementById('matrix-zoom-slider');
+    const zoomValue = document.getElementById('zoom-value');
+    const zoomWrapper = document.getElementById('matrix-zoom-wrapper');
+
+    if (zoomSlider && zoomWrapper) {
+        zoomSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            zoomWrapper.style.transform = `scale(${val})`;
+            if (zoomValue) {
+                zoomValue.textContent = `${Math.round(val * 100)}%`;
+            }
+        });
     }
-};
+}
 
-// Запуск движка
+window.renderMatrixTree = fetchTree;
+window.searchMatrixUser = searchMatrixUser;
+
+document.addEventListener('DOMContentLoaded', () => {
+    initZoomSlider();
+});
+
+setInterval(fetchTree, 3000);
 fetchTree();
-setInterval(fetchTree, 5000);
