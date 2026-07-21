@@ -186,9 +186,14 @@ async function loadReferalsTable(isBackground = false) {
 }
 
 /**
- * Отрисовка интерактивной таблицы с сохранением скролла
+ * Отрисовка интерактивной таблицы с сохранением текста поиска и скролла
  */
 function renderActiveReferralGrid(container) {
+    // Сохраняем введенный текст и статус фокуса
+    const oldInput = document.getElementById('interactiveTableSearchInput');
+    const savedSearchValue = oldInput ? oldInput.value : '';
+    const isInputFocused = (document.activeElement === oldInput);
+
     const wrapperOld = document.getElementById('referralGridWrapper');
     const scrollLeftVal = wrapperOld ? wrapperOld.scrollLeft : 0;
 
@@ -204,6 +209,24 @@ function renderActiveReferralGrid(container) {
     container.appendChild(searchBlock);
 
     const searchInput = searchBlock.querySelector('input');
+
+    // Восстанавливаем введенный текст
+    if (savedSearchValue) {
+        searchInput.value = savedSearchValue;
+    }
+
+    // Возвращаем курсор обратно, если пользователь печатал
+    if (isInputFocused) {
+        setTimeout(() => {
+            searchInput.focus();
+            searchInput.setSelectionRange(savedSearchValue.length, savedSearchValue.length);
+        }, 0);
+    }
+
+    searchInput.addEventListener('input', () => {
+        isUserInteracting = true;
+    });
+
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') window.searchTableUserByInput();
     });
@@ -216,7 +239,7 @@ function renderActiveReferralGrid(container) {
     const rootUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
     renderAlignedColumn(wrapper, rootUsers, 0, null);
 
-    // 2. Последующие колонки с точным выравниванием строк по родителям
+    // 2. Последующие колонки
     for (let i = 0; i < activePath.length; i++) {
         const currentLogin = activePath[i];
         const userNode = referralTreeData[currentLogin];
@@ -320,7 +343,7 @@ function createUserCardElement(user, columnIndex) {
         e.stopPropagation();
         isUserInteracting = true;
 
-        // Если ячейка уже открыта — при повторном клике сворачиваем все колонки справа!
+        // Если ячейка уже открыта — сворачиваем всё справа
         if (isAlreadyActive && activePath.length > columnIndex + 1) {
             activePath = activePath.slice(0, columnIndex + 1);
             openDropdownUser = null;
@@ -422,7 +445,12 @@ document.addEventListener('click', () => {
     }
 });
 
+// Автообновление (пропускаем, если пользователь печатает)
 setInterval(() => {
+    const inp = document.getElementById('interactiveTableSearchInput');
+    if (document.activeElement === inp && inp && inp.value.length > 0) {
+        return;
+    }
     loadReferalsTable(true);
 }, 3000);
 
