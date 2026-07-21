@@ -1,11 +1,9 @@
-// backend/index.js
-
 const express = require('express');
 const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Импортируем наши константы, утилиты и структуры данных (без рублей)
+// Импортируем утилиты из модуля статики
 const {
     getLevelLetter,
     cellIdToGlobalIndex,
@@ -18,20 +16,20 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static('../frontend'));
 
-// Инициализация баз данных
+// Инициализация баз данных в памяти
 let shopUsersDB = {};
 let wallets = createInitialWallets();
 
-// База данных реферальных связей: { 'логин_пользователя': 'логин_спонсора' }
+// Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
     'SYSTEM_ROOT': null,
     'LEADER_1': 'SYSTEM_ROOT',
     'LEADER_2': 'SYSTEM_ROOT'
 };
 
-// Храним имя последнего зарегистрированного бота для создания автоматической цепочки
 let lastRegisteredBot = null;
 
+// Стартовое состояние активных матриц
 function createInitialTree() {
     return {
         'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
@@ -45,20 +43,22 @@ function createInitialTree() {
 }
 
 let treeDB = createInitialTree();
+let activeMatricesList = ['A1']; // Список верхушек активных матриц
 
-// Уникальный алгоритм заполнения «Гребёнка» по порциям из 32 матриц (128 ячеек)
+/**
+ * Алгоритм поиска свободной ячейки и деления матриц
+ */
 function findNextEmptyCell(tree) {
-    const orderABC = ['A1', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'];
+    const orderABC = ['C1', 'C2', 'C3', 'C4'];
     for (const key of orderABC) {
         if (tree[key] && !tree[key].user) return key;
     }
 
-    let levelIndex = 3; // Начинаем с уровня D (индекс 3)
+    let levelIndex = 3; 
     while (true) {
         const letter = getLevelLetter(levelIndex);
         const countInLevel = 1 << levelIndex; 
         const totalQuadsInLevel = countInLevel / 4; 
-
         const CHUNK_SIZE = 32;
 
         for (let chunkStart = 0; chunkStart < totalQuadsInLevel; chunkStart += CHUNK_SIZE) {
@@ -83,52 +83,94 @@ function findNextEmptyCell(tree) {
     }
 }
 
-function checkAndGenerateChildren(tree, currentCellId) {
-    if (!currentCellId) return;
-    const globalIdx = cellIdToGlobalIndex(currentCellId);
-    
-    const leftChildGlobal = globalIdx * 2 + 1;
-    const rightChildGlobal = globalIdx * 2 + 2;
-    
-    function createCellByGlobalIndex(gIdx) {
+// Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек
+function checkAndSplitMatrix(cellId) {
+    const gIdx = cellIdToGlobalIndex(cellId);
+    const parentGIdx = Math.floor((gIdx - 1) / 2);
+    const topGIdx = Math.floor((parentGIdx - 1) / 2);
+
+    const b1G = topGIdx * 2 + 1;
+    const b2G = topGIdx * 2 + 2;
+    const c1G = b1G * 2 + 1;
+    const c2G = b1G * 2 + 2;
+    const c3G = b2G * 2 + 1;
+    const c4G = b2G * 2 + 2;
+
+    const getCellByGIdx = (g) => {
         let levelIndex = 0;
-        while ((1 << (levelIndex + 1)) - 1 <= gIdx) {
-            levelIndex++;
-        }
+        while ((1 << (levelIndex + 1)) - 1 <= g) levelIndex++;
         const levelStart = (1 << levelIndex) - 1;
-        const num = (gIdx - levelStart) + 1;
+        const num = (g - levelStart) + 1;
         const letter = getLevelLetter(levelIndex);
-        const id = `${letter}${num}`;
-        if (!tree[id]) {
-            tree[id] = { id, level: letter, user: null };
+        return treeDB[`${letter}${num}`];
+    };
+
+    const c1 = getCellByGIdx(c1G);
+    const c2 = getCellByGIdx(c2G);
+    const c3 = getCellByGIdx(c3G);
+    const c4 = getCellByGIdx(c4G);
+
+    if (c1 && c1.user && c2 && c2.user && c3 && c3.user && c4 && c4.user) {
+        const topCell = getCellByGIdx(topGIdx);
+        const b1Cell = getCellByGIdx(b1G);
+        const b2Cell = getCellByGIdx(b2G);
+
+        if (topCell && topCell.user) {
+            if (shopUsersDB[topCell.user]) {
+                shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
+            }
         }
+
+        activeMatricesList = activeMatricesList.filter(id => id !== topCell.id);
+        if (b1Cell && b1Cell.id) activeMatricesList.push(b1Cell.id);
+        if (b2Cell && b2Cell.id) activeMatricesList.push(b2Cell.id);
     }
-    
-    createCellByGlobalIndex(leftChildGlobal);
-    createCellByGlobalIndex(rightChildGlobal);
 }
 
-// === API МАТРИЦЫ ===
-app.get('/api/tree', (req, res) => res.json(treeDB));
+// ================= API =================
+
+app.get('/api/tree', (req, res) => {
+    res.json({
+        ...treeDB,
+        activeMatrices: activeMatricesList
+    });
+});
 
 app.post('/api/register', (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
     
-    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase());
-    if (isExist) return res.status(400).json({ error: 'Этот пользователь уже занял место в матрице' });
+    const trimmedUser = username.trim();
+    
+    // Рандомный выбор спонсора, если не указан явно
+    let canonicalSponsor = sponsor ? sponsor.trim() : null;
+    if (!canonicalSponsor) {
+        const allUsers = Object.keys(referalsDB);
+        canonicalSponsor = allUsers[Math.floor(Math.random() * allUsers.length)] || 'SYSTEM_ROOT';
+    }
+    
+    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
+    if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
 
     const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = username;
+    treeDB[cellId].user = trimmedUser;
     
-    referalsDB[username] = sponsor ? sponsor : 'SYSTEM_ROOT';
+    referalsDB[trimmedUser] = canonicalSponsor;
     
-    checkAndGenerateChildren(treeDB, cellId);
-    res.json({ success: true, cellId, user: username });
+    if (!shopUsersDB[trimmedUser]) {
+        shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
+        shopUsersDB[trimmedUser].isPaid = true;
+        shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
+        shopUsersDB[trimmedUser].matrixPosition.status = 'active';
+    }
+    
+    checkAndSplitMatrix(cellId);
+    res.json({ success: true, cellId, user: trimmedUser });
 });
 
 app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
+    activeMatricesList = ['A1'];
     shopUsersDB = {};
     wallets = createInitialWallets();
     referalsDB = {
@@ -140,54 +182,73 @@ app.post('/api/reset', (req, res) => {
     res.json({ success: true });
 });
 
-// Получение полных данных реферальной цепочки вверх и карточки пользователя
 app.get('/api/user-details/:username', (req, res) => {
-    const username = req.params.username;
+    const usernameParam = req.params.username.trim();
+    const canonicalName = Object.keys(referalsDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
+                        || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
+                        || usernameParam;
     
     const userCells = Object.values(treeDB)
-        .filter(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase())
+        .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
         .map(cell => cell.id);
         
-    if (userCells.length === 0 && !referalsDB[username]) {
-        return res.status(404).json({ error: 'Пользователь не найден' });
-    }
-    
     let sponsorChain = [];
-    let currentSponsor = referalsDB[username] || 'SYSTEM_ROOT';
+    let currentSponsor = referalsDB[canonicalName] || 'SYSTEM_ROOT';
+    let visited = new Set();
     
-    while (currentSponsor) {
+    while (currentSponsor && !visited.has(currentSponsor)) {
+        visited.add(currentSponsor);
         sponsorChain.push(currentSponsor);
-        currentSponsor = referalsDB[currentSponsor];
+        const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === currentSponsor.toLowerCase());
+        currentSponsor = nextSponsorKey ? referalsDB[nextSponsorKey] : null;
     }
     
-    // Если карточки в БД маркетплейса нет — отдаем дефолтную структуру
-    const userCard = shopUsersDB[username] || createNewUserCard(username);
+    if (!shopUsersDB[canonicalName]) {
+        shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
+        if (userCells.length > 0) {
+            shopUsersDB[canonicalName].isPaid = true;
+            shopUsersDB[canonicalName].matrixPosition.currentCellId = userCells[0];
+            shopUsersDB[canonicalName].matrixPosition.status = 'active';
+        }
+    }
     
     res.json({
         success: true,
-        username: username,
+        username: canonicalName,
         cells: userCells,
-        sponsor: referalsDB[username] || 'SYSTEM_ROOT',
+        sponsor: referalsDB[canonicalName] || 'SYSTEM_ROOT',
         chain: sponsorChain,
-        profile: userCard
+        profile: shopUsersDB[canonicalName]
     });
 });
 
-// Построение реферальной структуры с безопасным расчетом колонок без рекурсии
 app.get('/api/referals-tree', (req, res) => {
     let structure = {};
+    let childrenMap = {};
+    
+    Object.keys(referalsDB).forEach(user => {
+        childrenMap[user] = [];
+    });
+    
+    Object.entries(referalsDB).forEach(([user, sponsor]) => {
+        if (sponsor) {
+            const canonicalSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === sponsor.toLowerCase()) || sponsor;
+            if (!childrenMap[canonicalSponsor]) {
+                childrenMap[canonicalSponsor] = [];
+            }
+            childrenMap[canonicalSponsor].push(user);
+        }
+    });
     
     function getCalculatedLevel(user) {
         let level = 1;
         let current = user;
-        // Безопасный цикл while вместо глубокой рекурсии во избежание Call Stack Overflow
-        while (current && current !== 'SYSTEM_ROOT') {
+        let visited = new Set();
+        while (current && current !== 'SYSTEM_ROOT' && !visited.has(current)) {
+            visited.add(current);
             let sponsor = referalsDB[current];
-            if (!sponsor) {
-                level++;
-                break;
-            }
-            current = sponsor;
+            if (!sponsor) { level++; break; }
+            current = Object.keys(referalsDB).find(k => k.toLowerCase() === sponsor.toLowerCase()) || sponsor;
             level++;
         }
         return level;
@@ -195,77 +256,135 @@ app.get('/api/referals-tree', (req, res) => {
 
     Object.keys(referalsDB).forEach(username => {
         structure[username] = {
-            username: username,
-            sponsor: referalsDB[username],
-            calculatedColumn: getCalculatedLevel(username)
+            id: username,
+            login: username,
+            parentId: referalsDB[username],
+            level: getCalculatedLevel(username),
+            isExpanded: false,
+            children: childrenMap[username] || []
         };
     });
 
     res.json({ success: true, tree: structure });
 });
 
-// === API МАРКЕТПЛЕЙСА ===
+app.get('/api/get-referral-chain', (req, res) => {
+    const { login } = req.query;
+    if (!login) return res.status(400).json({ error: 'Параметр login обязателен' });
+
+    const targetUser = Object.keys(referalsDB).find(k => k.toLowerCase() === login.trim().toLowerCase());
+    if (!targetUser) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    let chain = [];
+    let current = targetUser;
+    let visited = new Set();
+
+    while (current && !visited.has(current)) {
+        visited.add(current);
+        chain.push(current);
+        const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === referalsDB[current]?.toLowerCase());
+        current = nextSponsorKey ? nextSponsorKey : referalsDB[current];
+    }
+
+    chain.reverse();
+    res.json({ success: true, chain });
+});
+
 app.post('/api/shop/register', (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-    if (shopUsersDB[username]) return res.status(400).json({ error: 'Такой покупатель уже зарегистрирован' });
     
-    // Используем стандартизированную структуру карточки из static.js
-    shopUsersDB[username] = createNewUserCard(username);
-    
-    if (sponsor) {
-        referalsDB[username] = sponsor;
-    } else {
-        referalsDB[username] = lastRegisteredBot ? lastRegisteredBot : 'SYSTEM_ROOT';
+    const trimmedUser = username.trim();
+    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
+    if (isExist) {
+        return res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser] || createNewUserCard(trimmedUser) });
     }
-    lastRegisteredBot = username; 
     
-    res.json({ success: true, shopUserStatus: shopUsersDB[username] });
+    shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
+    
+    // Выбираем спонсора: если передан — берем его, если не передан — берем случайного из имеющихся
+    let chosenSponsor = sponsor ? sponsor.trim() : null;
+    if (!chosenSponsor) {
+        const availableSponsors = Object.keys(referalsDB);
+        chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
+    }
+
+    referalsDB[trimmedUser] = chosenSponsor;
+    lastRegisteredBot = trimmedUser; 
+
+    const cellId = findNextEmptyCell(treeDB);
+    treeDB[cellId].user = trimmedUser;
+    
+    shopUsersDB[trimmedUser].isPaid = true;
+    shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
+    shopUsersDB[trimmedUser].matrixPosition.status = 'active';
+    
+    checkAndSplitMatrix(cellId);
+    res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser], cellId });
 });
 
 app.post('/api/shop/pay', (req, res) => {
     const { username } = req.body;
-    if (!username || !shopUsersDB[username]) return res.status(400).json({ error: 'Покупатель не найден' });
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
-    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase());
-    if (isExist) return res.status(400).json({ error: 'Этот пользователь уже занял место в матрице' });
+    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
+    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase());
+    if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
 
-    // Финансовая математика ТЗ: 1000 Митронов ($130) за активацию места
     const TOTAL_MITRONS = 1000;
-    const MARKETPLACE_RESERVE = 700; // 70% уходит в резерв ликвидности маркетплейса
-    const CREATOR_COLD = 300;        // 30% уходит на холодный кошелек создателя
+    const ADMIN_LOGISTICS = 450; 
+    const DAO_POOL = 550;        
 
-    // Обновляем статус покупателя
-    shopUsersDB[username].isPaid = true;
-    shopUsersDB[username].paymentDate = new Date().toISOString();
-    shopUsersDB[username].balances.mitrons += TOTAL_MITRONS;
-    shopUsersDB[username].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[username].balances.mitrons));
+    if (!shopUsersDB[canonicalName]) {
+        shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
+    }
 
-    // Наполняем контуры системных сейфов-кошельков
-    wallets.payoutReserveWallet.balanceMitrons += MARKETPLACE_RESERVE;
-    wallets.myWallet.balanceMitrons += CREATOR_COLD;
+    shopUsersDB[canonicalName].isPaid = true;
+    shopUsersDB[canonicalName].paymentDate = new Date().toISOString();
+    shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
+    shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
 
-    // Автоматическое нахождение и занятие места в глобальной матрице
+    wallets.adminWallet.balanceMitrons += ADMIN_LOGISTICS;
+    wallets.daoWallet.balanceMitrons += DAO_POOL;
+
     const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = username;
+    treeDB[cellId].user = canonicalName;
     
-    // Фиксируем след позиции ячейки в карточке
-    shopUsersDB[username].matrixPosition.currentCellId = cellId;
-    shopUsersDB[username].matrixPosition.status = 'active';
+    shopUsersDB[canonicalName].matrixPosition.currentCellId = cellId;
+    shopUsersDB[canonicalName].matrixPosition.status = 'active';
 
-    checkAndGenerateChildren(treeDB, cellId);
+    checkAndSplitMatrix(cellId);
 
     res.json({
         success: true,
-        shopUserStatus: shopUsersDB[username],
+        shopUserStatus: shopUsersDB[canonicalName],
         cellId,
         split: {
             totalMitrons: TOTAL_MITRONS,
-            totalUsd: parseFloat(mitronsToUsd(TOTAL_MITRONS)),
-            marketplaceMitrons: MARKETPLACE_RESERVE,
-            myWalletMitrons: CREATOR_COLD
+            adminLogistics: ADMIN_LOGISTICS,
+            daoPool: DAO_POOL
         }
     });
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.post('/api/admin/delete-user', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
+    
+    delete shopUsersDB[username];
+    delete referalsDB[username];
+    
+    Object.keys(treeDB).forEach(cellId => {
+        if (treeDB[cellId].user === username) {
+            treeDB[cellId].user = null;
+        }
+    });
+    
+    res.json({ success: true });
+});
+
+app.get('/api/sys-wallets', (req, res) => {
+    res.json({ success: true, wallets });
+});
+
+app.listen(PORT, () => console.log(`Backend server running on port ${PORT}`));
