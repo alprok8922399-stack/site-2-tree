@@ -71,7 +71,7 @@
             font-weight: bold;
         }
 
-        /* Модальное окно (Карточка пользователя - строго 3 поля) */
+        /* Модальное окно (Карточка пользователя с цепочкой спонсоров) */
         .user-card-modal {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -87,7 +87,8 @@
             border: 2px solid #ffd700;
             border-radius: 12px;
             padding: 20px;
-            width: 280px;
+            width: 310px;
+            max-width: 90vw;
             color: #fff;
             text-align: center;
             position: relative;
@@ -101,7 +102,7 @@
         }
 
         .timer-badge {
-            margin-top: 15px;
+            margin-top: 12px;
             padding: 8px 12px;
             border-radius: 20px;
             font-size: 12px;
@@ -111,6 +112,29 @@
 
         .timer-badge.active { background: #ff9800; color: #000; }
         .timer-badge.matured { background: #2ecc71; color: #fff; }
+
+        .modal-upline-box {
+            margin-top: 15px;
+            background: #202028;
+            border: 1px dashed #444455;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: left;
+        }
+        .modal-upline-title {
+            color: #aaa;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .modal-upline-chain {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            align-items: center;
+        }
     `;
     document.head.appendChild(style);
 })();
@@ -287,7 +311,7 @@ function switchFocus(element) {
     element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
 }
 
-// Карточка пользователя (СТРОГО 3 ПОЛЯ)
+// Карточка пользователя С ЦЕПОЧКОЙ СПОНСОРОВ
 async function showUserCard(username) {
     try {
         const res = await fetch(`${MATRIX_API_URL}/api/user-details/${encodeURIComponent(username)}`);
@@ -312,16 +336,63 @@ async function showUserCard(username) {
         const badgeClass = isMature ? 'matured' : 'active';
         const badgeText = isMature ? `Дней в матрице: ${diffDays} (Выплата)` : `Дней в матрице: ${diffDays} / 31`;
 
+        // Получаем цепочку спонсоров с бэкенда
+        let uplineHtml = '<div style="color:#777; font-size:11px;">Загрузка спонсоров...</div>';
+        
         modal.innerHTML = `
             <div class="user-card-content">
                 <span class="user-card-close" onclick="document.getElementById('userCardModal').remove()">&times;</span>
                 <h3 style="margin-top:0; color:#ffd700;">${data.username}</h3>
                 <p style="font-size:12px; color:#ccc; margin: 10px 0 0 0;">Дата регистрации:<br>${regDate.toLocaleDateString()}</p>
                 <div class="timer-badge ${badgeClass}">${badgeText}</div>
+                
+                <div class="modal-upline-box">
+                    <div class="modal-upline-title">Кто пригласил (Спонсоры):</div>
+                    <div class="modal-upline-chain" id="modalUplineContainer">${uplineHtml}</div>
+                </div>
             </div>
         `;
 
         document.body.appendChild(modal);
+
+        // Загружаем спонсорскую цепочку асинхронно
+        try {
+            const chainRes = await fetch(`${MATRIX_API_URL}/api/get-referral-chain?login=${encodeURIComponent(username)}`);
+            const chainData = await chainRes.json();
+            const container = document.getElementById('modalUplineContainer');
+            
+            if (container && chainData.success && chainData.chain && chainData.chain.length > 0) {
+                container.innerHTML = '';
+                chainData.chain.forEach((uplineLogin, idx) => {
+                    const node = document.createElement('span');
+                    if (idx === chainData.chain.length - 1) {
+                        node.innerHTML = `<strong style="color:#2ecc71;">${uplineLogin}</strong>`;
+                    } else {
+                        node.innerText = uplineLogin;
+                        node.style.color = '#3498db';
+                        node.style.cursor = 'pointer';
+                        node.style.textDecoration = 'underline';
+                        node.onclick = () => {
+                            document.getElementById('userCardModal').remove();
+                            showUserCard(uplineLogin);
+                        };
+                    }
+                    container.appendChild(node);
+
+                    if (idx < chainData.chain.length - 1) {
+                        const arrow = document.createElement('span');
+                        arrow.innerText = ' ➔ ';
+                        arrow.style.color = '#555';
+                        container.appendChild(arrow);
+                    }
+                });
+            } else if (container) {
+                container.innerHTML = '<span style="color:#777;">Нет вышестоящих спонсоров</span>';
+            }
+        } catch (chainErr) {
+            console.error('Ошибка загрузки цепочки в попап:', chainErr);
+        }
+
     } catch (err) {
         console.error('Ошибка загрузки карточки пользователя:', err);
     }
