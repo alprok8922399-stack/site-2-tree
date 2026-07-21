@@ -5,7 +5,7 @@ let activePath = [];
 let openDropdownUser = null;
 let lastTreeJsonString = "";
 let isUserInteracting = false;
-let highlightedTableUser = null; // Храним логин подсвечиваемого пользователя
+let highlightedTableUser = null;
 
 // Динамические стили
 const style = document.createElement('style');
@@ -57,6 +57,20 @@ style.innerHTML = `
     }
     .table-matrix-btn:hover {
         background: #9b59b6;
+    }
+    .table-nav-btn {
+        background: #2980b9;
+        color: #fff;
+        border: none;
+        padding: 8px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .table-nav-btn:hover {
+        background: #3498db;
     }
     .referral-grid-wrapper {
         display: flex !important;
@@ -111,7 +125,6 @@ style.innerHTML = `
         border-color: #4CAF50 !important;
         box-shadow: inset 0 0 6px rgba(76,175,80,0.5) !important;
     }
-    /* Красная подсветка для найденного пользователя */
     .user-cell-card.searched-highlight {
         border-color: #ff4757 !important;
         background: #5f1e1e !important;
@@ -222,7 +235,6 @@ function renderActiveReferralGrid(container, isBackground = false) {
     const savedSearchValue = oldInput ? oldInput.value : '';
     const isInputFocused = (document.activeElement === oldInput);
 
-    // Запоминаем позиции скролла ВСЕГО контейнера и отдельных колонок
     const wrapperOld = document.getElementById('referralGridWrapper');
     const scrollLeftVal = wrapperOld ? wrapperOld.scrollLeft : 0;
     
@@ -236,13 +248,15 @@ function renderActiveReferralGrid(container, isBackground = false) {
 
     container.innerHTML = '';
     
-    // Блок поиска
+    // Блок поиска и кнопок быстрых переходов
     const searchBlock = document.createElement('div');
     searchBlock.className = 'table-search-container';
     searchBlock.innerHTML = `
         <input type="text" id="interactiveTableSearchInput" class="table-search-input" placeholder="Поиск пользователя в таблице..." />
         <button type="button" class="table-search-btn" onclick="window.searchTableUserByInput()">Найти</button>
         <button type="button" class="table-matrix-btn" onclick="window.showSearchedInMatrix()">Показать в матрице</button>
+        <button type="button" class="table-nav-btn" onclick="window.scrollToTableStart()">⏮️ В начало</button>
+        <button type="button" class="table-nav-btn" onclick="window.scrollToTableEnd()">⏭️ В конец</button>
     `;
     container.appendChild(searchBlock);
 
@@ -296,7 +310,6 @@ function renderActiveReferralGrid(container, isBackground = false) {
         }
     });
 
-    // Прокрутка при поиске ИЛИ точное восстановление положения
     if (highlightedTableUser && !isBackground) {
         setTimeout(() => {
             const targetCard = document.getElementById(`table-user-${highlightedTableUser}`);
@@ -354,7 +367,6 @@ function createUserCardElement(user, columnIndex) {
         card.classList.add('active-link');
     }
 
-    // Подсветка при поиске
     if (highlightedTableUser && highlightedTableUser.toLowerCase() === user.login.toLowerCase()) {
         card.classList.add('searched-highlight');
     }
@@ -451,6 +463,21 @@ async function searchReferralUser(login) {
         setTimeout(() => { isUserInteracting = false; }, 1000);
     }
 }
+
+// Навигационные функции (В начало / В конец)
+window.scrollToTableStart = () => {
+    const wrapper = document.getElementById('referralGridWrapper');
+    if (wrapper) {
+        wrapper.scrollTo({ left: 0, behavior: 'smooth' });
+    }
+};
+
+window.scrollToTableEnd = () => {
+    const wrapper = document.getElementById('referralGridWrapper');
+    if (wrapper) {
+        wrapper.scrollTo({ left: wrapper.scrollWidth, behavior: 'smooth' });
+    }
+};
 
 window.searchTableUserByInput = () => {
     const inp = document.getElementById('interactiveTableSearchInput');
