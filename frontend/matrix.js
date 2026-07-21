@@ -187,11 +187,11 @@ function renderSingleMatrixBlock(container, topId, treeData) {
 
     const structure = getSevenCellIds(topId);
 
-    // Ряд 1 (Вершина - Золотой цвет)
+    // Ряд 1 (Вершина)
     const row1 = createRow([structure.top], treeData, 'cell-top');
-    // Ряд 2 (Плечи - Небесно-голубой цвет)
+    // Ряд 2 (Плечи)
     const row2 = createRow([structure.left, structure.right], treeData, 'cell-middle');
-    // Ряд 3 (Основание из 4 ячеек - Зеленый цвет)
+    // Ряд 3 (Основание из 4 ячеек)
     const row3 = createRow([structure.b1, structure.b2, structure.b3, structure.b4], treeData, 'cell-bottom');
 
     block.appendChild(row1);
@@ -201,25 +201,26 @@ function renderSingleMatrixBlock(container, topId, treeData) {
     container.appendChild(block);
 }
 
-// Вспомогательные функции координат
+// Універсальная конвертация ID ячейки (Excel-формат: A1, Z10, AA1 и т.д.) в глобальный индекс
 function cellIdToGlobalIndex(cellId) {
     if (!cellId) return 0;
     const match = cellId.match(/^([A-Z]+)(\d+)$/);
     if (!match) return 0;
     
-    const letter = match[1];
+    const letters = match[1];
     const num = parseInt(match[2], 10);
     
     let levelIndex = 0;
-    for (let i = 0; i < letter.length; i++) {
-        levelIndex = levelIndex * 26 + (letter.charCodeAt(i) - 64);
+    for (let i = 0; i < letters.length; i++) {
+        levelIndex = levelIndex * 26 + (letters.charCodeAt(i) - 64);
     }
-    levelIndex -= 1;
+    levelIndex -= 1; // Приведение к 0-индексу уровня
 
     const levelStart = (1 << levelIndex) - 1;
     return levelStart + (num - 1);
 }
 
+// Конвертация глобального индекса обратно в Excel-формат ID (A1, AA1...)
 function globalIndexToCellId(gIdx) {
     let levelIndex = 0;
     while ((1 << (levelIndex + 1)) - 1 <= gIdx) {
@@ -336,7 +337,6 @@ async function showUserCard(username) {
         const badgeClass = isMature ? 'matured' : 'active';
         const badgeText = isMature ? `Дней в матрице: ${diffDays} (Выплата)` : `Дней в матрице: ${diffDays} / 31`;
 
-        // Получаем цепочку спонсоров с бэкенда
         let uplineHtml = '<div style="color:#777; font-size:11px;">Загрузка спонсоров...</div>';
         
         modal.innerHTML = `
