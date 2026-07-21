@@ -5,18 +5,20 @@ let activePath = [];
 let openDropdownUser = null;
 let lastTreeJsonString = "";
 let isUserInteracting = false;
+let highlightedTableUser = null; // Храним логин подсвечиваемого пользователя
 
-// Динамические стили с сеткой табличного выравнивания
+// Динамические стили
 const style = document.createElement('style');
 style.innerHTML = `
     .table-search-container {
         display: flex;
-        gap: 10px;
+        gap: 8px;
         margin-bottom: 12px;
-        max-width: 400px;
+        max-width: 100%;
+        flex-wrap: wrap;
     }
     .table-search-input {
-        flex: 1;
+        flex: 1 1 180px;
         padding: 8px 12px;
         background: #1a1a1a;
         border: 1px solid #444;
@@ -32,14 +34,29 @@ style.innerHTML = `
         background: #2c5f2d;
         color: #fff;
         border: none;
-        padding: 8px 14px;
+        padding: 8px 12px;
         border-radius: 6px;
         cursor: pointer;
         font-weight: bold;
         font-size: 13px;
+        white-space: nowrap;
     }
     .table-search-btn:hover {
         background: #3e8e41;
+    }
+    .table-matrix-btn {
+        background: #8e44ad;
+        color: #fff;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .table-matrix-btn:hover {
+        background: #9b59b6;
     }
     .referral-grid-wrapper {
         display: flex !important;
@@ -54,7 +71,7 @@ style.innerHTML = `
         min-height: 400px;
         width: 100% !important;
         box-sizing: border-box;
-        scroll-behavior: auto;
+        scroll-behavior: smooth;
         -webkit-overflow-scrolling: touch;
     }
     .referral-column {
@@ -81,7 +98,7 @@ style.innerHTML = `
         padding: 10px !important;
         background: #2a2a2a !important;
         cursor: pointer !important;
-        transition: border-color 0.15s ease, background 0.15s ease !important;
+        transition: all 0.2s ease !important;
         position: relative !important;
         user-select: none !important;
         box-sizing: border-box;
@@ -95,6 +112,17 @@ style.innerHTML = `
         border-color: #4CAF50 !important;
         box-shadow: inset 0 0 6px rgba(76,175,80,0.5) !important;
     }
+    /* Красная подсветка для найденного пользователя */
+    .user-cell-card.searched-highlight {
+        border-color: #ff4757 !important;
+        background: #5f1e1e !important;
+        box-shadow: 0 0 15px #ff4757 !important;
+        animation: pulseRed 1.5s infinite alternate;
+    }
+    @keyframes pulseRed {
+        0% { box-shadow: 0 0 5px #ff4757; }
+        100% { box-shadow: 0 0 20px #ff4757; }
+    }
     .user-cell-main {
         display: flex !important;
         justify-content: space-between !important;
@@ -104,6 +132,9 @@ style.innerHTML = `
     .user-login-text {
         font-weight: 600 !important;
         color: #4CAF50 !important;
+    }
+    .user-cell-card.searched-highlight .user-login-text {
+        color: #ffffff !important;
     }
     .children-badge {
         background: #555555 !important;
@@ -146,7 +177,7 @@ style.innerHTML = `
 document.head.appendChild(style);
 
 /**
- * Загрузка реферального дерева с защитой от мерцания
+ * Загрузка реферального дерева
  */
 async function loadReferalsTable(isBackground = false) {
     const targetContainer = document.getElementById('referals-table-body');
@@ -160,7 +191,6 @@ async function loadReferalsTable(isBackground = false) {
 
         const newTreeJsonString = JSON.stringify(result.tree);
         
-        // Если данные на сервере не изменились — не дергаем интерфейс
         if (isBackground && newTreeJsonString === lastTreeJsonString) {
             return;
         }
@@ -186,10 +216,9 @@ async function loadReferalsTable(isBackground = false) {
 }
 
 /**
- * Отрисовка интерактивной таблицы с сохранением текста поиска и скролла
+ * Отрисовка интерактивной таблицы
  */
 function renderActiveReferralGrid(container) {
-    // Сохраняем введенный текст и статус фокуса
     const oldInput = document.getElementById('interactiveTableSearchInput');
     const savedSearchValue = oldInput ? oldInput.value : '';
     const isInputFocused = (document.activeElement === oldInput);
@@ -199,23 +228,22 @@ function renderActiveReferralGrid(container) {
 
     container.innerHTML = '';
     
-    // Блок поиска
+    // Блок поиска с кнопками "Найти" и "Показать в матрице"
     const searchBlock = document.createElement('div');
     searchBlock.className = 'table-search-container';
     searchBlock.innerHTML = `
         <input type="text" id="interactiveTableSearchInput" class="table-search-input" placeholder="Поиск пользователя в таблице..." />
         <button type="button" class="table-search-btn" onclick="window.searchTableUserByInput()">Найти</button>
+        <button type="button" class="table-matrix-btn" onclick="window.showSearchedInMatrix()">Показать в матрице</button>
     `;
     container.appendChild(searchBlock);
 
     const searchInput = searchBlock.querySelector('input');
 
-    // Восстанавливаем введенный текст
     if (savedSearchValue) {
         searchInput.value = savedSearchValue;
     }
 
-    // Возвращаем курсор обратно, если пользователь печатал
     if (isInputFocused) {
         setTimeout(() => {
             searchInput.focus();
@@ -252,15 +280,19 @@ function renderActiveReferralGrid(container) {
 
     container.appendChild(wrapper);
 
-    // Восстанавливаем позицию прокрутки
-    if (scrollLeftVal > 0) {
+    // Прокрутка к подсвеченной ячейке
+    if (highlightedTableUser) {
+        setTimeout(() => {
+            const targetCard = document.getElementById(`table-user-${highlightedTableUser}`);
+            if (targetCard) {
+                targetCard.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+        }, 100);
+    } else if (scrollLeftVal > 0) {
         wrapper.scrollLeft = scrollLeftVal;
     }
 }
 
-/**
- * Рендер колонки с выравниванием слотов строк под родительские элементы
- */
 function renderAlignedColumn(wrapper, usersList, columnIndex, parentNode) {
     const column = document.createElement('div');
     column.className = 'referral-column';
@@ -295,17 +327,20 @@ function renderAlignedColumn(wrapper, usersList, columnIndex, parentNode) {
     wrapper.appendChild(column);
 }
 
-/**
- * Создание карточки пользователя со сворачиванием
- */
 function createUserCardElement(user, columnIndex) {
     const card = document.createElement('div');
     card.className = 'user-cell-card';
+    card.id = `table-user-${user.login}`;
     
     const isAlreadyActive = activePath[columnIndex] === user.id;
 
     if (activePath.includes(user.id)) {
         card.classList.add('active-link');
+    }
+
+    // Подсветка при поиске
+    if (highlightedTableUser && highlightedTableUser.toLowerCase() === user.login.toLowerCase()) {
+        card.classList.add('searched-highlight');
     }
 
     const mainRow = document.createElement('div');
@@ -343,7 +378,6 @@ function createUserCardElement(user, columnIndex) {
         e.stopPropagation();
         isUserInteracting = true;
 
-        // Если ячейка уже открыта — сворачиваем всё справа
         if (isAlreadyActive && activePath.length > columnIndex + 1) {
             activePath = activePath.slice(0, columnIndex + 1);
             openDropdownUser = null;
@@ -388,6 +422,7 @@ async function searchReferralUser(login) {
         if (result.success && result.chain && result.chain.length > 0) {
             activePath = result.chain;
             openDropdownUser = result.chain[result.chain.length - 1];
+            highlightedTableUser = login.trim();
 
             const targetContainer = document.getElementById('referals-table-body');
             if (targetContainer) {
@@ -405,6 +440,20 @@ window.searchTableUserByInput = () => {
     const inp = document.getElementById('interactiveTableSearchInput');
     if (inp && inp.value) {
         searchReferralUser(inp.value);
+    }
+};
+
+window.showSearchedInMatrix = () => {
+    const inp = document.getElementById('interactiveTableSearchInput');
+    const login = inp && inp.value ? inp.value.trim() : highlightedTableUser;
+    if (login) {
+        if (typeof window.searchMatrixUser === 'function') {
+            window.searchMatrixUser(login);
+        } else {
+            alert(`Поиск по матрице для ${login}`);
+        }
+    } else {
+        alert('Введите логин пользователя!');
     }
 };
 
@@ -445,7 +494,6 @@ document.addEventListener('click', () => {
     }
 });
 
-// Автообновление (пропускаем, если пользователь печатает)
 setInterval(() => {
     const inp = document.getElementById('interactiveTableSearchInput');
     if (document.activeElement === inp && inp && inp.value.length > 0) {
