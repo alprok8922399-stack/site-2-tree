@@ -211,14 +211,41 @@ app.get('/api/user-details/:username', (req, res) => {
             shopUsersDB[canonicalName].matrixPosition.status = 'active';
         }
     }
-    
+
+    // === ОПТИМИЗИРОВАННАЯ ВЫДАЧА ЛИЧНИКОВ (ДЛЯ 10 000+ ЧЕЛОВЕК) ===
+    const searchQuery = (req.query.search || '').trim().toLowerCase();
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 30; // Порция по 30 человек
+
+    // Находим всех личников данного пользователя
+    const allReferrals = Object.keys(referalsDB).filter(user => {
+        const parent = referalsDB[user];
+        return parent && parent.toLowerCase() === canonicalName.toLowerCase();
+    });
+
+    // Фильтрация по поисковому запросу (если передан search)
+    const filteredReferrals = searchQuery
+        ? allReferrals.filter(ref => ref.toLowerCase().includes(searchQuery))
+        : allReferrals;
+
+    // Пагинация (вырезаем нужную страницу)
+    const startIndex = (page - 1) * limit;
+    const paginatedReferrals = filteredReferrals.slice(startIndex, startIndex + limit);
+
     res.json({
         success: true,
         username: canonicalName,
         cells: userCells,
         sponsor: referalsDB[canonicalName] || 'SYSTEM_ROOT',
         chain: sponsorChain,
-        profile: shopUsersDB[canonicalName]
+        profile: shopUsersDB[canonicalName],
+        referralsData: {
+            totalCount: allReferrals.length,       // Всего личников
+            filteredCount: filteredReferrals.length, // Найдено по фильтру
+            currentPage: page,
+            hasMore: startIndex + limit < filteredReferrals.length,
+            list: paginatedReferrals               // Отдаем порцией по 30
+        }
     });
 });
 
@@ -302,7 +329,6 @@ app.post('/api/shop/register', (req, res) => {
     
     shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
     
-    // Выбираем спонсора: если передан — берем его, если не передан — берем случайного из имеющихся
     let chosenSponsor = sponsor ? sponsor.trim() : null;
     if (!chosenSponsor) {
         const availableSponsors = Object.keys(referalsDB);
