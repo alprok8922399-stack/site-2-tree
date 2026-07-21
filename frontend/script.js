@@ -135,6 +135,12 @@ async function loadUserProfile(username) {
         const data = await response.json();
         
         if (data.success) {
+            // Если карточка открывается в модальном окне, показываем его
+            const modal = document.getElementById('profile-modal') || document.querySelector('.user-card-modal');
+            if (modal) {
+                modal.style.display = 'block';
+            }
+
             setElementText('current-profile-user', data.username);
             
             const cellId = data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null;
@@ -231,6 +237,13 @@ async function loadUserProfile(username) {
     }
 }
 
+function closeUserProfileCard() {
+    const modal = document.getElementById('profile-modal') || document.querySelector('.user-card-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
 async function resetSystem() {
     if (!confirm('Вы уверены, что хотите полностью очистить систему матриц и балансов?')) return;
     
@@ -251,6 +264,8 @@ async function resetSystem() {
             
             const uplineContainer = document.getElementById('profile-upline-chain');
             if (uplineContainer) uplineContainer.innerHTML = '';
+            
+            closeUserProfileCard();
         }
     } catch (error) {
         console.error('Ошибка при сбросе системы:', error);
@@ -259,6 +274,7 @@ async function resetSystem() {
 
 // === ГЛОБАЛЬНЫЕ МОСТЫ СВЯЗИ ===
 window.showUserCard = loadUserProfile;
+window.closeUserCard = closeUserProfileCard;
 window.focusMatrixOnUser = (login) => {
     if (typeof window.searchMatrixUser === 'function') {
         window.searchMatrixUser(login);
@@ -277,4 +293,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inputName) loadUserProfile(inputName);
         });
     }
+
+    // === ЗАКРЫТИЕ КАРТОЧКИ ПРИ КЛИКЕ / ТАПЕ ВНЕ ЕЁ ОБЛАСТИ ===
+    document.addEventListener('click', (e) => {
+        const modal = document.getElementById('profile-modal') || document.querySelector('.user-card-modal');
+        
+        // Проверяем, открыто ли модальное окно
+        if (modal && modal.style.display !== 'none' && modal.style.display !== '') {
+            const cardContent = modal.querySelector('.modal-content') || modal.querySelector('.user-card-content') || modal;
+            
+            // Если кликнули не внутри карточки и не по кнопке её открытия
+            const isClickInsideCard = cardContent.contains(e.target);
+            const isTriggerBtn = e.target.closest('#search-profile-btn') || e.target.closest('.dropdown-btn') || e.target.closest('.user-cell-card');
+
+            if (!isClickInsideCard && !isTriggerBtn) {
+                closeUserProfileCard();
+            }
+        }
+    });
 });
