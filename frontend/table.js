@@ -71,7 +71,6 @@ style.innerHTML = `
         min-height: 400px;
         width: 100% !important;
         box-sizing: border-box;
-        scroll-behavior: smooth;
         -webkit-overflow-scrolling: touch;
     }
     .referral-column {
@@ -208,7 +207,7 @@ async function loadReferalsTable(isBackground = false) {
             activePath = [rootUser.id];
         }
 
-        renderActiveReferralGrid(targetContainer);
+        renderActiveReferralGrid(targetContainer, isBackground);
 
     } catch (error) {
         console.error('Ошибка загрузки интерактивной таблицы:', error);
@@ -218,17 +217,26 @@ async function loadReferalsTable(isBackground = false) {
 /**
  * Отрисовка интерактивной таблицы
  */
-function renderActiveReferralGrid(container) {
+function renderActiveReferralGrid(container, isBackground = false) {
     const oldInput = document.getElementById('interactiveTableSearchInput');
     const savedSearchValue = oldInput ? oldInput.value : '';
     const isInputFocused = (document.activeElement === oldInput);
 
+    // Запоминаем позиции скролла ВСЕГО контейнера и отдельных колонок
     const wrapperOld = document.getElementById('referralGridWrapper');
     const scrollLeftVal = wrapperOld ? wrapperOld.scrollLeft : 0;
+    
+    const columnScrolls = {};
+    if (wrapperOld) {
+        const cols = wrapperOld.querySelectorAll('.referral-column');
+        cols.forEach((col, idx) => {
+            columnScrolls[idx] = col.scrollTop;
+        });
+    }
 
     container.innerHTML = '';
     
-    // Блок поиска с кнопками "Найти" и "Показать в матрице"
+    // Блок поиска
     const searchBlock = document.createElement('div');
     searchBlock.className = 'table-search-container';
     searchBlock.innerHTML = `
@@ -280,14 +288,22 @@ function renderActiveReferralGrid(container) {
 
     container.appendChild(wrapper);
 
-    // Прокрутка к подсвеченной ячейке
-    if (highlightedTableUser) {
+    // Восстанавливаем скролл колонок
+    const newCols = wrapper.querySelectorAll('.referral-column');
+    newCols.forEach((col, idx) => {
+        if (columnScrolls[idx]) {
+            col.scrollTop = columnScrolls[idx];
+        }
+    });
+
+    // Прокрутка при поиске ИЛИ точное восстановление положения
+    if (highlightedTableUser && !isBackground) {
         setTimeout(() => {
             const targetCard = document.getElementById(`table-user-${highlightedTableUser}`);
             if (targetCard) {
                 targetCard.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
             }
-        }, 100);
+        }, 50);
     } else if (scrollLeftVal > 0) {
         wrapper.scrollLeft = scrollLeftVal;
     }
@@ -394,7 +410,7 @@ function createUserCardElement(user, columnIndex) {
 
         const targetContainer = document.getElementById('referals-table-body');
         if (targetContainer) {
-            renderActiveReferralGrid(targetContainer);
+            renderActiveReferralGrid(targetContainer, false);
         }
 
         setTimeout(() => { isUserInteracting = false; }, 1000);
@@ -426,7 +442,7 @@ async function searchReferralUser(login) {
 
             const targetContainer = document.getElementById('referals-table-body');
             if (targetContainer) {
-                renderActiveReferralGrid(targetContainer);
+                renderActiveReferralGrid(targetContainer, false);
             }
         }
     } catch (e) {
@@ -489,7 +505,7 @@ document.addEventListener('click', () => {
         openDropdownUser = null;
         const targetContainer = document.getElementById('referals-table-body');
         if (targetContainer) {
-            renderActiveReferralGrid(targetContainer);
+            renderActiveReferralGrid(targetContainer, false);
         }
     }
 });
