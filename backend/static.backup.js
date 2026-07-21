@@ -1,46 +1,38 @@
-/* === ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД backend/static.js === */
-
 /**
- * Конвертирует индекс уровня в соответствующую букву алфавита (0 -> A, 25 -> Z, 26 -> AA, 27 -> AB...)
- * Обеспечивает бесконечную масштабируемость веерного почкования без риска краша сервера.
+ * Превращает индекс уровня/столбца в буквенное обозначение по аналогии с Excel:
+ * 0 -> A, 1 -> B ... 25 -> Z, 26 -> AA, 27 -> AB и т.д.
  */
-function getLevelLetter(levelIndex) {
+function getLevelLetter(index) {
     let letter = '';
-    let temp = levelIndex;
-    while (temp >= 0) {
-        letter = String.fromCharCode((temp % 26) + 65) + letter;
-        temp = Math.floor(temp / 26) - 1;
+    while (index >= 0) {
+        letter = String.fromCharCode((index % 26) + 65) + letter;
+        index = Math.floor(index / 26) - 1;
     }
     return letter;
 }
 
 /**
- * Математический перевод строкового ID ячейки (например, 'A1', 'Z5', 'AA12') 
- * в единый глобальный сквозной индекс бинарного дерева (0, 1, 2...).
- * Гарантирует стопроцентную точность связей дочерних и родительских элементов.
+ * Преобразует ID ячейки (например 'AA1' или 'C3') в глобальный численный индекс
  */
 function cellIdToGlobalIndex(cellId) {
-    if (!cellId) return 0;
+    const match = cellId.match(/^([A-Z]+)(\d+)$/);
+    if (!match) return 0;
     
-    const letterPart = cellId.match(/^[A-Z]+/)[0];
-    const numberPart = parseInt(cellId.match(/\d+$/)[0], 10);
+    const letters = match[1];
+    const num = parseInt(match[2], 10);
     
-    // Вычисляем индекс уровня с поддержкой многосимвольных названий (A=0, Z=25, AA=26...)
     let levelIndex = 0;
-    for (let i = 0; i < letterPart.length; i++) {
-        levelIndex = levelIndex * 26 + (letterPart.charCodeAt(i) - 64);
+    for (let i = 0; i < letters.length; i++) {
+        levelIndex = levelIndex * 26 + (letters.charCodeAt(i) - 64);
     }
-    levelIndex--; // Переводим в 0-индексируемую систему
+    levelIndex -= 1; // Корректировка к 0-индексу
     
-    // Смещение начала текущего уровня в глобальном бинарном дереве: (2^L) - 1
-    const levelStartGlobalIndex = (1 << levelIndex) - 1;
-    
-    // Глобальный индекс = смещение уровня + позиция внутри уровня (с нуля)
-    return levelStartGlobalIndex + (numberPart - 1);
+    const levelStartGIdx = (1 << levelIndex) - 1;
+    return levelStartGIdx + (num - 1);
 }
 
 /**
- * Курс конвертации Митронов в USD.
+ * Конвертация внутренних баллов (Mitrons) в USD по курсу
  */
 function mitronsToUsd(mitrons) {
     const RATE = 130 / 1000;
@@ -48,8 +40,7 @@ function mitronsToUsd(mitrons) {
 }
 
 /**
- * Возвращает дефолтную чистую структуру карточки покупателя для базы данных маркетплейса.
- * СТРОГО ПО ТЗ: Никаких золотых или серебряных мест. Только чистая матричная структура.
+ * Создание новой базовой карточки пользователя
  */
 function createNewUserCard(username) {
     return {
@@ -62,23 +53,22 @@ function createNewUserCard(username) {
         },
         matrixPosition: {
             currentCellId: null,
-            status: 'inactive' // active / inactive
+            status: 'inactive'
         }
     };
 }
 
 /**
- * Инициализация системных контуров сейфов-кошельков распределения ликвидности.
- * СТРОГО ПО ТЗ: 450 (Администрация/Логистика) и 550 (DAO-распределение).
+ * Инициализация системных кошельков
  */
 function createInitialWallets() {
     return {
-        // Кошелек Администрации (сюда поступает 45% от активаций = 450 Митронов)
         adminWallet: {
+            name: 'Административный кошелек (Логистика / Товар)',
             balanceMitrons: 0
         },
-        // DAO смарт-контракт (сюда поступает 55% от активаций = 550 Митронов)
         daoWallet: {
+            name: 'DAO Пул (Фонд развития)',
             balanceMitrons: 0
         }
     };
