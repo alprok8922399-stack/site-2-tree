@@ -8,10 +8,11 @@
         /* === ПРЕМИАЛЬНАЯ ТЁМНАЯ ТЕМА === */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #0f0f12; /* Глубокий тёмный фон */
+            background-color: #0f0f12;
             margin: 0;
             padding: 20px;
-            color: #e3e3e8; /* Светлый текст */
+            color: #e3e3e8;
+            overflow-x: hidden;
         }
         .container {
             max-width: 1200px;
@@ -23,9 +24,9 @@
             padding-bottom: 20px;
             border-bottom: 2px solid #232329;
         }
-        h1 { margin: 0; color: #ffffff; }
-        h2 { color: #ffffff; border-left: 5px solid #3498db; padding-left: 10px; }
-        p { color: #a0a0ab; }
+        h1 { margin: 0; color: #ffffff; font-size: 24px; }
+        h2 { color: #ffffff; border-left: 5px solid #3498db; padding-left: 10px; font-size: 18px; margin-top: 0; }
+        p { color: #a0a0ab; margin: 5px 0; }
         
         .grid {
             display: grid;
@@ -34,7 +35,7 @@
             margin-bottom: 30px;
         }
         .card {
-            background: #17171c; /* Тёмные карточки блоков */
+            background: #17171c;
             padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
@@ -54,30 +55,13 @@
             padding: 11px;
             box-sizing: border-box;
             border: 1px solid #2d2d35;
-            background-color: #202026; /* Тёмные поля ввода */
+            background-color: #202026;
             color: #ffffff;
             border-radius: 6px;
         }
         input[type="text"]:focus {
             border-color: #3498db;
             outline: none;
-        }
-        
-        /* Блок управления масштабом (Зум) */
-        .zoom-controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: #202026;
-            padding: 10px 15px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-            width: fit-content;
-            border: 1px solid #2d2d35;
-        }
-        input[type="range"] {
-            cursor: pointer;
-            accent-color: #3498db;
         }
 
         button {
@@ -95,93 +79,81 @@
         .btn-danger:hover { background-color: #c0392b; }
         .btn-success { background-color: #2ecc71; }
         .btn-success:hover { background-color: #27ae60; }
-        
-        /* Окно просмотра матрицы с поддержкой прокрутки */
+
+        /* === БЛОК УПРАВЛЕНИЯ ЗУМОМ === */
+        .zoom-panel {
+            background: #1a1a1f;
+            border: 1px solid #3498db;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            width: fit-content;
+        }
+        .zoom-panel label { font-weight: bold; color: #ffffff; margin: 0; }
+        .zoom-panel input[type="range"] { cursor: pointer; accent-color: #3498db; width: 150px; }
+        .zoom-panel #zoom-value { font-weight: bold; color: #3498db; min-width: 45px; text-align: right; }
+
+        /* === ОКНО ПРОСМОТРА МАТРИЦЫ === */
         #matrix-view-container {
             background: #09090b;
-            padding: 30px;
+            padding: 15px;
             border-radius: 8px;
             overflow: auto; 
             border: 1px solid #2d2d35;
-            min-height: 400px;
-            position: relative;
-        }
-        
-        /* Контейнер-обертка для применения CSS масштабирования */
-        #matrix-zoom-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            transform-origin: top center; 
-            transition: transform 0.2s ease-out;
-            width: max-content;
-            margin: 0 auto;
-        }
-        
-        .matrix-row {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
+            min-height: 450px;
             width: 100%;
-        }
-        .matrix-cell {
-            min-width: 80px;
-            padding: 10px;
-            border-radius: 6px;
-            text-align: center;
-            font-size: 12px;
-            font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.4);
-            transition: all 0.2s ease;
-        }
-        .matrix-cell.empty { background-color: #3f3f46; color: #a1a1aa; border: 2px dashed #52525b; }
-        .matrix-cell.occupied { background-color: #1e3a1e; color: #4ade80; border: 2px solid #166534; }
-        .cell-id { font-size: 10px; opacity: 0.7; }
-
-        /* === НЕОНОВАЯ СИСТЕМА УМНОГО ФОКУСА === */
-        @keyframes neon-glow {
-            0% { box-shadow: 0 0 10px #00f0ff, inset 0 0 5px #00f0ff; border-color: #00f0ff; }
-            50% { box-shadow: 0 0 35px #00f0ff, inset 0 0 20px #00f0ff; border-color: #ffffff; transform: scale(1.15); }
-            100% { box-shadow: 0 0 10px #00f0ff, inset 0 0 5px #00f0ff; border-color: #00f0ff; }
-        }
-        .matrix-cell.search-highlight {
-            animation: neon-glow 2s infinite ease-in-out;
-            z-index: 999;
-            position: relative;
-            background-color: #003344 !important;
-            color: #00f0ff !important;
+            box-sizing: border-box;
         }
 
-        /* Профиль и 5 Золотых ячеек */
+        #matrix-zoom-wrapper {
+            transform-origin: top left;
+            transition: transform 0.1s ease-out;
+            width: max-content;
+            height: max-content;
+            display: block;
+        }
+
+        /* === СТИЛИ ДЛЯ ВЫРАВНИВАНИЯ МАТРИЦ В СТРОКУ (ДО 32 ШТ) === */
+        #mainTreeDisplay {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 20px !important;
+            align-items: flex-start !important;
+        }
+
+        /* === ЦВЕТА ЯЧЕЕК МАТРИЦЫ === */
+        .cell-top {
+            background: linear-gradient(135deg, #f39c12, #ffd700) !important;
+            color: #000000 !important;
+            font-weight: bold !important;
+            border: 1px solid #f1c40f !important;
+            box-shadow: 0 0 8px rgba(255, 215, 0, 0.4) !important;
+        }
+        .cell-middle {
+            background: linear-gradient(135deg, #0284c7, #38bdf8) !important;
+            color: #ffffff !important;
+            font-weight: bold !important;
+            border: 1px solid #7dd3fc !important;
+            box-shadow: 0 0 6px rgba(56, 189, 248, 0.3) !important;
+        }
+        .cell-bottom {
+            background: linear-gradient(135deg, #16a34a, #2ecc71) !important;
+            color: #ffffff !important;
+            font-weight: bold !important;
+            border: 1px solid #4ade80 !important;
+        }
+
+        /* Профиль */
         .profile-info p { margin: 8px 0; font-size: 16px; }
         .balance-box { font-size: 22px; font-weight: bold; color: #4ade80; margin: 15px 0; }
-        .golden-cells-list { list-style: none; padding: 0; }
-        .golden-cells-list li {
-            padding: 10px;
-            margin-bottom: 6px;
-            border-radius: 6px;
-            font-weight: bold;
-        }
-        .cell-gold-active { background-color: #453507; color: #fbbf24; border: 1px solid #78350f; }
-        .cell-gold-locked { background-color: #27272a; color: #71717a; text-decoration: line-through; border: 1px solid #3f3f46; }
 
-        /* Аналитическая таблица */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            background: #17171c;
-            border-radius: 8px;
-            overflow: hidden;
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
         }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #232329;
-        }
-        th { background-color: #202026; color: #ffffff; }
-        td { color: #e3e3e8; }
     </style>
 </head>
 <body>
@@ -228,9 +200,11 @@
             
             <div class="profile-info">
                 <p>Текущий профиль: <strong id="current-profile-user">—</strong></p>
-                <p>Позиция в глобальной матрице: <span id="profile-cell-id">—</span></p>
-                <p>Статус оплаты тарифа: <span id="profile-status">—</span></p>
+                <p>Позиция в матрице: <span id="profile-cell-id">—</span></p>
+                <p>Статус оплаты: <span id="profile-status">—</span></p>
                 
+                <div id="profile-upline-chain"></div>
+
                 <div class="balance-box">
                     Баланс: <span id="balance-mitrons">0 Mitrons</span> 
                     <span id="balance-usd" style="font-size: 14px; color: #a0a0ab;">($0.00)</span>
@@ -238,45 +212,28 @@
                 
                 <button onclick="payCertificate()" class="btn-success">Активировать пакет (1000 Mitrons / $130)</button>
             </div>
-
-            <div id="golden-cells-status" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #2d2d35;">
-                </div>
         </div>
     </div>
 
     <div class="card" style="margin-bottom: 30px;">
         <h2>4. Глобальная структура бинарной матрицы</h2>
         
-        <div class="zoom-controls">
-            <label for="matrix-zoom-slider" style="margin: 0;">Масштаб дерева:</label>
+        <div class="zoom-panel">
+            <label for="matrix-zoom-slider">Масштаб:</label>
             <input type="range" id="matrix-zoom-slider" min="0.03" max="1" step="0.01" value="1">
-            <span id="zoom-value" style="font-weight: bold; color: #3498db;">100%</span>
+            <span id="zoom-value">100%</span>
         </div>
 
         <div id="matrix-view-container">
             <div id="matrix-zoom-wrapper">
-                </div>
+                <div id="mainTreeDisplay"></div>
+            </div>
         </div>
     </div>
 
     <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>5. Реферальная аналитика и квалификации XYZ</h2>
-            <button id="refresh-table-btn">Обновить данные</button>
-        </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Участник</th>
-                    <th>Пригласитель (Спонсор)</th>
-                    <th>Глубина цепочки</th>
-                    <th>Баланс аккаунта</th>
-                    <th>Статус 5 Золотых Ячеек (XYZ)</th>
-                </tr>
-            </thead>
-            <tbody id="referals-table-body">
-                </tbody>
-        </table>
+        <h2>5. Интерактивная таблица Пользователей</h2>
+        <div id="referals-table-body"></div>
     </div>
 
     <div style="margin-top: 40px; text-align: center;">
@@ -284,7 +241,8 @@
     </div>
 </div>
 
-<script src="script.js"></script>
-<script src="table.js"></script>
+<script src="script.js?v=11"></script>
+<script src="matrix.js?v=11"></script>
+<script src="table.js?v=11"></script>
 </body>
 </html>
