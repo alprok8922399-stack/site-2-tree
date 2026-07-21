@@ -126,6 +126,13 @@ async function payCertificate() {
 
 // === 3. ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И UPLINE TRACKING ===
 
+function getProfileModalElement() {
+    return document.getElementById('profile-modal') || 
+           document.querySelector('.user-card-modal') || 
+           document.querySelector('.modal') || 
+           document.getElementById('user-card');
+}
+
 async function loadUserProfile(username) {
     if (!username || username === '—') return;
     
@@ -135,10 +142,10 @@ async function loadUserProfile(username) {
         const data = await response.json();
         
         if (data.success) {
-            // Если карточка открывается в модальном окне, показываем его
-            const modal = document.getElementById('profile-modal') || document.querySelector('.user-card-modal');
+            const modal = getProfileModalElement();
             if (modal) {
                 modal.style.display = 'block';
+                modal.classList.add('active');
             }
 
             setElementText('current-profile-user', data.username);
@@ -156,10 +163,10 @@ async function loadUserProfile(username) {
                     
                     statusEl.innerText = `Оплачен (${diffDays} дн.)`;
                     if (diffDays > 30) {
-                        statusEl.style.backgroundColor = '#d9534f'; // Красный цвет
+                        statusEl.style.backgroundColor = '#d9534f';
                         statusEl.style.color = '#ffffff';
                     } else {
-                        statusEl.style.backgroundColor = '#5cb85c'; // Зеленый цвет
+                        statusEl.style.backgroundColor = '#5cb85c';
                         statusEl.style.color = '#ffffff';
                     }
                     statusEl.style.padding = '3px 8px';
@@ -201,10 +208,8 @@ async function loadUserProfile(username) {
                         chainData.chain.forEach((uplineLogin, idx) => {
                             const node = document.createElement('span');
                             if (idx === chainData.chain.length - 1) {
-                                // Сам пользователь
                                 node.innerHTML = `<strong style="color:#2ecc71; background: #223828; padding: 2px 6px; border-radius: 4px;">${uplineLogin}</strong>`;
                             } else {
-                                // Спонсоры
                                 node.innerText = uplineLogin;
                                 node.style.cursor = 'pointer';
                                 node.style.color = '#3498db';
@@ -238,9 +243,10 @@ async function loadUserProfile(username) {
 }
 
 function closeUserProfileCard() {
-    const modal = document.getElementById('profile-modal') || document.querySelector('.user-card-modal');
+    const modal = getProfileModalElement();
     if (modal) {
         modal.style.display = 'none';
+        modal.classList.remove('active');
     }
 }
 
@@ -294,21 +300,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // === ЗАКРЫТИЕ КАРТОЧКИ ПРИ КЛИКЕ / ТАПЕ ВНЕ ЕЁ ОБЛАСТИ ===
+    // === УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ЗАКРЫТИЯ КАРТОЧКИ ПО КЛИКУ ВНЕ ЕЁ ===
     document.addEventListener('click', (e) => {
-        const modal = document.getElementById('profile-modal') || document.querySelector('.user-card-modal');
-        
-        // Проверяем, открыто ли модальное окно
-        if (modal && modal.style.display !== 'none' && modal.style.display !== '') {
-            const cardContent = modal.querySelector('.modal-content') || modal.querySelector('.user-card-content') || modal;
-            
-            // Если кликнули не внутри карточки и не по кнопке её открытия
-            const isClickInsideCard = cardContent.contains(e.target);
-            const isTriggerBtn = e.target.closest('#search-profile-btn') || e.target.closest('.dropdown-btn') || e.target.closest('.user-cell-card');
+        const modal = getProfileModalElement();
+        if (!modal) return;
 
-            if (!isClickInsideCard && !isTriggerBtn) {
+        // Если модальное окно скрыто, ничего не делаем
+        const computedStyle = window.getComputedStyle(modal);
+        if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') return;
+
+        // Определяем внутренний блок с контентом (если он есть)
+        const contentBox = modal.querySelector('.modal-content') || 
+                           modal.querySelector('.card-body') || 
+                           modal.querySelector('.user-card-content') || 
+                           modal.children[0];
+
+        // Проверяем, был ли клик по кнопкам открытия
+        const isTrigger = e.target.closest('#search-profile-btn') || 
+                          e.target.closest('.dropdown-btn') || 
+                          e.target.closest('.user-cell-card') ||
+                          e.target.closest('[onclick*="showUserCard"]') ||
+                          e.target.closest('[onclick*="viewUserCardTrigger"]');
+
+        if (isTrigger) return;
+
+        // Если клик был по самой подложке (вне внутреннего блока карточки) — закрываем
+        if (contentBox) {
+            if (!contentBox.contains(e.target)) {
                 closeUserProfileCard();
             }
+        } else if (modal === e.target) {
+            closeUserProfileCard();
         }
     });
 });
