@@ -72,6 +72,20 @@ style.innerHTML = `
     .table-nav-btn:hover {
         background: #3498db;
     }
+    .table-reset-btn {
+        background: #d35400;
+        color: #fff;
+        border: none;
+        padding: 8px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .table-reset-btn:hover {
+        background: #e67e22;
+    }
     .referral-grid-wrapper {
         display: flex !important;
         flex-direction: row !important;
@@ -248,7 +262,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
 
     container.innerHTML = '';
     
-    // Блок поиска и кнопок быстрых переходов
+    // Блок поиска и кнопок быстрой навигации
     const searchBlock = document.createElement('div');
     searchBlock.className = 'table-search-container';
     searchBlock.innerHTML = `
@@ -257,6 +271,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
         <button type="button" class="table-matrix-btn" onclick="window.showSearchedInMatrix()">Показать в матрице</button>
         <button type="button" class="table-nav-btn" onclick="window.scrollToTableStart()">⏮️ В начало</button>
         <button type="button" class="table-nav-btn" onclick="window.scrollToTableEnd()">⏭️ В конец</button>
+        <button type="button" class="table-reset-btn" onclick="window.resetTableToRoot()">🏠 К корню</button>
     `;
     container.appendChild(searchBlock);
 
@@ -285,11 +300,19 @@ function renderActiveReferralGrid(container, isBackground = false) {
     wrapper.className = 'referral-grid-wrapper';
     wrapper.id = 'referralGridWrapper';
 
-    // 1. Корневая колонка
-    const rootUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
-    renderAlignedColumn(wrapper, rootUsers, 0, null);
+    // 1. Первая колонка (Либо корень, либо стартовый узел текущего узкого среза)
+    const firstLoginInPath = activePath[0];
+    let rootColumnUsers = [];
 
-    // 2. Последующие колонки
+    if (firstLoginInPath && referralTreeData[firstLoginInPath]) {
+        rootColumnUsers = [referralTreeData[firstLoginInPath]];
+    } else {
+        rootColumnUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
+    }
+    
+    renderAlignedColumn(wrapper, rootColumnUsers, 0, null);
+
+    // 2. Последующие колонки (Отображаем только активный фокусный путь)
     for (let i = 0; i < activePath.length; i++) {
         const currentLogin = activePath[i];
         const userNode = referralTreeData[currentLogin];
@@ -432,7 +455,7 @@ function createUserCardElement(user, columnIndex) {
 }
 
 /**
- * Поиск пользователя по логину
+ * Поиск пользователя с фокусом на срез (Ограничение длины цепочки для максимальной скорости)
  */
 async function searchReferralUser(login) {
     if (!login) return;
@@ -448,8 +471,17 @@ async function searchReferralUser(login) {
 
         const result = await response.json();
         if (result.success && result.chain && result.chain.length > 0) {
-            activePath = result.chain;
-            openDropdownUser = result.chain[result.chain.length - 1];
+            const fullChain = result.chain;
+            
+            // Если цепочка длиннее 3 уровней, берем только последних 3 человек (Спонсор -> Пользователь -> Личники)
+            // Это решает проблему 7000 ячеек раз и навсегда!
+            if (fullChain.length > 3) {
+                activePath = fullChain.slice(-3);
+            } else {
+                activePath = fullChain;
+            }
+
+            openDropdownUser = fullChain[fullChain.length - 1];
             highlightedTableUser = login.trim();
 
             const targetContainer = document.getElementById('referals-table-body');
@@ -463,6 +495,24 @@ async function searchReferralUser(login) {
         setTimeout(() => { isUserInteracting = false; }, 1000);
     }
 }
+
+// Сброс таблицы к главному корню
+window.resetTableToRoot = () => {
+    const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData).find(node => !node.parentId) || Object.values(referralTreeData)[0];
+    if (rootUser) {
+        activePath = [rootUser.id];
+        openDropdownUser = null;
+        highlightedTableUser = null;
+        
+        const inp = document.getElementById('interactiveTableSearchInput');
+        if (inp) inp.value = '';
+
+        const targetContainer = document.getElementById('referals-table-body');
+        if (targetContainer) {
+            renderActiveReferralGrid(targetContainer, false);
+        }
+    }
+};
 
 // Навигационные функции (В начало / В конец)
 window.scrollToTableStart = () => {
