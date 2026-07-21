@@ -133,11 +133,12 @@ function getProfileModalElement() {
            document.getElementById('user-card');
 }
 
-async function loadUserProfile(username) {
+async function loadUserProfile(username, searchQuery = '', page = 1) {
     if (!username || username === '—') return;
     
     try {
-        const response = await fetch(`${API_URL}/api/user-details/${encodeURIComponent(username)}`);
+        const url = `${API_URL}/api/user-details/${encodeURIComponent(username)}?search=${encodeURIComponent(searchQuery)}&page=${page}`;
+        const response = await fetch(url);
         if (!response.ok) throw new Error('Пользователь не найден');
         const data = await response.json();
         
@@ -236,10 +237,92 @@ async function loadUserProfile(username) {
                     console.error('Не удалось загрузить аплайн-цепочку спонсоров:', e);
                 }
             }
+
+            // --- БЛОК СПИСКА ЛИЧНИКОВ С ПОИСКОМ И ПАГИНАЦИЕЙ ---
+            renderReferralsSection(data.username, data.referralsData, searchQuery);
         }
     } catch (error) {
         console.error('Ошибка загрузки профиля:', error);
     }
+}
+
+// Рендер секции личников внутри карточки
+function renderReferralsSection(username, refData, currentSearch) {
+    let container = document.getElementById('profile-referrals-section');
+    if (!container) {
+        const uplineContainer = document.getElementById('profile-upline-chain');
+        if (uplineContainer && uplineContainer.parentNode) {
+            container = document.createElement('div');
+            container.id = 'profile-referrals-section';
+            uplineContainer.parentNode.appendChild(container);
+        }
+    }
+
+    if (!container || !refData) return;
+    container.innerHTML = '';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'margin-top: 12px; font-size: 14px; background: #1a1a20; padding: 10px; border-radius: 6px; border: 1px solid #33333e;';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; color: #a0a0ab; font-size: 13px;';
+    header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount}</strong></span>`;
+    wrapper.appendChild(header);
+
+    // Строка поиска по личникам
+    if (refData.totalCount > 0) {
+        const searchBox = document.createElement('div');
+        searchBox.style.cssText = 'margin-bottom: 8px; display: flex; gap: 6px;';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Поиск по личникам...';
+        input.value = currentSearch;
+        input.style.cssText = 'flex: 1; padding: 5px 8px; background: #0e0e12; border: 1px solid #333; color: #fff; border-radius: 4px; font-size: 12px;';
+        
+        let timeout = null;
+        input.oninput = (e) => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                loadUserProfile(username, e.target.value, 1);
+            }, 300);
+        };
+
+        searchBox.appendChild(input);
+        wrapper.appendChild(searchBox);
+    }
+
+    // Список личников (чипсы)
+    const listDiv = document.createElement('div');
+    listDiv.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-height: 150px; overflow-y: auto; padding: 4px;';
+
+    if (refData.list && refData.list.length > 0) {
+        refData.list.forEach(refUser => {
+            const chip = document.createElement('span');
+            chip.innerText = refUser;
+            chip.style.cssText = 'background: #252530; color: #3498db; padding: 3px 8px; border-radius: 4px; font-weight: bold; cursor: pointer; text-decoration: underline; font-size: 12px;';
+            chip.onclick = () => loadUserProfile(refUser);
+            listDiv.appendChild(chip);
+        });
+    } else {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.cssText = 'color: #777; font-size: 12px; padding: 4px 0;';
+        emptyMsg.innerText = currentSearch ? 'Никого не найдено' : 'Нет личных приглашений';
+        listDiv.appendChild(emptyMsg);
+    }
+
+    wrapper.appendChild(listDiv);
+
+    // Кнопка "Загрузить ещё"
+    if (refData.hasMore) {
+        const moreBtn = document.createElement('button');
+        moreBtn.innerText = 'Показать ещё...';
+        moreBtn.style.cssText = 'margin-top: 8px; width: 100%; padding: 6px; background: #2a2a36; border: 1px solid #444; color: #3498db; border-radius: 4px; cursor: pointer; font-size: 12px;';
+        moreBtn.onclick = () => loadUserProfile(username, currentSearch, refData.currentPage + 1);
+        wrapper.appendChild(moreBtn);
+    }
+
+    container.appendChild(wrapper);
 }
 
 function closeUserProfileCard() {
