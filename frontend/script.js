@@ -181,18 +181,30 @@ async function loadUserProfile(username) {
                     const chainData = await chainRes.json();
                     
                     if (chainData.success && chainData.chain && chainData.chain.length > 0) {
+                        const wrapper = document.createElement('div');
+                        wrapper.style.cssText = 'margin-top: 12px; font-size: 14px; background: #1a1a20; padding: 10px; border-radius: 6px; border: 1px solid #33333e;';
+                        
+                        const title = document.createElement('div');
+                        title.style.cssText = 'font-weight: bold; color: #a0a0ab; margin-bottom: 6px; font-size: 13px;';
+                        title.innerText = 'Кто пригласил (Цепочка спонсоров):';
+                        wrapper.appendChild(title);
+
                         const traceDiv = document.createElement('div');
-                        traceDiv.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:10px; font-size:13px; background:#222222; padding:8px; border-radius:4px; border:1px dashed #444444;';
+                        traceDiv.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; align-items:center;';
                         
                         chainData.chain.forEach((uplineLogin, idx) => {
                             const node = document.createElement('span');
-                            if (idx === 0) {
-                                node.innerHTML = `<strong style="color:#4CAF50;">${uplineLogin}</strong>`;
+                            if (idx === chainData.chain.length - 1) {
+                                // Сам пользователь
+                                node.innerHTML = `<strong style="color:#2ecc71; background: #223828; padding: 2px 6px; border-radius: 4px;">${uplineLogin}</strong>`;
                             } else {
+                                // Спонсоры
                                 node.innerText = uplineLogin;
                                 node.style.cursor = 'pointer';
-                                node.style.color = '#888888';
+                                node.style.color = '#3498db';
+                                node.style.fontWeight = 'bold';
                                 node.style.textDecoration = 'underline';
+                                node.title = 'Перейти к профилю спонсора';
                                 node.onclick = () => loadUserProfile(uplineLogin);
                             }
                             traceDiv.appendChild(node);
@@ -200,11 +212,14 @@ async function loadUserProfile(username) {
                             if (idx < chainData.chain.length - 1) {
                                 const arrow = document.createElement('span');
                                 arrow.innerText = ' ➔ ';
-                                arrow.style.color = '#555555';
+                                arrow.style.color = '#666666';
+                                arrow.style.fontWeight = 'bold';
                                 traceDiv.appendChild(arrow);
                             }
                         });
-                        uplineContainer.appendChild(traceDiv);
+                        
+                        wrapper.appendChild(traceDiv);
+                        uplineContainer.appendChild(wrapper);
                     }
                 } catch (e) {
                     console.error('Не удалось загрузить аплайн-цепочку спонсоров:', e);
