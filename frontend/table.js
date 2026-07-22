@@ -242,7 +242,7 @@ async function loadReferalsTable(isBackground = false) {
 }
 
 /**
- * Отрисовка интерактивной таблицы
+ * Отрисовка интерактивной таблицы с УЗКИМ СРЕЗОМ
  */
 function renderActiveReferralGrid(container, isBackground = false) {
     const oldInput = document.getElementById('interactiveTableSearchInput');
@@ -300,26 +300,25 @@ function renderActiveReferralGrid(container, isBackground = false) {
     wrapper.className = 'referral-grid-wrapper';
     wrapper.id = 'referralGridWrapper';
 
-    // 1. Первая колонка (Либо корень, либо стартовый узел текущего узкого среза)
-    const firstLoginInPath = activePath[0];
-    let rootColumnUsers = [];
+    // РЕНДЕР СРЕЗА: Рендерим колонки строго по активному пути activePath
+    if (activePath.length > 0) {
+        // Первая колонка среза — это первый элемент в activePath
+        const startId = activePath[0];
+        const startUser = referralTreeData[startId];
 
-    if (firstLoginInPath && referralTreeData[firstLoginInPath]) {
-        rootColumnUsers = [referralTreeData[firstLoginInPath]];
-    } else {
-        rootColumnUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
-    }
-    
-    renderAlignedColumn(wrapper, rootColumnUsers, 0, null);
+        if (startUser) {
+            renderAlignedColumn(wrapper, [startUser], 0, null);
+        }
 
-    // 2. Последующие колонки (Отображаем только активный фокусный путь)
-    for (let i = 0; i < activePath.length; i++) {
-        const currentLogin = activePath[i];
-        const userNode = referralTreeData[currentLogin];
+        // Каждая последующая колонка рендерит ДЕТЕЙ предыдущего выбранного пользователя из activePath
+        for (let i = 0; i < activePath.length; i++) {
+            const currentLogin = activePath[i];
+            const userNode = referralTreeData[currentLogin];
 
-        if (userNode && userNode.children && userNode.children.length > 0) {
-            const childrenNodes = userNode.children.map(childLogin => referralTreeData[childLogin]).filter(Boolean);
-            renderAlignedColumn(wrapper, childrenNodes, i + 1, userNode);
+            if (userNode && userNode.children && userNode.children.length > 0) {
+                const childrenNodes = userNode.children.map(childLogin => referralTreeData[childLogin]).filter(Boolean);
+                renderAlignedColumn(wrapper, childrenNodes, i + 1, userNode);
+            }
         }
     }
 
@@ -455,7 +454,7 @@ function createUserCardElement(user, columnIndex) {
 }
 
 /**
- * Поиск пользователя с фокусом на срез (Ограничение длины цепочки для максимальной скорости)
+ * ПОИСК С УЗКИМ СРЕЗОМ: берет только последних 3 человек из цепочки!
  */
 async function searchReferralUser(login) {
     if (!login) return;
@@ -473,8 +472,7 @@ async function searchReferralUser(login) {
         if (result.success && result.chain && result.chain.length > 0) {
             const fullChain = result.chain;
             
-            // Если цепочка длиннее 3 уровней, берем только последних 3 человек (Спонсор -> Пользователь -> Личники)
-            // Это решает проблему 7000 ячеек раз и навсегда!
+            // БЕРЕМ СРЕЗ: Ровно последних 3 человека (Спонсор -> Пользователь -> Дети)
             if (fullChain.length > 3) {
                 activePath = fullChain.slice(-3);
             } else {
