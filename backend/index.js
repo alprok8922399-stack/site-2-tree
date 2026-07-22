@@ -29,6 +29,26 @@ let referalsDB = {
 
 let lastRegisteredBot = null;
 
+// Функция для нахождения точного имени спонсора
+function resolveSponsor(inputSponsor) {
+    if (!inputSponsor || !inputSponsor.trim()) {
+        // Если спонсор не указан, отдаем приоритет LEADER_1 и LEADER_2
+        const l1 = Object.keys(referalsDB).find(k => k.toLowerCase() === 'leader_1');
+        const l2 = Object.keys(referalsDB).find(k => k.toLowerCase() === 'leader_2');
+        
+        // Подсчитаем их текущих личников
+        const l1Count = Object.values(referalsDB).filter(s => s === (l1 || 'LEADER_1')).length;
+        const l2Count = Object.values(referalsDB).filter(s => s === (l2 || 'LEADER_2')).length;
+
+        if (l1Count <= l2Count) return l1 || 'LEADER_1';
+        return l2 || 'LEADER_2';
+    }
+
+    const trimmed = inputSponsor.trim();
+    const exist = Object.keys(referalsDB).find(k => k.toLowerCase() === trimmed.toLowerCase());
+    return exist || trimmed;
+}
+
 // Стартовое состояние активных матриц
 function createInitialTree() {
     return {
@@ -85,7 +105,6 @@ function findNextEmptyCell(tree) {
 
 /**
  * Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек.
- * При делении матрицы верхний логин получает право на 100% Кешбэк (1000 M).
  */
 function checkAndSplitMatrix(cellId) {
     const gIdx = cellIdToGlobalIndex(cellId);
@@ -122,7 +141,6 @@ function checkAndSplitMatrix(cellId) {
             if (!shopUsersDB[topCell.user]) {
                 shopUsersDB[topCell.user] = createNewUserCard(topCell.user);
             }
-            // Включение индикатора кешбэка при делении
             shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
             shopUsersDB[topCell.user].cashbackAvailable = true;
             shopUsersDB[topCell.user].cashbackAmount = 1000;
@@ -148,15 +166,7 @@ app.post('/api/register', (req, res) => {
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
     
     const trimmedUser = username.trim();
-    
-    let canonicalSponsor = sponsor ? sponsor.trim() : null;
-    if (canonicalSponsor) {
-        const existSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === canonicalSponsor.toLowerCase());
-        canonicalSponsor = existSponsor || canonicalSponsor;
-    } else {
-        const allUsers = Object.keys(referalsDB);
-        canonicalSponsor = allUsers[Math.floor(Math.random() * allUsers.length)] || 'SYSTEM_ROOT';
-    }
+    const canonicalSponsor = resolveSponsor(sponsor);
     
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
     if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
@@ -334,14 +344,7 @@ app.post('/api/shop/register', (req, res) => {
     
     shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
     
-    let chosenSponsor = sponsor ? sponsor.trim() : null;
-    if (chosenSponsor) {
-        const existSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === chosenSponsor.toLowerCase());
-        chosenSponsor = existSponsor || chosenSponsor;
-    } else {
-        const availableSponsors = Object.keys(referalsDB);
-        chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
-    }
+    const chosenSponsor = resolveSponsor(sponsor);
 
     referalsDB[trimmedUser] = chosenSponsor;
     lastRegisteredBot = trimmedUser; 
@@ -375,11 +378,7 @@ app.post('/api/shop/pay', (req, res) => {
         shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
     }
 
-    let chosenSponsor = sponsor ? sponsor.trim() : (referalsDB[canonicalName] || 'SYSTEM_ROOT');
-    if (chosenSponsor) {
-        const existSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === chosenSponsor.toLowerCase());
-        chosenSponsor = existSponsor || chosenSponsor;
-    }
+    const chosenSponsor = resolveSponsor(sponsor);
 
     referalsDB[canonicalName] = chosenSponsor;
 
