@@ -83,7 +83,10 @@ function findNextEmptyCell(tree) {
     }
 }
 
-// Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек
+/**
+ * Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек.
+ * При делении матрицы верхний логин получает право на 100% Кешбэк (1000 M).
+ */
 function checkAndSplitMatrix(cellId) {
     const gIdx = cellIdToGlobalIndex(cellId);
     const parentGIdx = Math.floor((gIdx - 1) / 2);
@@ -116,9 +119,13 @@ function checkAndSplitMatrix(cellId) {
         const b2Cell = getCellByGIdx(b2G);
 
         if (topCell && topCell.user) {
-            if (shopUsersDB[topCell.user]) {
-                shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
+            if (!shopUsersDB[topCell.user]) {
+                shopUsersDB[topCell.user] = createNewUserCard(topCell.user);
             }
+            // Включение индикатора кешбэка при делении
+            shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
+            shopUsersDB[topCell.user].cashbackAvailable = true;
+            shopUsersDB[topCell.user].cashbackAmount = 1000;
         }
 
         activeMatricesList = activeMatricesList.filter(id => id !== topCell.id);
@@ -142,7 +149,6 @@ app.post('/api/register', (req, res) => {
     
     const trimmedUser = username.trim();
     
-    // Рандомный выбор спонсора, если не указан явно
     let canonicalSponsor = sponsor ? sponsor.trim() : null;
     if (!canonicalSponsor) {
         const allUsers = Object.keys(referalsDB);
@@ -212,23 +218,19 @@ app.get('/api/user-details/:username', (req, res) => {
         }
     }
 
-    // === ОПТИМИЗИРОВАННАЯ ВЫДАЧА ЛИЧНИКОВ (ДЛЯ 10 000+ ЧЕЛОВЕК) ===
     const searchQuery = (req.query.search || '').trim().toLowerCase();
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 30; // Порция по 30 человек
+    const limit = parseInt(req.query.limit) || 30;
 
-    // Находим всех личников данного пользователя
     const allReferrals = Object.keys(referalsDB).filter(user => {
         const parent = referalsDB[user];
         return parent && parent.toLowerCase() === canonicalName.toLowerCase();
     });
 
-    // Фильтрация по поисковому запросу (если передан search)
     const filteredReferrals = searchQuery
         ? allReferrals.filter(ref => ref.toLowerCase().includes(searchQuery))
         : allReferrals;
 
-    // Пагинация (вырезаем нужную страницу)
     const startIndex = (page - 1) * limit;
     const paginatedReferrals = filteredReferrals.slice(startIndex, startIndex + limit);
 
@@ -240,11 +242,11 @@ app.get('/api/user-details/:username', (req, res) => {
         chain: sponsorChain,
         profile: shopUsersDB[canonicalName],
         referralsData: {
-            totalCount: allReferrals.length,       // Всего личников
-            filteredCount: filteredReferrals.length, // Найдено по фильтру
+            totalCount: allReferrals.length,
+            filteredCount: filteredReferrals.length,
             currentPage: page,
             hasMore: startIndex + limit < filteredReferrals.length,
-            list: paginatedReferrals               // Отдаем порцией по 30
+            list: paginatedReferrals
         }
     });
 });
@@ -349,29 +351,53 @@ app.post('/api/shop/register', (req, res) => {
     res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser], cellId });
 });
 
+/**
+ * Оплата заказа на 1000 M с финансовым сплитом и 31-дневным таймером
+ */
 app.post('/api/shop/pay', (req, res) => {
-    const { username } = req.body;
+    const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase());
     if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
 
+    // Точная финансовая математика
     const TOTAL_MITRONS = 1000;
-    const ADMIN_LOGISTICS = 450; 
-    const DAO_POOL = 550;        
+    const SUPPLIER_COST = 450;     // Поставщик (45%)
+    const MATRIX_RESERVE = 250;    // Матрица (25%)
+    const REFERRAL_RESERVE = 70;   // Резерв 50/10/10 M на 31 день
+    const ADMIN_PROFIT = 230;      // Чистый доход админа (23%)
 
     if (!shopUsersDB[canonicalName]) {
         shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
     }
 
+    let chosenSponsor = sponsor ? sponsor.trim() : (referalsDB[canonicalName] || 'SYSTEM_ROOT');
+    referalsDB[canonicalName] = chosenSponsor;
+
+    const now = new Date();
+    const releaseDate = new Date(now.getTime() + (31 * 24 * 60 * 60 * 1000)); // +31 день
+
     shopUsersDB[canonicalName].isPaid = true;
-    shopUsersDB[canonicalName].paymentDate = new Date().toISOString();
+    shopUsersDB[canonicalName].paymentDate = now.toISOString();
     shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
     shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
 
-    wallets.adminWallet.balanceMitrons += ADMIN_LOGISTICS;
-    wallets.daoWallet.balanceMitrons += DAO_POOL;
+    // Начисление средств на системные кошельки
+    wallets.adminWallet.balanceMitrons += ADMIN_PROFIT;
+    wallets.daoWallet.balanceMitrons += MATRIX_RESERVE;
+
+    // Резервация реферальных выплат на 31 день
+    if (!wallets.referralHold) wallets.referralHold = [];
+    wallets.referralHold.push({
+        buyer: canonicalName,
+        sponsor: chosenSponsor,
+        totalHold: REFERRAL_RESERVE, // 70 M (50M, 10M, 10M)
+        createdAt: now.toISOString(),
+        unlockAt: releaseDate.toISOString(),
+        status: 'pending_31_days'
+    });
 
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = canonicalName;
@@ -387,8 +413,12 @@ app.post('/api/shop/pay', (req, res) => {
         cellId,
         split: {
             totalMitrons: TOTAL_MITRONS,
-            adminLogistics: ADMIN_LOGISTICS,
-            daoPool: DAO_POOL
+            supplierCost: SUPPLIER_COST,
+            matrixReserve: MATRIX_RESERVE,
+            referralReserve: REFERRAL_RESERVE,
+            adminProfit: ADMIN_PROFIT,
+            holdDays: 31,
+            unlockAt: releaseDate.toISOString()
         }
     });
 });
