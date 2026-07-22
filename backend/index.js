@@ -150,7 +150,10 @@ app.post('/api/register', (req, res) => {
     const trimmedUser = username.trim();
     
     let canonicalSponsor = sponsor ? sponsor.trim() : null;
-    if (!canonicalSponsor) {
+    if (canonicalSponsor) {
+        const existSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === canonicalSponsor.toLowerCase());
+        canonicalSponsor = existSponsor || canonicalSponsor;
+    } else {
         const allUsers = Object.keys(referalsDB);
         canonicalSponsor = allUsers[Math.floor(Math.random() * allUsers.length)] || 'SYSTEM_ROOT';
     }
@@ -332,7 +335,10 @@ app.post('/api/shop/register', (req, res) => {
     shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
     
     let chosenSponsor = sponsor ? sponsor.trim() : null;
-    if (!chosenSponsor) {
+    if (chosenSponsor) {
+        const existSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === chosenSponsor.toLowerCase());
+        chosenSponsor = existSponsor || chosenSponsor;
+    } else {
         const availableSponsors = Object.keys(referalsDB);
         chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
     }
@@ -351,9 +357,6 @@ app.post('/api/shop/register', (req, res) => {
     res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser], cellId });
 });
 
-/**
- * Оплата заказа на 1000 M с финансовым сплитом и 31-дневным таймером
- */
 app.post('/api/shop/pay', (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -362,38 +365,40 @@ app.post('/api/shop/pay', (req, res) => {
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase());
     if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
 
-    // Точная финансовая математика
     const TOTAL_MITRONS = 1000;
-    const SUPPLIER_COST = 450;     // Поставщик (45%)
-    const MATRIX_RESERVE = 250;    // Матрица (25%)
-    const REFERRAL_RESERVE = 70;   // Резерв 50/10/10 M на 31 день
-    const ADMIN_PROFIT = 230;      // Чистый доход админа (23%)
+    const SUPPLIER_COST = 450;
+    const MATRIX_RESERVE = 250;
+    const REFERRAL_RESERVE = 70;
+    const ADMIN_PROFIT = 230;
 
     if (!shopUsersDB[canonicalName]) {
         shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
     }
 
     let chosenSponsor = sponsor ? sponsor.trim() : (referalsDB[canonicalName] || 'SYSTEM_ROOT');
+    if (chosenSponsor) {
+        const existSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === chosenSponsor.toLowerCase());
+        chosenSponsor = existSponsor || chosenSponsor;
+    }
+
     referalsDB[canonicalName] = chosenSponsor;
 
     const now = new Date();
-    const releaseDate = new Date(now.getTime() + (31 * 24 * 60 * 60 * 1000)); // +31 день
+    const releaseDate = new Date(now.getTime() + (31 * 24 * 60 * 60 * 1000));
 
     shopUsersDB[canonicalName].isPaid = true;
     shopUsersDB[canonicalName].paymentDate = now.toISOString();
     shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
     shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
 
-    // Начисление средств на системные кошельки
     wallets.adminWallet.balanceMitrons += ADMIN_PROFIT;
     wallets.daoWallet.balanceMitrons += MATRIX_RESERVE;
 
-    // Резервация реферальных выплат на 31 день
     if (!wallets.referralHold) wallets.referralHold = [];
     wallets.referralHold.push({
         buyer: canonicalName,
         sponsor: chosenSponsor,
-        totalHold: REFERRAL_RESERVE, // 70 M (50M, 10M, 10M)
+        totalHold: REFERRAL_RESERVE,
         createdAt: now.toISOString(),
         unlockAt: releaseDate.toISOString(),
         status: 'pending_31_days'
