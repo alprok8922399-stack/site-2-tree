@@ -399,6 +399,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // === АВТООБНОВЛЕНИЕ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ И МАТРИЦ (КАЖДЫЕ 3 СЕКУНДЫ) ===
+    setInterval(() => {
+        if (typeof window.refreshReferralTable === 'function') {
+            window.refreshReferralTable();
+        }
+        if (typeof window.renderMatrixTree === 'function') {
+            window.renderMatrixTree();
+        }
+    }, 3000);
+
     // === УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ЗАКРЫТИЯ КАРТОЧКИ ПО КЛИКУ ВНЕ ЕЁ ===
     document.addEventListener('click', (e) => {
         const modal = getProfileModalElement();
