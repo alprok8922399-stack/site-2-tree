@@ -7,6 +7,16 @@ let lastTreeJsonString = "";
 let isUserInteracting = false;
 let highlightedTableUser = null;
 
+// Вспомогательная функция для поиска узла без учета регистра букв
+function getUserNode(login) {
+    if (!login || !referralTreeData) return null;
+    if (referralTreeData[login]) return referralTreeData[login];
+    
+    const lower = login.trim().toLowerCase();
+    const foundKey = Object.keys(referralTreeData).find(k => k.toLowerCase() === lower);
+    return foundKey ? referralTreeData[foundKey] : null;
+}
+
 // Динамические стили
 const style = document.createElement('style');
 style.innerHTML = `
@@ -224,7 +234,7 @@ async function loadReferalsTable(isBackground = false) {
         referralTreeData = result.tree;
 
         // Определяем корень таблицы (SYSTEM_ROOT)
-        const rootKey = referralTreeData['SYSTEM_ROOT'] ? 'SYSTEM_ROOT' : Object.keys(referralTreeData)[0];
+        const rootKey = getUserNode('SYSTEM_ROOT')?.login || Object.keys(referralTreeData)[0];
 
         if (activePath.length === 0 && rootKey) {
             activePath = [rootKey];
@@ -284,18 +294,18 @@ function renderActiveReferralGrid(container, isBackground = false) {
 
     // 1. Корень (Самая первая колонка слева)
     const rootKey = activePath[0] || 'SYSTEM_ROOT';
-    const rootUserNode = referralTreeData[rootKey] || { login: rootKey, children: [] };
+    const rootUserNode = getUserNode(rootKey) || { login: rootKey, children: [] };
     renderAlignedColumn(wrapper, [rootUserNode], 0, null);
 
     // 2. Последующие колонки по пути кликов (activePath)
     for (let i = 0; i < activePath.length; i++) {
         const currentLogin = activePath[i];
-        const userNode = referralTreeData[currentLogin];
+        const userNode = getUserNode(currentLogin);
 
         if (userNode && userNode.children && userNode.children.length > 0) {
-            // Подтягиваем детей по их ЛОГИНАМ
+            // Подтягиваем детей по их ЛОГИНАМ без чувствительности к регистру
             const childrenNodes = userNode.children.map(childLogin => {
-                return referralTreeData[childLogin] || { login: childLogin, children: [] };
+                return getUserNode(childLogin) || { login: childLogin, children: [] };
             });
             renderAlignedColumn(wrapper, childrenNodes, i + 1, userNode);
         }
@@ -342,9 +352,9 @@ function createUserCardElement(user, columnIndex) {
     card.className = 'user-cell-card';
     card.id = `table-user-${userLogin}`;
     
-    const isAlreadyActive = activePath[columnIndex] === userLogin;
+    const isAlreadyActive = activePath.some(p => p.toLowerCase() === userLogin.toLowerCase());
 
-    if (activePath.includes(userLogin)) {
+    if (isAlreadyActive) {
         card.classList.add('active-link');
     }
 
@@ -370,7 +380,7 @@ function createUserCardElement(user, columnIndex) {
 
     card.appendChild(mainRow);
 
-    if (openDropdownUser === userLogin) {
+    if (openDropdownUser && openDropdownUser.toLowerCase() === userLogin.toLowerCase()) {
         const dropdown = document.createElement('div');
         dropdown.className = 'user-dropdown-menu';
         dropdown.onclick = (e) => e.stopPropagation(); 
@@ -395,7 +405,7 @@ function createUserCardElement(user, columnIndex) {
             activePath = activePath.slice(0, columnIndex);
             activePath.push(userLogin);
 
-            if (openDropdownUser === userLogin) {
+            if (openDropdownUser && openDropdownUser.toLowerCase() === userLogin.toLowerCase()) {
                 openDropdownUser = null; 
             } else {
                 openDropdownUser = userLogin; 
@@ -448,7 +458,7 @@ async function searchReferralUser(login) {
 
 // Сброс
 window.resetTableToRoot = () => {
-    const rootKey = referralTreeData['SYSTEM_ROOT'] ? 'SYSTEM_ROOT' : Object.keys(referralTreeData)[0];
+    const rootKey = getUserNode('SYSTEM_ROOT')?.login || Object.keys(referralTreeData)[0];
     if (rootKey) {
         activePath = [rootKey];
         openDropdownUser = null;
