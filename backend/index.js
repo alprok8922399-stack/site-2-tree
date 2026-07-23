@@ -20,6 +20,11 @@ app.use(express.static('../frontend'));
 let shopUsersDB = {};
 let wallets = createInitialWallets();
 
+// Состояние и логи генератора (робота)
+let robotRunning = false;
+let robotLogs = ["Ожидание запуска робота..."];
+let robotTimer = null;
+
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
     'SYSTEM_ROOT': null,
@@ -181,7 +186,63 @@ function checkAndSplitMatrix(cellId) {
     }
 }
 
+// Вспомогательная логика автогенерации робота
+function addRobotLog(text) {
+    robotLogs.push(text);
+    if (robotLogs.length > 200) robotLogs.shift();
+}
+
+function processAutoBotStep() {
+    if (!robotRunning) return;
+    const randId = Math.floor(1000 + Math.random() * 9000);
+    const botName = `Bot_${randId}`;
+    
+    const cellId = findNextEmptyCell(treeDB);
+    treeDB[cellId].user = botName;
+    referalsDB[botName] = resolveSponsor(null);
+    
+    shopUsersDB[botName] = createNewUserCard(botName);
+    shopUsersDB[botName].isPaid = true;
+    shopUsersDB[botName].matrixPosition.currentCellId = cellId;
+    shopUsersDB[botName].matrixPosition.status = 'active';
+
+    checkAndSplitMatrix(cellId);
+    addRobotLog(`🤖 Автобот ${botName} активирован и встал в ячейку ${cellId}`);
+}
+
 // ================= API =================
+
+// Управление роботом
+app.get('/api/robot/status', (req, res) => {
+    res.json({ running: robotRunning });
+});
+
+app.get('/api/robot/logs', (req, res) => {
+    res.json({ logs: robotLogs });
+});
+
+app.post('/api/robot/start', (req, res) => {
+    if (!robotRunning) {
+        robotRunning = true;
+        addRobotLog("🟢 Робот успешно запущен сервером.");
+        if (!robotTimer) {
+            robotTimer = setInterval(processAutoBotStep, 2500);
+        }
+    }
+    res.json({ success: true, running: robotRunning });
+});
+
+app.post('/api/robot/stop', (req, res) => {
+    if (robotRunning) {
+        robotRunning = false;
+        if (robotTimer) {
+            clearInterval(robotTimer);
+            robotTimer = null;
+        }
+        addRobotLog("🔴 Робот остановлен по команде.");
+    }
+    res.json({ success: true, running: robotRunning });
+});
 
 app.get('/api/tree', (req, res) => {
     res.json({
@@ -228,6 +289,12 @@ app.post('/api/reset', (req, res) => {
         'LEADER_2': 'SYSTEM_ROOT'
     };
     lastRegisteredBot = null;
+    robotRunning = false;
+    if (robotTimer) {
+        clearInterval(robotTimer);
+        robotTimer = null;
+    }
+    robotLogs = ["Логи очищены сервером."];
     res.json({ success: true });
 });
 
@@ -379,6 +446,7 @@ app.post('/api/shop/register', (req, res) => {
     shopUsersDB[shopKey].matrixPosition.status = 'active';
     
     checkAndSplitMatrix(cellId);
+    addRobotLog(`Регистрация: ${trimmedUser} (спонсор: ${chosenSponsor}) -> ячейка ${cellId}`);
     res.json({ success: true, shopUserStatus: shopUsersDB[shopKey], cellId });
 });
 
@@ -434,6 +502,7 @@ app.post('/api/shop/pay', (req, res) => {
     shopUsersDB[canonicalName].matrixPosition.status = 'active';
 
     checkAndSplitMatrix(cellId);
+    addRobotLog(`💰 Оплата: ${canonicalName} -> место ${cellId}`);
 
     res.json({
         success: true,
