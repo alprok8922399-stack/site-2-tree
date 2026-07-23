@@ -29,16 +29,27 @@ let referalsDB = {
 
 let lastRegisteredBot = null;
 
-// Функция для нахождения точного имени спонсора
+// === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ РЕГИСТРОНЕЗАВИСИМОГО ПОИСКА ===
+
+function getCanonicalRefKey(username) {
+    if (!username) return null;
+    const trimmed = username.trim();
+    return Object.keys(referalsDB).find(k => k.toLowerCase() === trimmed.toLowerCase()) || trimmed;
+}
+
+function getSponsorOf(username) {
+    const canonical = getCanonicalRefKey(username);
+    if (!canonical || !referalsDB[canonical]) return null;
+    return referalsDB[canonical];
+}
+
 function resolveSponsor(inputSponsor) {
     if (!inputSponsor || !inputSponsor.trim()) {
-        // Если спонсор не указан, отдаем приоритет LEADER_1 и LEADER_2
         const l1 = Object.keys(referalsDB).find(k => k.toLowerCase() === 'leader_1');
         const l2 = Object.keys(referalsDB).find(k => k.toLowerCase() === 'leader_2');
         
-        // Подсчитаем их текущих личников
-        const l1Count = Object.values(referalsDB).filter(s => s === (l1 || 'LEADER_1')).length;
-        const l2Count = Object.values(referalsDB).filter(s => s === (l2 || 'LEADER_2')).length;
+        const l1Count = Object.values(referalsDB).filter(s => s && s.toLowerCase() === (l1 || 'leader_1').toLowerCase()).length;
+        const l2Count = Object.values(referalsDB).filter(s => s && s.toLowerCase() === (l2 || 'leader_2').toLowerCase()).length;
 
         if (l1Count <= l2Count) return l1 || 'LEADER_1';
         return l2 || 'LEADER_2';
@@ -47,6 +58,21 @@ function resolveSponsor(inputSponsor) {
     const trimmed = inputSponsor.trim();
     const exist = Object.keys(referalsDB).find(k => k.toLowerCase() === trimmed.toLowerCase());
     return exist || trimmed;
+}
+
+function getCalculatedLevel(username) {
+    let level = 1;
+    let current = username;
+    let visited = new Set();
+    
+    while (current && current.toUpperCase() !== 'SYSTEM_ROOT' && !visited.has(current.toLowerCase())) {
+        visited.add(current.toLowerCase());
+        let sponsor = getSponsorOf(current);
+        if (!sponsor) break;
+        current = sponsor;
+        level++;
+    }
+    return level;
 }
 
 // Стартовое состояние активных матриц
@@ -138,15 +164,18 @@ function checkAndSplitMatrix(cellId) {
         const b2Cell = getCellByGIdx(b2G);
 
         if (topCell && topCell.user) {
-            if (!shopUsersDB[topCell.user]) {
-                shopUsersDB[topCell.user] = createNewUserCard(topCell.user);
+            const topUserKey = Object.keys(shopUsersDB).find(k => k.toLowerCase() === topCell.user.toLowerCase()) || topCell.user;
+            if (!shopUsersDB[topUserKey]) {
+                shopUsersDB[topUserKey] = createNewUserCard(topUserKey);
             }
-            shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
-            shopUsersDB[topCell.user].cashbackAvailable = true;
-            shopUsersDB[topCell.user].cashbackAmount = 1000;
+            shopUsersDB[topUserKey].matrixPosition.status = 'payout_pending';
+            shopUsersDB[topUserKey].cashbackAvailable = true;
+            shopUsersDB[topUserKey].cashbackAmount = 1000;
         }
 
-        activeMatricesList = activeMatricesList.filter(id => id !== topCell.id);
+        if (topCell && topCell.id) {
+            activeMatricesList = activeMatricesList.filter(id => id !== topCell.id);
+        }
         if (b1Cell && b1Cell.id) activeMatricesList.push(b1Cell.id);
         if (b2Cell && b2Cell.id) activeMatricesList.push(b2Cell.id);
     }
@@ -176,12 +205,13 @@ app.post('/api/register', (req, res) => {
     
     referalsDB[trimmedUser] = canonicalSponsor;
     
-    if (!shopUsersDB[trimmedUser]) {
-        shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
-        shopUsersDB[trimmedUser].isPaid = true;
-        shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
-        shopUsersDB[trimmedUser].matrixPosition.status = 'active';
+    const shopKey = Object.keys(shopUsersDB).find(k => k.toLowerCase() === trimmedUser.toLowerCase()) || trimmedUser;
+    if (!shopUsersDB[shopKey]) {
+        shopUsersDB[shopKey] = createNewUserCard(trimmedUser);
     }
+    shopUsersDB[shopKey].isPaid = true;
+    shopUsersDB[shopKey].matrixPosition.currentCellId = cellId;
+    shopUsersDB[shopKey].matrixPosition.status = 'active';
     
     checkAndSplitMatrix(cellId);
     res.json({ success: true, cellId, user: trimmedUser });
@@ -212,23 +242,24 @@ app.get('/api/user-details/:username', (req, res) => {
         .map(cell => cell.id);
         
     let sponsorChain = [];
-    let currentSponsor = referalsDB[canonicalName] || 'SYSTEM_ROOT';
+    let currentSponsor = getSponsorOf(canonicalName) || 'SYSTEM_ROOT';
     let visited = new Set();
     
-    while (currentSponsor && !visited.has(currentSponsor)) {
-        visited.add(currentSponsor);
+    while (currentSponsor && !visited.has(currentSponsor.toLowerCase())) {
+        visited.add(currentSponsor.toLowerCase());
         sponsorChain.push(currentSponsor);
-        const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === currentSponsor.toLowerCase());
-        currentSponsor = nextSponsorKey ? referalsDB[nextSponsorKey] : null;
+        currentSponsor = getSponsorOf(currentSponsor);
     }
     
-    if (!shopUsersDB[canonicalName]) {
+    let shopKey = Object.keys(shopUsersDB).find(k => k.toLowerCase() === canonicalName.toLowerCase());
+    if (!shopKey) {
         shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
-        if (userCells.length > 0) {
-            shopUsersDB[canonicalName].isPaid = true;
-            shopUsersDB[canonicalName].matrixPosition.currentCellId = userCells[0];
-            shopUsersDB[canonicalName].matrixPosition.status = 'active';
-        }
+        shopKey = canonicalName;
+    }
+    if (userCells.length > 0) {
+        shopUsersDB[shopKey].isPaid = true;
+        shopUsersDB[shopKey].matrixPosition.currentCellId = userCells[0];
+        shopUsersDB[shopKey].matrixPosition.status = 'active';
     }
 
     const searchQuery = (req.query.search || '').trim().toLowerCase();
@@ -251,9 +282,9 @@ app.get('/api/user-details/:username', (req, res) => {
         success: true,
         username: canonicalName,
         cells: userCells,
-        sponsor: referalsDB[canonicalName] || 'SYSTEM_ROOT',
+        sponsor: getSponsorOf(canonicalName) || 'SYSTEM_ROOT',
         chain: sponsorChain,
-        profile: shopUsersDB[canonicalName],
+        profile: shopUsersDB[shopKey],
         referralsData: {
             totalCount: allReferrals.length,
             filteredCount: filteredReferrals.length,
@@ -278,23 +309,11 @@ app.get('/api/referals-tree', (req, res) => {
             if (!childrenMap[canonicalSponsor]) {
                 childrenMap[canonicalSponsor] = [];
             }
-            childrenMap[canonicalSponsor].push(user);
+            if (!childrenMap[canonicalSponsor].includes(user)) {
+                childrenMap[canonicalSponsor].push(user);
+            }
         }
     });
-    
-    function getCalculatedLevel(user) {
-        let level = 1;
-        let current = user;
-        let visited = new Set();
-        while (current && current !== 'SYSTEM_ROOT' && !visited.has(current)) {
-            visited.add(current);
-            let sponsor = referalsDB[current];
-            if (!sponsor) { level++; break; }
-            current = Object.keys(referalsDB).find(k => k.toLowerCase() === sponsor.toLowerCase()) || sponsor;
-            level++;
-        }
-        return level;
-    }
 
     Object.keys(referalsDB).forEach(username => {
         structure[username] = {
@@ -321,11 +340,10 @@ app.get('/api/get-referral-chain', (req, res) => {
     let current = targetUser;
     let visited = new Set();
 
-    while (current && !visited.has(current)) {
-        visited.add(current);
+    while (current && !visited.has(current.toLowerCase())) {
+        visited.add(current.toLowerCase());
         chain.push(current);
-        const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === referalsDB[current]?.toLowerCase());
-        current = nextSponsorKey ? nextSponsorKey : referalsDB[current];
+        current = getSponsorOf(current);
     }
 
     chain.reverse();
@@ -339,10 +357,14 @@ app.post('/api/shop/register', (req, res) => {
     const trimmedUser = username.trim();
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
     if (isExist) {
-        return res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser] || createNewUserCard(trimmedUser) });
+        const shopKey = Object.keys(shopUsersDB).find(k => k.toLowerCase() === trimmedUser.toLowerCase()) || trimmedUser;
+        return res.json({ success: true, shopUserStatus: shopUsersDB[shopKey] || createNewUserCard(trimmedUser) });
     }
     
-    shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
+    const shopKey = Object.keys(shopUsersDB).find(k => k.toLowerCase() === trimmedUser.toLowerCase()) || trimmedUser;
+    if (!shopUsersDB[shopKey]) {
+        shopUsersDB[shopKey] = createNewUserCard(trimmedUser);
+    }
     
     const chosenSponsor = resolveSponsor(sponsor);
 
@@ -352,19 +374,21 @@ app.post('/api/shop/register', (req, res) => {
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = trimmedUser;
     
-    shopUsersDB[trimmedUser].isPaid = true;
-    shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
-    shopUsersDB[trimmedUser].matrixPosition.status = 'active';
+    shopUsersDB[shopKey].isPaid = true;
+    shopUsersDB[shopKey].matrixPosition.currentCellId = cellId;
+    shopUsersDB[shopKey].matrixPosition.status = 'active';
     
     checkAndSplitMatrix(cellId);
-    res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser], cellId });
+    res.json({ success: true, shopUserStatus: shopUsersDB[shopKey], cellId });
 });
 
 app.post('/api/shop/pay', (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
-    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
+    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) 
+                        || Object.keys(referalsDB).find(k => k.toLowerCase() === username.trim().toLowerCase())
+                        || username.trim();
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase());
     if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
 
@@ -431,11 +455,13 @@ app.post('/api/admin/delete-user', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
     
-    delete shopUsersDB[username];
-    delete referalsDB[username];
+    const targetKey = Object.keys(referalsDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
+
+    delete shopUsersDB[targetKey];
+    delete referalsDB[targetKey];
     
     Object.keys(treeDB).forEach(cellId => {
-        if (treeDB[cellId].user === username) {
+        if (treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === targetKey.toLowerCase()) {
             treeDB[cellId].user = null;
         }
     });
