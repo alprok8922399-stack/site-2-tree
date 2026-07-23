@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -14,7 +15,10 @@ const {
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-app.use(express.static('../frontend'));
+
+// Исправленный универсальный путь к фронтенду
+const frontendPath = path.join(__dirname, '../frontend');
+app.use(express.static(frontendPath));
 
 // Инициализация баз данных в памяти
 let shopUsersDB = {};
@@ -552,6 +556,11 @@ app.post('/api/admin/delete-user', (req, res) => {
 
 app.get('/api/sys-wallets', (req, res) => {
     res.json({ success: true, wallets });
+});
+
+// Возврат HTML страниц для любых остальных маршрутов
+app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 app.listen(PORT, () => console.log(`Backend server running on port ${PORT}`));
