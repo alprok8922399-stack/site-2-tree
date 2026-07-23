@@ -212,11 +212,21 @@ style.innerHTML = `
 `;
 document.head.appendChild(style);
 
+// Функция автопоиска нужного контейнера
+function getTableTargetContainer() {
+    return document.getElementById('referals-table-body') 
+        || document.getElementById('referral-table-body') 
+        || document.getElementById('tree-container')
+        || document.getElementById('table-container')
+        || document.querySelector('.table-section')
+        || document.body; // если ничего не найдено, монтируем прямо в body
+}
+
 /**
  * Загрузка дерева пользователей
  */
 async function loadReferalsTable(isBackground = false) {
-    const targetContainer = document.getElementById('referals-table-body');
+    const targetContainer = getTableTargetContainer();
     if (!targetContainer) return;
 
     try {
@@ -303,7 +313,6 @@ function renderActiveReferralGrid(container, isBackground = false) {
         const userNode = getUserNode(currentLogin);
 
         if (userNode && userNode.children && userNode.children.length > 0) {
-            // Подтягиваем детей по их ЛОГИНАМ без чувствительности к регистру
             const childrenNodes = userNode.children.map(childLogin => {
                 return getUserNode(childLogin) || { login: childLogin, children: [] };
             });
@@ -412,7 +421,7 @@ function createUserCardElement(user, columnIndex) {
             }
         }
 
-        const targetContainer = document.getElementById('referals-table-body');
+        const targetContainer = getTableTargetContainer();
         if (targetContainer) {
             renderActiveReferralGrid(targetContainer, false);
         }
@@ -444,7 +453,7 @@ async function searchReferralUser(login) {
             openDropdownUser = result.chain[result.chain.length - 1];
             highlightedTableUser = login.trim();
 
-            const targetContainer = document.getElementById('referals-table-body');
+            const targetContainer = getTableTargetContainer();
             if (targetContainer) {
                 renderActiveReferralGrid(targetContainer, false);
             }
@@ -467,7 +476,7 @@ window.resetTableToRoot = () => {
         const inp = document.getElementById('interactiveTableSearchInput');
         if (inp) inp.value = '';
 
-        const targetContainer = document.getElementById('referals-table-body');
+        const targetContainer = getTableTargetContainer();
         if (targetContainer) {
             renderActiveReferralGrid(targetContainer, false);
         }
@@ -527,7 +536,7 @@ window.copyToClipboardTrigger = (text, btn) => {
 document.addEventListener('click', () => {
     if (openDropdownUser !== null) {
         openDropdownUser = null;
-        const targetContainer = document.getElementById('referals-table-body');
+        const targetContainer = getTableTargetContainer();
         if (targetContainer) renderActiveReferralGrid(targetContainer, false);
     }
 });
@@ -538,6 +547,9 @@ setInterval(() => {
     loadReferalsTable(true);
 }, 3000);
 
-document.addEventListener('DOMContentLoaded', () => {
+// Запуск при загрузке страницы или незамедлительно
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => loadReferalsTable(false));
+} else {
     loadReferalsTable(false);
-});
+        }
