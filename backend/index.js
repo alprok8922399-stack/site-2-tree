@@ -393,6 +393,18 @@ app.get('/api/referals-tree', (req, res) => {
         };
     });
 
+    // Обязательно гарантируем наличие записи SYSTEM_ROOT
+    if (!structure['SYSTEM_ROOT']) {
+        structure['SYSTEM_ROOT'] = {
+            id: 'SYSTEM_ROOT',
+            login: 'SYSTEM_ROOT',
+            parentId: null,
+            level: 1,
+            isExpanded: true,
+            children: childrenMap['SYSTEM_ROOT'] || []
+        };
+    }
+
     res.json({ success: true, tree: structure });
 });
 
