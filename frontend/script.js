@@ -44,9 +44,6 @@ async function registerInMatrix() {
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
             }
-            if (typeof window.refreshReferralTable === 'function') {
-                window.refreshReferralTable();
-            }
         } else {
             alert(`Ошибка: ${result.error}`);
         }
@@ -81,9 +78,6 @@ async function registerShopUser() {
         if (result.success) {
             alert(`Покупатель ${shopUserStr} успешно зарегистрирован!`);
             loadUserProfile(shopUserStr);
-            if (typeof window.refreshReferralTable === 'function') {
-                window.refreshReferralTable();
-            }
         } else {
             alert(`Ошибка: ${result.error}`);
         }
@@ -121,9 +115,6 @@ async function payCertificate() {
             loadUserProfile(username);
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
-            }
-            if (typeof window.refreshReferralTable === 'function') {
-                window.refreshReferralTable();
             }
         } else {
             alert(`Ошибка оплаты: ${result.error}`);
@@ -353,9 +344,6 @@ async function resetSystem() {
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
             }
-            if (typeof window.refreshReferralTable === 'function') {
-                window.refreshReferralTable();
-            }
             
             setElementText('current-profile-user', '—');
             setElementText('profile-cell-id', '—');
@@ -376,10 +364,6 @@ async function resetSystem() {
 // === ГЛОБАЛЬНЫЕ МОСТЫ СВЯЗИ ===
 window.showUserCard = loadUserProfile;
 window.closeUserCard = closeUserProfileCard;
-window.registerInMatrix = registerInMatrix;
-window.registerShopUser = registerShopUser;
-window.payCertificate = payCertificate;
-window.resetSystem = resetSystem;
 window.focusMatrixOnUser = (login) => {
     if (typeof window.searchMatrixUser === 'function') {
         window.searchMatrixUser(login);
@@ -399,29 +383,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // === АВТООБНОВЛЕНИЕ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ И МАТРИЦ (КАЖДЫЕ 3 СЕКУНДЫ) ===
-    setInterval(() => {
-        if (typeof window.refreshReferralTable === 'function') {
-            window.refreshReferralTable();
-        }
-        if (typeof window.renderMatrixTree === 'function') {
-            window.renderMatrixTree();
-        }
-    }, 3000);
-
     // === УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ЗАКРЫТИЯ КАРТОЧКИ ПО КЛИКУ ВНЕ ЕЁ ===
     document.addEventListener('click', (e) => {
         const modal = getProfileModalElement();
         if (!modal) return;
 
+        // Если модальное окно скрыто, ничего не делаем
         const computedStyle = window.getComputedStyle(modal);
         if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') return;
 
+        // Определяем внутренний блок с контентом (если он есть)
         const contentBox = modal.querySelector('.modal-content') || 
                            modal.querySelector('.card-body') || 
                            modal.querySelector('.user-card-content') || 
                            modal.children[0];
 
+        // Проверяем, был ли клик по кнопкам открытия
         const isTrigger = e.target.closest('#search-profile-btn') || 
                           e.target.closest('.dropdown-btn') || 
                           e.target.closest('.user-cell-card') ||
@@ -430,6 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isTrigger) return;
 
+        // Если клик был по самой подложке (вне внутреннего блока карточки) — закрываем
         if (contentBox) {
             if (!contentBox.contains(e.target)) {
                 closeUserProfileCard();
