@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -15,19 +14,11 @@ const {
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-
-// Исправленный универсальный путь к фронтенду
-const frontendPath = path.join(__dirname, '../frontend');
-app.use(express.static(frontendPath));
+app.use(express.static('../frontend'));
 
 // Инициализация баз данных в памяти
 let shopUsersDB = {};
 let wallets = createInitialWallets();
-
-// Состояние и логи генератора (робота)
-let robotRunning = false;
-let robotLogs = ["Ожидание запуска робота..."];
-let robotTimer = null;
 
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
@@ -37,52 +28,6 @@ let referalsDB = {
 };
 
 let lastRegisteredBot = null;
-
-// === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ РЕГИСТРОНЕЗАВИСИМОГО ПОИСКА ===
-
-function getCanonicalRefKey(username) {
-    if (!username) return null;
-    const trimmed = username.trim();
-    return Object.keys(referalsDB).find(k => k.toLowerCase() === trimmed.toLowerCase()) || trimmed;
-}
-
-function getSponsorOf(username) {
-    const canonical = getCanonicalRefKey(username);
-    if (!canonical || !referalsDB[canonical]) return null;
-    return referalsDB[canonical];
-}
-
-function resolveSponsor(inputSponsor) {
-    if (!inputSponsor || !inputSponsor.trim()) {
-        const l1 = Object.keys(referalsDB).find(k => k.toLowerCase() === 'leader_1');
-        const l2 = Object.keys(referalsDB).find(k => k.toLowerCase() === 'leader_2');
-        
-        const l1Count = Object.values(referalsDB).filter(s => s && s.toLowerCase() === (l1 || 'leader_1').toLowerCase()).length;
-        const l2Count = Object.values(referalsDB).filter(s => s && s.toLowerCase() === (l2 || 'leader_2').toLowerCase()).length;
-
-        if (l1Count <= l2Count) return l1 || 'LEADER_1';
-        return l2 || 'LEADER_2';
-    }
-
-    const trimmed = inputSponsor.trim();
-    const exist = Object.keys(referalsDB).find(k => k.toLowerCase() === trimmed.toLowerCase());
-    return exist || trimmed;
-}
-
-function getCalculatedLevel(username) {
-    let level = 1;
-    let current = username;
-    let visited = new Set();
-    
-    while (current && current.toUpperCase() !== 'SYSTEM_ROOT' && !visited.has(current.toLowerCase())) {
-        visited.add(current.toLowerCase());
-        let sponsor = getSponsorOf(current);
-        if (!sponsor) break;
-        current = sponsor;
-        level++;
-    }
-    return level;
-}
 
 // Стартовое состояние активных матриц
 function createInitialTree() {
@@ -138,9 +83,7 @@ function findNextEmptyCell(tree) {
     }
 }
 
-/**
- * Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек.
- */
+// Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек
 function checkAndSplitMatrix(cellId) {
     const gIdx = cellIdToGlobalIndex(cellId);
     const parentGIdx = Math.floor((gIdx - 1) / 2);
@@ -173,80 +116,18 @@ function checkAndSplitMatrix(cellId) {
         const b2Cell = getCellByGIdx(b2G);
 
         if (topCell && topCell.user) {
-            const topUserKey = Object.keys(shopUsersDB).find(k => k.toLowerCase() === topCell.user.toLowerCase()) || topCell.user;
-            if (!shopUsersDB[topUserKey]) {
-                shopUsersDB[topUserKey] = createNewUserCard(topUserKey);
+            if (shopUsersDB[topCell.user]) {
+                shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
             }
-            shopUsersDB[topUserKey].matrixPosition.status = 'payout_pending';
-            shopUsersDB[topUserKey].cashbackAvailable = true;
-            shopUsersDB[topUserKey].cashbackAmount = 1000;
         }
 
-        if (topCell && topCell.id) {
-            activeMatricesList = activeMatricesList.filter(id => id !== topCell.id);
-        }
+        activeMatricesList = activeMatricesList.filter(id => id !== topCell.id);
         if (b1Cell && b1Cell.id) activeMatricesList.push(b1Cell.id);
         if (b2Cell && b2Cell.id) activeMatricesList.push(b2Cell.id);
     }
 }
 
-// Вспомогательная логика автогенерации робота
-function addRobotLog(text) {
-    robotLogs.push(text);
-    if (robotLogs.length > 200) robotLogs.shift();
-}
-
-function processAutoBotStep() {
-    if (!robotRunning) return;
-    const randId = Math.floor(1000 + Math.random() * 9000);
-    const botName = `Bot_${randId}`;
-    
-    const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = botName;
-    referalsDB[botName] = resolveSponsor(null);
-    
-    shopUsersDB[botName] = createNewUserCard(botName);
-    shopUsersDB[botName].isPaid = true;
-    shopUsersDB[botName].matrixPosition.currentCellId = cellId;
-    shopUsersDB[botName].matrixPosition.status = 'active';
-
-    checkAndSplitMatrix(cellId);
-    addRobotLog(`🤖 Автобот ${botName} активирован и встал в ячейку ${cellId}`);
-}
-
 // ================= API =================
-
-// Управление роботом
-app.get('/api/robot/status', (req, res) => {
-    res.json({ running: robotRunning });
-});
-
-app.get('/api/robot/logs', (req, res) => {
-    res.json({ logs: robotLogs });
-});
-
-app.post('/api/robot/start', (req, res) => {
-    if (!robotRunning) {
-        robotRunning = true;
-        addRobotLog("🟢 Робот успешно запущен сервером.");
-        if (!robotTimer) {
-            robotTimer = setInterval(processAutoBotStep, 2500);
-        }
-    }
-    res.json({ success: true, running: robotRunning });
-});
-
-app.post('/api/robot/stop', (req, res) => {
-    if (robotRunning) {
-        robotRunning = false;
-        if (robotTimer) {
-            clearInterval(robotTimer);
-            robotTimer = null;
-        }
-        addRobotLog("🔴 Робот остановлен по команде.");
-    }
-    res.json({ success: true, running: robotRunning });
-});
 
 app.get('/api/tree', (req, res) => {
     res.json({
@@ -260,7 +141,13 @@ app.post('/api/register', (req, res) => {
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
     
     const trimmedUser = username.trim();
-    const canonicalSponsor = resolveSponsor(sponsor);
+    
+    // Рандомный выбор спонсора, если не указан явно
+    let canonicalSponsor = sponsor ? sponsor.trim() : null;
+    if (!canonicalSponsor) {
+        const allUsers = Object.keys(referalsDB);
+        canonicalSponsor = allUsers[Math.floor(Math.random() * allUsers.length)] || 'SYSTEM_ROOT';
+    }
     
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
     if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
@@ -270,13 +157,12 @@ app.post('/api/register', (req, res) => {
     
     referalsDB[trimmedUser] = canonicalSponsor;
     
-    const shopKey = Object.keys(shopUsersDB).find(k => k.toLowerCase() === trimmedUser.toLowerCase()) || trimmedUser;
-    if (!shopUsersDB[shopKey]) {
-        shopUsersDB[shopKey] = createNewUserCard(trimmedUser);
+    if (!shopUsersDB[trimmedUser]) {
+        shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
+        shopUsersDB[trimmedUser].isPaid = true;
+        shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
+        shopUsersDB[trimmedUser].matrixPosition.status = 'active';
     }
-    shopUsersDB[shopKey].isPaid = true;
-    shopUsersDB[shopKey].matrixPosition.currentCellId = cellId;
-    shopUsersDB[shopKey].matrixPosition.status = 'active';
     
     checkAndSplitMatrix(cellId);
     res.json({ success: true, cellId, user: trimmedUser });
@@ -293,12 +179,6 @@ app.post('/api/reset', (req, res) => {
         'LEADER_2': 'SYSTEM_ROOT'
     };
     lastRegisteredBot = null;
-    robotRunning = false;
-    if (robotTimer) {
-        clearInterval(robotTimer);
-        robotTimer = null;
-    }
-    robotLogs = ["Логи очищены сервером."];
     res.json({ success: true });
 });
 
@@ -313,39 +193,42 @@ app.get('/api/user-details/:username', (req, res) => {
         .map(cell => cell.id);
         
     let sponsorChain = [];
-    let currentSponsor = getSponsorOf(canonicalName) || 'SYSTEM_ROOT';
+    let currentSponsor = referalsDB[canonicalName] || 'SYSTEM_ROOT';
     let visited = new Set();
     
-    while (currentSponsor && !visited.has(currentSponsor.toLowerCase())) {
-        visited.add(currentSponsor.toLowerCase());
+    while (currentSponsor && !visited.has(currentSponsor)) {
+        visited.add(currentSponsor);
         sponsorChain.push(currentSponsor);
-        currentSponsor = getSponsorOf(currentSponsor);
+        const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === currentSponsor.toLowerCase());
+        currentSponsor = nextSponsorKey ? referalsDB[nextSponsorKey] : null;
     }
     
-    let shopKey = Object.keys(shopUsersDB).find(k => k.toLowerCase() === canonicalName.toLowerCase());
-    if (!shopKey) {
+    if (!shopUsersDB[canonicalName]) {
         shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
-        shopKey = canonicalName;
-    }
-    if (userCells.length > 0) {
-        shopUsersDB[shopKey].isPaid = true;
-        shopUsersDB[shopKey].matrixPosition.currentCellId = userCells[0];
-        shopUsersDB[shopKey].matrixPosition.status = 'active';
+        if (userCells.length > 0) {
+            shopUsersDB[canonicalName].isPaid = true;
+            shopUsersDB[canonicalName].matrixPosition.currentCellId = userCells[0];
+            shopUsersDB[canonicalName].matrixPosition.status = 'active';
+        }
     }
 
+    // === ОПТИМИЗИРОВАННАЯ ВЫДАЧА ЛИЧНИКОВ (ДЛЯ 10 000+ ЧЕЛОВЕК) ===
     const searchQuery = (req.query.search || '').trim().toLowerCase();
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 30;
+    const limit = parseInt(req.query.limit) || 30; // Порция по 30 человек
 
+    // Находим всех личников данного пользователя
     const allReferrals = Object.keys(referalsDB).filter(user => {
         const parent = referalsDB[user];
         return parent && parent.toLowerCase() === canonicalName.toLowerCase();
     });
 
+    // Фильтрация по поисковому запросу (если передан search)
     const filteredReferrals = searchQuery
         ? allReferrals.filter(ref => ref.toLowerCase().includes(searchQuery))
         : allReferrals;
 
+    // Пагинация (вырезаем нужную страницу)
     const startIndex = (page - 1) * limit;
     const paginatedReferrals = filteredReferrals.slice(startIndex, startIndex + limit);
 
@@ -353,15 +236,15 @@ app.get('/api/user-details/:username', (req, res) => {
         success: true,
         username: canonicalName,
         cells: userCells,
-        sponsor: getSponsorOf(canonicalName) || 'SYSTEM_ROOT',
+        sponsor: referalsDB[canonicalName] || 'SYSTEM_ROOT',
         chain: sponsorChain,
-        profile: shopUsersDB[shopKey],
+        profile: shopUsersDB[canonicalName],
         referralsData: {
-            totalCount: allReferrals.length,
-            filteredCount: filteredReferrals.length,
+            totalCount: allReferrals.length,       // Всего личников
+            filteredCount: filteredReferrals.length, // Найдено по фильтру
             currentPage: page,
             hasMore: startIndex + limit < filteredReferrals.length,
-            list: paginatedReferrals
+            list: paginatedReferrals               // Отдаем порцией по 30
         }
     });
 });
@@ -380,11 +263,23 @@ app.get('/api/referals-tree', (req, res) => {
             if (!childrenMap[canonicalSponsor]) {
                 childrenMap[canonicalSponsor] = [];
             }
-            if (!childrenMap[canonicalSponsor].includes(user)) {
-                childrenMap[canonicalSponsor].push(user);
-            }
+            childrenMap[canonicalSponsor].push(user);
         }
     });
+    
+    function getCalculatedLevel(user) {
+        let level = 1;
+        let current = user;
+        let visited = new Set();
+        while (current && current !== 'SYSTEM_ROOT' && !visited.has(current)) {
+            visited.add(current);
+            let sponsor = referalsDB[current];
+            if (!sponsor) { level++; break; }
+            current = Object.keys(referalsDB).find(k => k.toLowerCase() === sponsor.toLowerCase()) || sponsor;
+            level++;
+        }
+        return level;
+    }
 
     Object.keys(referalsDB).forEach(username => {
         structure[username] = {
@@ -396,18 +291,6 @@ app.get('/api/referals-tree', (req, res) => {
             children: childrenMap[username] || []
         };
     });
-
-    // Обязательно гарантируем наличие записи SYSTEM_ROOT
-    if (!structure['SYSTEM_ROOT']) {
-        structure['SYSTEM_ROOT'] = {
-            id: 'SYSTEM_ROOT',
-            login: 'SYSTEM_ROOT',
-            parentId: null,
-            level: 1,
-            isExpanded: true,
-            children: childrenMap['SYSTEM_ROOT'] || []
-        };
-    }
 
     res.json({ success: true, tree: structure });
 });
@@ -423,10 +306,11 @@ app.get('/api/get-referral-chain', (req, res) => {
     let current = targetUser;
     let visited = new Set();
 
-    while (current && !visited.has(current.toLowerCase())) {
-        visited.add(current.toLowerCase());
+    while (current && !visited.has(current)) {
+        visited.add(current);
         chain.push(current);
-        current = getSponsorOf(current);
+        const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === referalsDB[current]?.toLowerCase());
+        current = nextSponsorKey ? nextSponsorKey : referalsDB[current];
     }
 
     chain.reverse();
@@ -440,16 +324,16 @@ app.post('/api/shop/register', (req, res) => {
     const trimmedUser = username.trim();
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
     if (isExist) {
-        const shopKey = Object.keys(shopUsersDB).find(k => k.toLowerCase() === trimmedUser.toLowerCase()) || trimmedUser;
-        return res.json({ success: true, shopUserStatus: shopUsersDB[shopKey] || createNewUserCard(trimmedUser) });
+        return res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser] || createNewUserCard(trimmedUser) });
     }
     
-    const shopKey = Object.keys(shopUsersDB).find(k => k.toLowerCase() === trimmedUser.toLowerCase()) || trimmedUser;
-    if (!shopUsersDB[shopKey]) {
-        shopUsersDB[shopKey] = createNewUserCard(trimmedUser);
-    }
+    shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
     
-    const chosenSponsor = resolveSponsor(sponsor);
+    let chosenSponsor = sponsor ? sponsor.trim() : null;
+    if (!chosenSponsor) {
+        const availableSponsors = Object.keys(referalsDB);
+        chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
+    }
 
     referalsDB[trimmedUser] = chosenSponsor;
     lastRegisteredBot = trimmedUser; 
@@ -457,59 +341,37 @@ app.post('/api/shop/register', (req, res) => {
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = trimmedUser;
     
-    shopUsersDB[shopKey].isPaid = true;
-    shopUsersDB[shopKey].matrixPosition.currentCellId = cellId;
-    shopUsersDB[shopKey].matrixPosition.status = 'active';
+    shopUsersDB[trimmedUser].isPaid = true;
+    shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
+    shopUsersDB[trimmedUser].matrixPosition.status = 'active';
     
     checkAndSplitMatrix(cellId);
-    addRobotLog(`Регистрация: ${trimmedUser} (спонсор: ${chosenSponsor}) -> ячейка ${cellId}`);
-    res.json({ success: true, shopUserStatus: shopUsersDB[shopKey], cellId });
+    res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser], cellId });
 });
 
 app.post('/api/shop/pay', (req, res) => {
-    const { username, sponsor } = req.body;
+    const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
-    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) 
-                        || Object.keys(referalsDB).find(k => k.toLowerCase() === username.trim().toLowerCase())
-                        || username.trim();
+    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase());
     if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
 
     const TOTAL_MITRONS = 1000;
-    const SUPPLIER_COST = 450;
-    const MATRIX_RESERVE = 250;
-    const REFERRAL_RESERVE = 70;
-    const ADMIN_PROFIT = 230;
+    const ADMIN_LOGISTICS = 450; 
+    const DAO_POOL = 550;        
 
     if (!shopUsersDB[canonicalName]) {
         shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
     }
 
-    const chosenSponsor = resolveSponsor(sponsor);
-
-    referalsDB[canonicalName] = chosenSponsor;
-
-    const now = new Date();
-    const releaseDate = new Date(now.getTime() + (31 * 24 * 60 * 60 * 1000));
-
     shopUsersDB[canonicalName].isPaid = true;
-    shopUsersDB[canonicalName].paymentDate = now.toISOString();
+    shopUsersDB[canonicalName].paymentDate = new Date().toISOString();
     shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
     shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
 
-    wallets.adminWallet.balanceMitrons += ADMIN_PROFIT;
-    wallets.daoWallet.balanceMitrons += MATRIX_RESERVE;
-
-    if (!wallets.referralHold) wallets.referralHold = [];
-    wallets.referralHold.push({
-        buyer: canonicalName,
-        sponsor: chosenSponsor,
-        totalHold: REFERRAL_RESERVE,
-        createdAt: now.toISOString(),
-        unlockAt: releaseDate.toISOString(),
-        status: 'pending_31_days'
-    });
+    wallets.adminWallet.balanceMitrons += ADMIN_LOGISTICS;
+    wallets.daoWallet.balanceMitrons += DAO_POOL;
 
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = canonicalName;
@@ -518,7 +380,6 @@ app.post('/api/shop/pay', (req, res) => {
     shopUsersDB[canonicalName].matrixPosition.status = 'active';
 
     checkAndSplitMatrix(cellId);
-    addRobotLog(`💰 Оплата: ${canonicalName} -> место ${cellId}`);
 
     res.json({
         success: true,
@@ -526,12 +387,8 @@ app.post('/api/shop/pay', (req, res) => {
         cellId,
         split: {
             totalMitrons: TOTAL_MITRONS,
-            supplierCost: SUPPLIER_COST,
-            matrixReserve: MATRIX_RESERVE,
-            referralReserve: REFERRAL_RESERVE,
-            adminProfit: ADMIN_PROFIT,
-            holdDays: 31,
-            unlockAt: releaseDate.toISOString()
+            adminLogistics: ADMIN_LOGISTICS,
+            daoPool: DAO_POOL
         }
     });
 });
@@ -540,13 +397,11 @@ app.post('/api/admin/delete-user', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
     
-    const targetKey = Object.keys(referalsDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
-
-    delete shopUsersDB[targetKey];
-    delete referalsDB[targetKey];
+    delete shopUsersDB[username];
+    delete referalsDB[username];
     
     Object.keys(treeDB).forEach(cellId => {
-        if (treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === targetKey.toLowerCase()) {
+        if (treeDB[cellId].user === username) {
             treeDB[cellId].user = null;
         }
     });
@@ -556,11 +411,6 @@ app.post('/api/admin/delete-user', (req, res) => {
 
 app.get('/api/sys-wallets', (req, res) => {
     res.json({ success: true, wallets });
-});
-
-// Возврат HTML страниц для любых остальных маршрутов
-app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 app.listen(PORT, () => console.log(`Backend server running on port ${PORT}`));
