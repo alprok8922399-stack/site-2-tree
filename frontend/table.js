@@ -212,14 +212,28 @@ style.innerHTML = `
 `;
 document.head.appendChild(style);
 
-// Функция автопоиска нужного контейнера
+// Функция автопоиска или создания точного контейнера
 function getTableTargetContainer() {
-    return document.getElementById('referals-table-body') 
+    let container = document.getElementById('referals-table-body') 
         || document.getElementById('referral-table-body') 
         || document.getElementById('tree-container')
         || document.getElementById('table-container')
-        || document.querySelector('.table-section')
-        || document.body; // если ничего не найдено, монтируем прямо в body
+        || document.querySelector('.table-container')
+        || document.querySelector('.table-section');
+
+    if (!container) {
+        // Если блок с таблицей не найден, ищем вкладку с таблицей
+        const mainTab = document.getElementById('tableTab') || document.getElementById('treeTab');
+        if (mainTab) {
+            container = mainTab;
+        } else {
+            // Создаем отдельный контейнер в верхушке рабочей области
+            container = document.createElement('div');
+            container.id = 'table-auto-generated-container';
+            document.body.prepend(container);
+        }
+    }
+    return container;
 }
 
 /**
@@ -547,9 +561,9 @@ setInterval(() => {
     loadReferalsTable(true);
 }, 3000);
 
-// Запуск при загрузке страницы или незамедлительно
+// Запуск при загрузке страницы
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => loadReferalsTable(false));
 } else {
     loadReferalsTable(false);
-        }
+}
