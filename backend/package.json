@@ -4,7 +4,8 @@
   "description": "Бэкенд бинарного маркетинг-плана",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test-bot": "node test-bot.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
