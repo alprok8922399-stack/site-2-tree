@@ -19,6 +19,21 @@ const {
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
+
+// Секретный ключ для защиты API
+const INTERNAL_SECRET_KEY = process.env.INTERNAL_SECRET_KEY || 'super_secret_mitron_key_2026';
+
+// Проверка секретного ключа для защищенных запросов (POST, PUT, DELETE)
+app.use('/api/', (req, res, next) => {
+    if (req.method === 'GET') return next();
+
+    const clientKey = req.headers['x-internal-key'];
+    if (clientKey !== INTERNAL_SECRET_KEY) {
+        return res.status(403).json({ error: 'Доступ запрещен: Неверный системный ключ!' });
+    }
+    next();
+});
+
 app.use(express.static('../frontend'));
 
 // Инициализация баз данных в памяти
@@ -392,7 +407,7 @@ app.post('/api/shop/pay', (req, res) => {
             adminWallet: TOTAL_MITRONS,
             reservations: {
                 matrixReserve: 250,
-                tableRefReserve: 70 // 50 M + 10 M + 10 M
+                tableRefReserve: 70
             }
         }
     });
