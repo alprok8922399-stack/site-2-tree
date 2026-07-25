@@ -374,9 +374,9 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     const { username, amount = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
-    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
-    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase());
-    if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
+    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) 
+                        || Object.keys(referalsDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) 
+                        || username.trim();
 
     const TOTAL_MITRONS = amount;
 
@@ -384,21 +384,27 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
         shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
     }
 
+    // Проверяем, есть ли уже у пользователя место в матрице
+    let existingCell = Object.keys(treeDB).find(cellId => treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === canonicalName.toLowerCase());
+    let cellId = existingCell;
+
+    // Если места еще нет — сажаем в ближайшую свободную ячейку
+    if (!cellId) {
+        cellId = findNextEmptyCell(treeDB);
+        treeDB[cellId].user = canonicalName;
+        checkAndSplitMatrix(cellId);
+    }
+
+    // Активируем статус оплаты и пополняем балансы
     shopUsersDB[canonicalName].isPaid = true;
     shopUsersDB[canonicalName].paymentDate = new Date().toISOString();
     shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
     shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
-
-    // 100% Поступлений зачисляются в Кошелек Администрации
-    wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
-
-    const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = canonicalName;
-    
     shopUsersDB[canonicalName].matrixPosition.currentCellId = cellId;
     shopUsersDB[canonicalName].matrixPosition.status = 'active';
 
-    checkAndSplitMatrix(cellId);
+    // 100% Поступлений зачисляются в Кошелек Администрации
+    wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
 
     res.json({
         success: true,
