@@ -1,4 +1,5 @@
 const API_URL = window.location.origin;
+const INTERNAL_SECRET_KEY = 'super_secret_mitron_key_2026';
 
 // === ГЛОБАЛЬНЫЙ КУРС ВАЛЮТЫ ===
 const MITRON_RATE_USD = 130 / 1000; 
@@ -34,7 +35,10 @@ async function registerInMatrix() {
     try {
         const response = await fetch(`${API_URL}/api/register-matrix`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-internal-key': INTERNAL_SECRET_KEY
+            },
             body: JSON.stringify(payload)
         });
         const result = await response.json();
@@ -73,7 +77,10 @@ async function registerShopUser() {
     try {
         const response = await fetch(`${API_URL}/api/register-shop`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-internal-key': INTERNAL_SECRET_KEY
+            },
             body: JSON.stringify({ username: shopUserStr, sponsor: shopSponsorStr })
         });
         const result = await response.json();
@@ -102,7 +109,10 @@ async function payCertificate() {
     try {
         const response = await fetch(`${API_URL}/api/pay-certificate`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-internal-key': INTERNAL_SECRET_KEY
+            },
             body: JSON.stringify({ username })
         });
         const result = await response.json();
@@ -363,7 +373,13 @@ async function resetSystem() {
     if (!confirm('Вы уверены, что хотите полностью очистить систему матриц и балансов?')) return;
     
     try {
-        const response = await fetch(`${API_URL}/api/reset-database`, { method: 'POST' });
+        const response = await fetch(`${API_URL}/api/reset-database`, { 
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-internal-key': INTERNAL_SECRET_KEY
+            }
+        });
         const result = await response.json();
         if (result.success) {
             alert('Система успешно сброшена к исходному состоянию!');
@@ -420,17 +436,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const modal = getProfileModalElement();
         if (!modal) return;
 
-        // Если модальное окно скрыто, ничего не делаем
         const computedStyle = window.getComputedStyle(modal);
         if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') return;
 
-        // Определяем внутренний блок с контентом (если он есть)
         const contentBox = modal.querySelector('.modal-content') || 
                            modal.querySelector('.card-body') || 
                            modal.querySelector('.user-card-content') || 
                            modal.children[0];
 
-        // Проверяем, был ли клик по кнопкам открытия
         const isTrigger = e.target.closest('#search-profile-btn') || 
                           e.target.closest('.dropdown-btn') || 
                           e.target.closest('.user-cell-card') ||
@@ -439,7 +452,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isTrigger) return;
 
-        // Если клик был по самой подложке (вне внутреннего блока карточки) — закрываем
         if (contentBox) {
             if (!contentBox.contains(e.target)) {
                 closeUserProfileCard();
