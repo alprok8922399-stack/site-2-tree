@@ -102,17 +102,19 @@ async function payCertificate() {
         const result = await response.json();
         
         if (result.success) {
+            const adminMitrons = result.split ? result.split.adminLogistics : 1000;
             const splitInfo = `
 Активация успешна!
-Списано: ${result.split.totalMitrons} Митронов
+Списано: 1000 Митронов ($130)
 -----------------------------------------
 Распределение:
-💸 Логистика / Товар: ${result.split.adminLogistics} Митронов
-🔒 DAO Пул: ${result.split.daoPool} Митронов
+💸 Кошелек Администрации (100%): ${adminMitrons} Mitrons ($130.00)
+🔒 DAO Пул (Резерв): 0 Mitrons
             `;
             alert(splitInfo);
             
             loadUserProfile(username);
+            loadSystemWallets();
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
             }
@@ -121,6 +123,23 @@ async function payCertificate() {
         }
     } catch (error) {
         console.error('Ошибка при оплате тарифа:', error);
+    }
+}
+
+// Загрузка состояния системных кошельков
+async function loadSystemWallets() {
+    try {
+        const response = await fetch(`${API_URL}/api/wallets`);
+        const data = await response.json();
+        if (data.success && data.wallets) {
+            const adminM = data.wallets.adminWallet ? data.wallets.adminWallet.balanceMitrons : 0;
+            const daoM = data.wallets.daoWallet ? data.wallets.daoWallet.balanceMitrons : 0;
+            
+            setElementText('sys-admin-wallet', `${adminM} M ($${convertMitronsToUsd(adminM)})`);
+            setElementText('sys-dao-wallet', `${daoM} M ($${convertMitronsToUsd(daoM)})`);
+        }
+    } catch (e) {
+        console.error('Не удалось загрузить данные системных кошельков:', e);
     }
 }
 
@@ -355,6 +374,7 @@ async function resetSystem() {
             if (uplineContainer) uplineContainer.innerHTML = '';
             
             closeUserProfileCard();
+            loadSystemWallets();
         }
     } catch (error) {
         console.error('Ошибка при сбросе системы:', error);
@@ -374,6 +394,8 @@ window.focusMatrixOnUser = (login) => {
 
 // Привязка событий после загрузки страницы
 document.addEventListener('DOMContentLoaded', () => {
+    loadSystemWallets();
+
     const searchBtn = document.getElementById('search-profile-btn');
     if (searchBtn) {
         searchBtn.addEventListener('click', () => {
