@@ -1,4 +1,8 @@
 /**
+ * Вспомогательный модуль статических функций и структур данных для Сайта №2 (static.js)
+ */
+
+/**
  * Превращает индекс уровня/столбца в буквенное обозначение по аналогии с Excel:
  * 0 -> A, 1 -> B ... 25 -> Z, 26 -> AA, 27 -> AB и т.д.
  */
@@ -27,7 +31,8 @@ function cellIdToGlobalIndex(cellId) {
     }
     levelIndex -= 1; // Корректировка к 0-индексу
     
-    const levelStartGIdx = (1 << levelIndex) - 1;
+    // Используем Math.pow во избежание ограничений 32-битного битового сдвига (1 << levelIndex)
+    const levelStartGIdx = Math.pow(2, levelIndex) - 1;
     return levelStartGIdx + (num - 1);
 }
 
@@ -64,11 +69,11 @@ function createNewUserCard(username) {
 function createInitialWallets() {
     return {
         adminWallet: {
-            name: 'Административный кошелек (Логистика / Товар)',
+            name: 'Кошелек Администрации (100% поступивших средств)',
             balanceMitrons: 0
         },
         daoWallet: {
-            name: 'DAO Пул (Фонд развития)',
+            name: 'DAO Пул (Фонд развития / Резерв выплат)',
             balanceMitrons: 0
         }
     };
