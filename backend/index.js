@@ -1,3 +1,8 @@
+/**
+ * Бэкенд Приватного Ядра — Сайт №2 (Матрица и Реферальная Таблица)
+ * Управляет деревом ячеек, реферальными связями, логикой деления и системными кошельками.
+ */
+
 const express = require('express');
 const cors = require('cors');
 const app = express();
@@ -23,6 +28,7 @@ let wallets = createInitialWallets();
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
     'SYSTEM_ROOT': null,
+    'Admin_System': 'SYSTEM_ROOT',
     'LEADER_1': 'SYSTEM_ROOT',
     'LEADER_2': 'SYSTEM_ROOT'
 };
@@ -46,7 +52,7 @@ let treeDB = createInitialTree();
 let activeMatricesList = ['A1']; // Список верхушек активных матриц
 
 /**
- * Алгоритм поиска свободной ячейки и деления матриц
+ * Алгоритм поиска свободной ячейки (Правило четырех)
  */
 function findNextEmptyCell(tree) {
     const orderABC = ['C1', 'C2', 'C3', 'C4'];
@@ -83,7 +89,9 @@ function findNextEmptyCell(tree) {
     }
 }
 
-// Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек
+/**
+ * Проверка и деление матрицы при заполнении 4 нижних ячеек
+ */
 function checkAndSplitMatrix(cellId) {
     const gIdx = cellIdToGlobalIndex(cellId);
     const parentGIdx = Math.floor((gIdx - 1) / 2);
@@ -127,7 +135,7 @@ function checkAndSplitMatrix(cellId) {
     }
 }
 
-// ================= API =================
+// ================= API ЭНДПОИНТЫ =================
 
 app.get('/api/tree', (req, res) => {
     res.json({
@@ -142,7 +150,6 @@ app.post('/api/register', (req, res) => {
     
     const trimmedUser = username.trim();
     
-    // Рандомный выбор спонсора, если не указан явно
     let canonicalSponsor = sponsor ? sponsor.trim() : null;
     if (!canonicalSponsor) {
         const allUsers = Object.keys(referalsDB);
@@ -175,6 +182,7 @@ app.post('/api/reset', (req, res) => {
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
+        'Admin_System': 'SYSTEM_ROOT',
         'LEADER_1': 'SYSTEM_ROOT',
         'LEADER_2': 'SYSTEM_ROOT'
     };
@@ -212,23 +220,19 @@ app.get('/api/user-details/:username', (req, res) => {
         }
     }
 
-    // === ОПТИМИЗИРОВАННАЯ ВЫДАЧА ЛИЧНИКОВ (ДЛЯ 10 000+ ЧЕЛОВЕК) ===
     const searchQuery = (req.query.search || '').trim().toLowerCase();
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 30; // Порция по 30 человек
+    const limit = parseInt(req.query.limit) || 30;
 
-    // Находим всех личников данного пользователя
     const allReferrals = Object.keys(referalsDB).filter(user => {
         const parent = referalsDB[user];
         return parent && parent.toLowerCase() === canonicalName.toLowerCase();
     });
 
-    // Фильтрация по поисковому запросу (если передан search)
     const filteredReferrals = searchQuery
         ? allReferrals.filter(ref => ref.toLowerCase().includes(searchQuery))
         : allReferrals;
 
-    // Пагинация (вырезаем нужную страницу)
     const startIndex = (page - 1) * limit;
     const paginatedReferrals = filteredReferrals.slice(startIndex, startIndex + limit);
 
@@ -240,11 +244,11 @@ app.get('/api/user-details/:username', (req, res) => {
         chain: sponsorChain,
         profile: shopUsersDB[canonicalName],
         referralsData: {
-            totalCount: allReferrals.length,       // Всего личников
-            filteredCount: filteredReferrals.length, // Найдено по фильтру
+            totalCount: allReferrals.length,
+            filteredCount: filteredReferrals.length,
             currentPage: page,
             hasMore: startIndex + limit < filteredReferrals.length,
-            list: paginatedReferrals               // Отдаем порцией по 30
+            list: paginatedReferrals
         }
     });
 });
@@ -350,16 +354,14 @@ app.post('/api/shop/register', (req, res) => {
 });
 
 app.post('/api/shop/pay', (req, res) => {
-    const { username } = req.body;
+    const { username, amount = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
     const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase());
     if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
 
-    const TOTAL_MITRONS = 1000;
-    const ADMIN_LOGISTICS = 450; 
-    const DAO_POOL = 550;        
+    const TOTAL_MITRONS = amount;
 
     if (!shopUsersDB[canonicalName]) {
         shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
@@ -370,8 +372,8 @@ app.post('/api/shop/pay', (req, res) => {
     shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
     shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
 
-    wallets.adminWallet.balanceMitrons += ADMIN_LOGISTICS;
-    wallets.daoWallet.balanceMitrons += DAO_POOL;
+    // 100% Поступлений зачисляются в Кошелек Администрации
+    wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
 
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = canonicalName;
@@ -387,12 +389,19 @@ app.post('/api/shop/pay', (req, res) => {
         cellId,
         split: {
             totalMitrons: TOTAL_MITRONS,
-            adminLogistics: ADMIN_LOGISTICS,
-            daoPool: DAO_POOL
+            adminWallet: TOTAL_MITRONS,
+            reservations: {
+                matrixReserve: 250,
+                tableRefReserve: 70 // 50 M + 10 M + 10 M
+            }
         }
     });
 });
 
+/**
+ * Обработка показательного Отказа (до 31 дня):
+ * Покупатель удаляется, 100% возврат средств, ячейка переходит Admin_System
+ */
 app.post('/api/admin/delete-user', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
@@ -400,13 +409,14 @@ app.post('/api/admin/delete-user', (req, res) => {
     delete shopUsersDB[username];
     delete referalsDB[username];
     
+    // Вместо обнуления (null) передаем ячейку системному аккаунту Admin_System
     Object.keys(treeDB).forEach(cellId => {
         if (treeDB[cellId].user === username) {
-            treeDB[cellId].user = null;
+            treeDB[cellId].user = 'Admin_System';
         }
     });
     
-    res.json({ success: true });
+    res.json({ success: true, message: `Пользователь ${username} удален. Ячейки переданы Admin_System` });
 });
 
 app.get('/api/sys-wallets', (req, res) => {
