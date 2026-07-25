@@ -455,7 +455,7 @@ function createUserCardElement(user, columnIndex) {
 }
 
 /**
- * Поиск пользователя с фокусом на срез (Ограничение длины цепочки для максимальной скорости)
+ * Поиск пользователя с фокусом на срез
  */
 async function searchReferralUser(login) {
     if (!login) return;
@@ -473,8 +473,6 @@ async function searchReferralUser(login) {
         if (result.success && result.chain && result.chain.length > 0) {
             const fullChain = result.chain;
             
-            // Если цепочка длиннее 3 уровней, берем только последних 3 человек (Спонсор -> Пользователь -> Личники)
-            // Это решает проблему 7000 ячеек раз и навсегда!
             if (fullChain.length > 3) {
                 activePath = fullChain.slice(-3);
             } else {
@@ -552,6 +550,7 @@ window.showSearchedInMatrix = () => {
 
 window.searchReferralUser = searchReferralUser;
 window.refreshReferralTable = () => loadReferalsTable(false);
+window.renderUsersTable = () => loadReferalsTable(false);
 
 window.viewUserCardTrigger = (login) => {
     if (typeof window.showUserCard === 'function') {
