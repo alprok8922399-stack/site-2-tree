@@ -159,7 +159,8 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-app.post('/api/register', (req, res) => {
+// Совместимый эндпоинт для фронтенда и тестов
+app.post(['/api/register', '/api/register-matrix'], (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
     
@@ -190,7 +191,8 @@ app.post('/api/register', (req, res) => {
     res.json({ success: true, cellId, user: trimmedUser });
 });
 
-app.post('/api/reset', (req, res) => {
+// Сброс базы данных
+app.post(['/api/reset', '/api/reset-database'], (req, res) => {
     treeDB = createInitialTree();
     activeMatricesList = ['A1'];
     shopUsersDB = {};
@@ -336,7 +338,7 @@ app.get('/api/get-referral-chain', (req, res) => {
     res.json({ success: true, chain });
 });
 
-app.post('/api/shop/register', (req, res) => {
+app.post(['/api/shop/register', '/api/register-shop'], (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
@@ -368,7 +370,7 @@ app.post('/api/shop/register', (req, res) => {
     res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser], cellId });
 });
 
-app.post('/api/shop/pay', (req, res) => {
+app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     const { username, amount = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
@@ -404,6 +406,7 @@ app.post('/api/shop/pay', (req, res) => {
         cellId,
         split: {
             totalMitrons: TOTAL_MITRONS,
+            adminLogistics: TOTAL_MITRONS,
             adminWallet: TOTAL_MITRONS,
             reservations: {
                 matrixReserve: 250,
@@ -413,10 +416,6 @@ app.post('/api/shop/pay', (req, res) => {
     });
 });
 
-/**
- * Обработка показательного Отказа (до 31 дня):
- * Покупатель удаляется, 100% возврат средств, ячейка переходит Admin_System
- */
 app.post('/api/admin/delete-user', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
@@ -424,7 +423,6 @@ app.post('/api/admin/delete-user', (req, res) => {
     delete shopUsersDB[username];
     delete referalsDB[username];
     
-    // Вместо обнуления (null) передаем ячейку системному аккаунту Admin_System
     Object.keys(treeDB).forEach(cellId => {
         if (treeDB[cellId].user === username) {
             treeDB[cellId].user = 'Admin_System';
@@ -434,8 +432,13 @@ app.post('/api/admin/delete-user', (req, res) => {
     res.json({ success: true, message: `Пользователь ${username} удален. Ячейки переданы Admin_System` });
 });
 
-app.get('/api/sys-wallets', (req, res) => {
-    res.json({ success: true, wallets });
+app.get(['/api/sys-wallets', '/api/system-wallets'], (req, res) => {
+    res.json({ 
+        success: true, 
+        wallets,
+        adminWallet: wallets.adminWallet ? wallets.adminWallet.balanceMitrons : 0,
+        daoWallet: wallets.daoWallet ? wallets.daoWallet.balanceMitrons : 0
+    });
 });
 
 app.listen(PORT, () => console.log(`Backend server running on port ${PORT}`));
