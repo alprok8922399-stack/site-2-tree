@@ -32,7 +32,7 @@ async function registerInMatrix() {
     };
 
     try {
-        const response = await fetch(`${API_URL}/api/register`, {
+        const response = await fetch(`${API_URL}/api/register-matrix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -40,9 +40,12 @@ async function registerInMatrix() {
         const result = await response.json();
         
         if (result.success) {
-            alert(`Успешно! Место занято в ячейке: ${result.cellId}`);
+            alert(`Успешно! Место занято в ячейке: ${result.cellId || 'OK'}`);
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
+            }
+            if (typeof window.renderUsersTable === 'function') {
+                window.renderUsersTable();
             }
         } else {
             alert(`Ошибка: ${result.error}`);
@@ -68,7 +71,7 @@ async function registerShopUser() {
     }
 
     try {
-        const response = await fetch(`${API_URL}/api/shop/register`, {
+        const response = await fetch(`${API_URL}/api/register-shop`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: shopUserStr, sponsor: shopSponsorStr })
@@ -78,6 +81,9 @@ async function registerShopUser() {
         if (result.success) {
             alert(`Покупатель ${shopUserStr} успешно зарегистрирован!`);
             loadUserProfile(shopUserStr);
+            if (typeof window.renderUsersTable === 'function') {
+                window.renderUsersTable();
+            }
         } else {
             alert(`Ошибка: ${result.error}`);
         }
@@ -94,7 +100,7 @@ async function payCertificate() {
     }
 
     try {
-        const response = await fetch(`${API_URL}/api/shop/pay`, {
+        const response = await fetch(`${API_URL}/api/pay-certificate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username })
@@ -129,11 +135,11 @@ async function payCertificate() {
 // Загрузка состояния системных кошельков
 async function loadSystemWallets() {
     try {
-        const response = await fetch(`${API_URL}/api/wallets`);
+        const response = await fetch(`${API_URL}/api/system-wallets`);
         const data = await response.json();
-        if (data.success && data.wallets) {
-            const adminM = data.wallets.adminWallet ? data.wallets.adminWallet.balanceMitrons : 0;
-            const daoM = data.wallets.daoWallet ? data.wallets.daoWallet.balanceMitrons : 0;
+        if (data.success) {
+            const adminM = data.adminWallet || 0;
+            const daoM = data.daoWallet || 0;
             
             setElementText('sys-admin-wallet', `${adminM} M ($${convertMitronsToUsd(adminM)})`);
             setElementText('sys-dao-wallet', `${daoM} M ($${convertMitronsToUsd(daoM)})`);
@@ -170,14 +176,15 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
 
             setElementText('current-profile-user', data.username);
             
-            const cellId = data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null;
+            const cellId = data.cellId || (data.profile && data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null);
             setElementText('profile-cell-id', cellId || 'Нет места');
             
             // Расчет дней с момента активации и выбор цвета статус-бара
             const statusEl = document.getElementById('profile-status');
+            const isPaid = data.profile ? data.profile.isPaid : false;
             if (statusEl) {
-                if (data.profile.isPaid) {
-                    const paidAt = data.profile.paymentDate ? new Date(data.profile.paymentDate) : new Date();
+                if (isPaid) {
+                    const paidAt = (data.profile && data.profile.paymentDate) ? new Date(data.profile.paymentDate) : new Date();
                     const diffTime = Math.abs(new Date() - paidAt);
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                     
@@ -200,9 +207,9 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 }
             }
             
-            const mitronsBalance = data.profile.balances ? data.profile.balances.mitrons : 0;
+            const mitronsBalance = data.profile ? (data.profile.balanceMitrons || (data.profile.balances ? data.profile.balances.mitrons : 0)) : 0;
             setElementText('balance-mitrons', `${mitronsBalance} Mitrons`);
-            setElementText('balance-usd', `$${convertMitronsToUsd(mitronsBalance)}`);
+            setElementText('balance-usd', `($${convertMitronsToUsd(mitronsBalance)})`);
             
             // --- ОБРАТНЫЙ СПИСОК СПОНСОРОВ (UPLINE TRACKING) ---
             const uplineContainer = document.getElementById('profile-upline-chain');
@@ -285,7 +292,7 @@ function renderReferralsSection(username, refData, currentSearch) {
 
     const header = document.createElement('div');
     header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; color: #a0a0ab; font-size: 13px;';
-    header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount}</strong></span>`;
+    header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount || 0}</strong></span>`;
     wrapper.appendChild(header);
 
     // Строка поиска по личникам
@@ -337,7 +344,7 @@ function renderReferralsSection(username, refData, currentSearch) {
         const moreBtn = document.createElement('button');
         moreBtn.innerText = 'Показать ещё...';
         moreBtn.style.cssText = 'margin-top: 8px; width: 100%; padding: 6px; background: #2a2a36; border: 1px solid #444; color: #3498db; border-radius: 4px; cursor: pointer; font-size: 12px;';
-        moreBtn.onclick = () => loadUserProfile(username, currentSearch, refData.currentPage + 1);
+        moreBtn.onclick = () => loadUserProfile(username, currentSearch, (refData.currentPage || 1) + 1);
         wrapper.appendChild(moreBtn);
     }
 
@@ -356,12 +363,15 @@ async function resetSystem() {
     if (!confirm('Вы уверены, что хотите полностью очистить систему матриц и балансов?')) return;
     
     try {
-        const response = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
+        const response = await fetch(`${API_URL}/api/reset-database`, { method: 'POST' });
         const result = await response.json();
         if (result.success) {
             alert('Система успешно сброшена к исходному состоянию!');
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
+            }
+            if (typeof window.renderUsersTable === 'function') {
+                window.renderUsersTable();
             }
             
             setElementText('current-profile-user', '—');
