@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mitron Matrix & Marketplace System</title>
+    <title>Mitron Matrix & Marketplace System (Сайт №2)</title>
     <style>
         /* === ПРЕМИАЛЬНАЯ ТЁМНАЯ ТЕМА === */
         body {
@@ -147,9 +147,18 @@
             border: 1px solid #4ade80 !important;
         }
 
-        /* Профиль */
+        /* Профиль и Счета */
         .profile-info p { margin: 8px 0; font-size: 16px; }
         .balance-box { font-size: 22px; font-weight: bold; color: #4ade80; margin: 15px 0; }
+        
+        .sys-wallets-box {
+            background: #111116;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px dashed #3498db;
+            margin-top: 15px;
+        }
+        .sys-wallets-box h3 { margin: 0 0 8px 0; font-size: 14px; color: #3498db; }
 
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
@@ -160,8 +169,8 @@
 
 <div class="container">
     <header>
-        <h1>Система Управления Матрицей и Маркетплейсом</h1>
-        <p>Расчеты в Митронах (Mitrons) и USD. Базовый пакет: 1000 Митронов ($130)</p>
+        <h1>Система Управления Матрицей и Маркетплейсом (Приватное Ядро)</h1>
+        <p>Расчеты в Митронах (Mitrons) и USD. Покупка: 1000 Митронов ($130) = 100% на Кошелек Админа</p>
     </header>
 
     <div class="grid">
@@ -212,6 +221,12 @@
                 
                 <button onclick="payCertificate()" class="btn-success">Активировать пакет (1000 Mitrons / $130)</button>
             </div>
+
+            <div class="sys-wallets-box">
+                <h3>💼 Системные кошельки</h3>
+                <p>Администрация (100%): <strong id="sys-admin-wallet" style="color: #4ade80;">0 M</strong></p>
+                <p>DAO Пул (Резерв): <strong id="sys-dao-wallet" style="color: #38bdf8;">0 M</strong></p>
+            </div>
         </div>
     </div>
 
@@ -241,8 +256,8 @@
     </div>
 </div>
 
-<script src="script.js?v=11"></script>
-<script src="matrix.js?v=11"></script>
-<script src="table.js?v=11"></script>
+<script src="script.js?v=12"></script>
+<script src="matrix.js?v=12"></script>
+<script src="table.js?v=12"></script>
 </body>
 </html>
