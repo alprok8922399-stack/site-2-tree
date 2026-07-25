@@ -201,7 +201,7 @@ function renderSingleMatrixBlock(container, topId, treeData) {
     container.appendChild(block);
 }
 
-// Універсальная конвертация ID ячейки (Excel-формат: A1, Z10, AA1 и т.д.) в глобальный индекс
+// Универсальная конвертация ID ячейки (Excel-формат: A1, Z10, AA1 и т.д.) в глобальный индекс
 function cellIdToGlobalIndex(cellId) {
     if (!cellId) return 0;
     const match = cellId.match(/^([A-Z]+)(\d+)$/);
