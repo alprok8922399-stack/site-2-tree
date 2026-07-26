@@ -1,7 +1,8 @@
 /**
  * Бэкенд Приватного Ядра — Сайт №2 (Матрица и Реферальная Таблица)
  * Управляет деревом ячеек, реферальными связями, логикой деления,
- * заморозкой/блокировкой, 5 поколениями связей и реферальными выплатами (50/10/10).
+ * заморозкой/блокировкой, 5 поколениями связей, реферальными выплатами (50/10/10)
+ * и финансовой статистикой Администратора.
  */
 
 const express = require('express');
@@ -302,6 +303,60 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
         shopUserStatus: shopUsersDB[canonicalName],
         cellId,
         amount: TOTAL_MITRONS
+    });
+});
+
+// Данные карточки Администратора
+app.get('/api/admin/stats', (req, res) => {
+    const totalUsersList = Object.keys(referalsDB);
+    const totalUsers = totalUsersList.length;
+    
+    const adminLogins = totalUsersList.filter(u => 
+        u.toLowerCase().includes('admin') || 
+        u === 'SYSTEM_ROOT' || 
+        u === 'Admin_System'
+    ).length;
+    
+    const buyerLogins = Math.max(0, totalUsers - adminLogins);
+
+    let totalIncome = 0;
+    let refPayoutsReleased = 0;
+    let refPayoutsPending = 0;
+
+    Object.values(shopUsersDB).forEach(u => {
+        if (u.purchases && u.purchases.certificateAmount) {
+            totalIncome += u.purchases.certificateAmount;
+        }
+        if (u.pendingPayouts && Array.isArray(u.pendingPayouts)) {
+            u.pendingPayouts.forEach(p => {
+                if (p.status === 'released') {
+                    refPayoutsReleased += p.amount;
+                } else {
+                    refPayoutsPending += p.amount;
+                }
+            });
+        }
+    });
+
+    const cashbackPaid = 0; // По умолчанию
+    const totalReserve = refPayoutsPending; 
+    const netProfit = totalIncome - refPayoutsReleased - cashbackPaid - totalReserve;
+
+    res.json({
+        success: true,
+        stats: {
+            totalBalance: wallets.adminWallet ? wallets.adminWallet.balanceMitrons : totalIncome,
+            incomeToday: totalIncome,
+            incomeWeek: totalIncome,
+            incomeMonth: totalIncome,
+            cashbackPaid,
+            refPayouts: refPayoutsReleased,
+            totalReserve,
+            netProfit,
+            totalUsers,
+            adminLogins,
+            buyerLogins
+        }
     });
 });
 
