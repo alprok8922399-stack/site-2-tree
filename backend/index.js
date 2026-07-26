@@ -73,7 +73,7 @@ let activeMatricesList = ['A1']; // Список верхушек активны
  */
 function getOrCreateUserCard(username) {
     const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) 
-                        || username.trim();
+                         || username.trim();
     if (!shopUsersDB[canonicalName]) {
         shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
         if (!shopUsersDB[canonicalName].balances) {
