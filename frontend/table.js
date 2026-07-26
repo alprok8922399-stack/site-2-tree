@@ -98,6 +98,9 @@ async function loadReferalsTable(isBackground = false) {
         let rootUserKey = Object.keys(referralTreeData).find(key => key === 'SYSTEM_ROOT' || !referralTreeData[key].parentId);
         if (!rootUserKey) rootUserKey = Object.keys(referralTreeData)[0];
 
+        // Очистка активного пути от удалённых пользователей
+        activePath = activePath.filter(user => referralTreeData[user]);
+
         if (activePath.length === 0 && rootUserKey) {
             activePath = [rootUserKey];
         }
@@ -147,7 +150,7 @@ function renderActiveReferralGrid(container) {
     }
     renderAlignedColumn(wrapper, rootColumnUsers, 0);
 
-    // 2. Последующие 4 колонки рефералов
+    // 2. Последующие колонки рефералов
     for (let i = 0; i < activePath.length && i < 4; i++) {
         const currentLogin = activePath[i];
         const userNode = referralTreeData[currentLogin];
@@ -288,6 +291,9 @@ window.resetTableToRoot = function() {
         if (targetContainer) renderActiveReferralGrid(targetContainer);
     }
 };
+
+// Экспорт для вызова из других модулей (например, при удалении пользователя из админки)
+window.loadReferalsTable = loadReferalsTable;
 
 // Фоновое обновление каждые 3 секунды
 setInterval(() => { loadReferalsTable(true); }, 3000);
