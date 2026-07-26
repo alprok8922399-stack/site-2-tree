@@ -8,9 +8,10 @@
  */
 function getLevelLetter(index) {
     let letter = '';
-    while (index >= 0) {
-        letter = String.fromCharCode((index % 26) + 65) + letter;
-        index = Math.floor(index / 26) - 1;
+    let idx = index;
+    while (idx >= 0) {
+        letter = String.fromCharCode((idx % 26) + 65) + letter;
+        idx = Math.floor(idx / 26) - 1;
     }
     return letter;
 }
@@ -52,9 +53,18 @@ function createNewUserCard(username) {
         username: username,
         isPaid: false,
         paymentDate: null,
+        isFrozen: false,
+        pendingPayouts: [],
         balances: {
             mitrons: 0,
             usd: 0
+        },
+        spent: {
+            mitrons: 0,
+            usd: 0
+        },
+        purchases: {
+            certificateAmount: 0
         },
         matrixPosition: {
             currentCellId: null,
