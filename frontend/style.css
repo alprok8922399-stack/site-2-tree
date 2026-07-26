@@ -3,7 +3,7 @@ body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #0f0f12;
     margin: 0;
-    padding: 20px;
+    padding: 15px;
     color: #e3e3e8;
     overflow-x: hidden;
 }
@@ -17,14 +17,14 @@ body {
 
 header {
     text-align: center;
-    margin-bottom: 30px;
-    padding-bottom: 20px;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
     border-bottom: 2px solid #232329;
 }
 
-h1 { margin: 0; color: #ffffff; font-size: 24px; }
+h1 { margin: 0; color: #ffffff; font-size: 22px; }
 h2 { color: #ffffff; border-left: 5px solid #3498db; padding-left: 10px; font-size: 18px; margin-top: 0; }
-p { color: #a0a0ab; margin: 5px 0; }
+p { color: #a0a0ab; margin: 5px 0; font-size: 13px; }
 
 .grid {
     display: grid;
@@ -44,68 +44,120 @@ p { color: #a0a0ab; margin: 5px 0; }
     overflow: hidden;
 }
 
-/* === КАРТОЧКА АДМИНИСТРАТОРА (ВЕРХНЯЯ АНАЛИТИКА) === */
-.admin-card {
-    background: linear-gradient(145deg, #181822, #121218);
-    border: 1px solid #e74c3c;
-    border-radius: 12px;
-    padding: 20px;
+/* === КАРТОЧКА АДМИНИСТРАТОРА (ОБНОВЛЕННАЯ ФИНАНСОВАЯ АНАЛИТИКА) === */
+.admin-analytics-card {
+    background: linear-gradient(145deg, #161620, #0f0f14);
+    border: 1px solid #2e2e3e;
+    border-radius: 14px;
+    padding: 18px;
     margin-bottom: 25px;
-    box-shadow: 0 0 20px rgba(231, 76, 60, 0.15);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
 }
 
 .admin-card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #2d2d3a;
-    padding-bottom: 12px;
-    margin-bottom: 15px;
+    border-bottom: 1px solid #2a2a38;
+    padding-bottom: 10px;
+    margin-bottom: 16px;
 }
 
 .admin-card-header h2 {
-    color: #e74c3c;
-    border-left: 4px solid #e74c3c;
+    color: #ffd700;
+    border-left: 4px solid #ffd700;
     margin: 0;
     padding-left: 10px;
-}
-
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
-    margin-bottom: 15px;
-}
-
-.stat-item {
-    background: #0d0d12;
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid #262633;
-    display: flex;
-    flex-direction: column;
-}
-
-.stat-label {
-    font-size: 12px;
-    color: #8a8a9e;
-    margin-bottom: 4px;
-}
-
-.stat-value {
-    font-size: 16px;
-    font-weight: bold;
-    color: #38bdf8;
-}
-
-.stat-value.highlight {
-    color: #2ecc71;
     font-size: 18px;
 }
 
-.stat-value.reserve {
-    color: #f39c12;
+.admin-status-badge {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+    border: 1px solid #2ecc71;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
+
+/* Сетка карточек аналитики */
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.analytics-item {
+    background: #111117;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #22222e;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-shadow: inset 0 1px 3px rgba(255,255,255,0.02);
+}
+
+.analytics-item.main-balance {
+    grid-column: span 2;
+    background: linear-gradient(135deg, #1c1c28, #13131c);
+    border: 1px solid #38bdf8;
+}
+
+.analytics-label {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.analytics-value {
+    font-size: 18px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+}
+
+/* Яркие цветовые подсвечивания значений */
+.analytics-value.green { color: #4ade80; }
+.analytics-value.orange { color: #fb923c; }
+.analytics-value.blue { color: #38bdf8; }
+.analytics-value.purple { color: #c084fc; }
+.analytics-value.gold { 
+    color: #ffd700; 
+    font-size: 22px; 
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+/* Блок статистики логинов */
+.logins-summary-box {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background: #0d0d12;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #20202c;
+    font-size: 13px;
+    color: #cbd5e1;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.login-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gold-text { color: #ffd700; }
+.green-text { color: #4ade80; }
 
 /* === ФОРМЫ И ВВОД === */
 .form-group {
@@ -197,7 +249,7 @@ button:active { transform: scale(0.98); }
     display: block;
 }
 
-/* === СТИЛИ ДЛЯ ВЫРАВНИВАНИЯ МАТРИЦ В СТРОКУ (ДО 32 ШТ) === */
+/* === СТИЛИ ДЛЯ ВЫРАВНИВАНИЯ МАТРИЦ В СТРОКУ === */
 #mainTreeDisplay {
     display: flex !important;
     flex-direction: row !important;
@@ -234,16 +286,6 @@ button:active { transform: scale(0.98); }
 .profile-info p { margin: 8px 0; font-size: 15px; }
 .balance-box { font-size: 20px; font-weight: bold; color: #4ade80; margin: 15px 0; }
 
-.sys-wallets-box {
-    background: #111116;
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px dashed #3498db;
-    margin-top: 15px;
-}
-
-.sys-wallets-box h3 { margin: 0 0 8px 0; font-size: 14px; color: #3498db; }
-
 /* === МОДАЛЬНОЕ ОКНО И ИНФО-КАРТОЧКА === */
 .modal {
     display: none;
@@ -271,35 +313,6 @@ button:active { transform: scale(0.98); }
     box-sizing: border-box;
 }
 
-.user-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #2a2a35;
-    padding-bottom: 12px;
-    margin-bottom: 15px;
-}
-
-.user-card-title {
-    font-size: 20px;
-    font-weight: bold;
-    color: #38bdf8;
-    margin: 0;
-}
-
-.status-badge {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: bold;
-    text-transform: uppercase;
-}
-
-.status-badge.active { background: #1e3a20; color: #4CAF50; border: 1px solid #4CAF50; }
-.status-badge.waiting { background: #3d2c00; color: #f39c12; border: 1px solid #f39c12; }
-.status-badge.frozen { background: #1b3644; color: #38bdf8; border: 1px solid #38bdf8; }
-.status-badge.blocked { background: #4a1515; color: #ff4757; border: 1px solid #ff4757; }
-
 /* === ТАБЛИЦА ПОЛЬЗОВАТЕЛЕЙ И ДАННЫХ === */
 .user-safes-table, .data-table {
     width: 100%;
@@ -320,19 +333,15 @@ button:active { transform: scale(0.98); }
     color: #a0a0ab;
 }
 
-.card-control-section {
-    background: #111116;
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid #2a2a35;
-    margin-top: 15px;
-}
-
 /* === АДАПТИВНОСТЬ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ === */
 @media (max-width: 768px) {
-    body { padding: 10px; }
+    body { padding: 8px; }
     .grid { grid-template-columns: 1fr; }
-    .stats-grid { grid-template-columns: 1fr 1fr; }
-    .modal-content { margin: 10% auto; width: 95%; padding: 15px; }
-    #matrix-view-container { padding: 10px; min-height: 350px; }
+    .analytics-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .analytics-item.main-balance { grid-column: span 2; }
+    .analytics-value { font-size: 16px; }
+    .analytics-value.gold { font-size: 19px; }
+    .modal-content { margin: 8% auto; width: 95%; padding: 15px; }
+    #matrix-view-container { padding: 8px; min-height: 350px; }
+    .logins-summary-box { font-size: 12px; flex-direction: column; gap: 4px; align-items: flex-start; }
 }
