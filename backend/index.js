@@ -176,7 +176,7 @@ function checkAndSplitMatrix(cellId) {
 }
 
 /**
- * Логика выплат 50 / 10 / 10 с удержанием 31 день
+ * Логика выплат 50 / 10 / 10 (31 день удержания ВРЕМЕННО ОТКЛЮЧЕН — мгновенная выплата)
  */
 function processReferralPayouts(buyerUser, amount = 1000) {
     let current = buyerUser;
@@ -190,16 +190,19 @@ function processReferralPayouts(buyerUser, amount = 1000) {
         const sponsorProfile = shopUsersDB[canonicalSponsor];
 
         if (sponsorProfile && !sponsorProfile.isFrozen) {
-            const releaseDate = new Date();
-            releaseDate.setDate(releaseDate.getDate() + 31); // 31 день отказного периода
             const payoutAmount = amount * rewardPercents[level];
 
+            // Записываем выплату со статусом 'released' (без ожидания 31 дня)
             sponsorProfile.pendingPayouts.push({
                 fromUser: buyerUser,
                 amount: payoutAmount,
-                releaseDate: releaseDate.toISOString(),
-                status: 'pending'
+                releaseDate: new Date().toISOString(), // Выплачено прямо сейчас
+                status: 'released'
             });
+
+            // Начисляем деньги сразу на баланс спонсора
+            sponsorProfile.balances.mitrons += payoutAmount;
+            sponsorProfile.balances.usd = parseFloat(mitronsToUsd(sponsorProfile.balances.mitrons));
         }
         current = canonicalSponsor;
     }
