@@ -281,6 +281,17 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 `;
             }
 
+            // Рендер тела модального окна (для userModal)
+            const modalBody = document.getElementById('modal-user-body');
+            if (modalBody) {
+                modalBody.innerHTML = `
+                    <div><strong>Логин:</strong> ${data.username}</div>
+                    <div><strong>Ячейки:</strong> ${cellsList}</div>
+                    <div><strong>Статус:</strong> ${statusEl ? statusEl.innerText : '—'}</div>
+                    <div><strong>Баланс:</strong> ${mitronsBalance} Mitrons ($${convertMitronsToUsd(mitronsBalance)})</div>
+                `;
+            }
+
             // Цепочка спонсоров (до 5 поколений вглубь)
             const uplineContainer = document.getElementById('profile-upline-chain');
             if (uplineContainer) {
@@ -335,10 +346,11 @@ function renderAdminActionButtons(username, isFrozen) {
     if (!container) {
         const modal = getProfileModalElement();
         if (modal) {
+            const targetContainer = modal.querySelector('.modal-content') || modal;
             container = document.createElement('div');
             container.id = 'admin-actions-container';
             container.style.cssText = 'display: flex; gap: 10px; margin-top: 15px; border-top: 1px solid #333; padding-top: 10px;';
-            modal.appendChild(container);
+            targetContainer.appendChild(container);
         }
     }
 
