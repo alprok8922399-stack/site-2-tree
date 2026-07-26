@@ -2,7 +2,7 @@
  * Бэкенд Приватного Ядра — Сайт №2 (Матрица, Таблицы и Аналитика)
  * Управляет деревом ячеек, реферальными связями, логикой деления,
  * заморозкой/блокировкой, 5 поколениями связей, реферальными выплатами
- * и финансовой статистикой Администратора.
+ * и точной финансовой статистикой Администратора.
  */
 
 const express = require('express');
@@ -32,6 +32,9 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // Инициализация баз данных в памяти
 let shopUsersDB = {};
 let wallets = createInitialWallets();
+
+// Список строго системных админ-аккаунтов (ровно 3 аккаунта)
+const ADMIN_LOGINS_LIST = ['SYSTEM_ROOT', 'Admin_System', 'LEADER_1'];
 
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
@@ -130,7 +133,6 @@ function findNextEmptyCell(tree) {
 
 /**
  * Проверка и деление матрицы при заполнении 4 нижних ячеек
- * НА ВРЕМЯ ТЕСТОВ: Выплата 1000 Митронов верхнему лидеру происходит МГНОВЕННО!
  */
 function checkAndSplitMatrix(cellId) {
     const gIdx = cellIdToGlobalIndex(cellId);
@@ -182,7 +184,7 @@ function checkAndSplitMatrix(cellId) {
 }
 
 /**
- * Распределение реферальных выплат (НА ВРЕМЯ ТЕСТОВ: 50 / 10 / 10 Митронов мгновенно)
+ * Распределение реферальных выплат (50 / 10 / 10 Митронов)
  */
 function processIncomeDistribution(buyerUser) {
     let current = buyerUser;
@@ -216,33 +218,43 @@ function processIncomeDistribution(buyerUser) {
     wallets.referralPaid = (wallets.referralPaid || 0) + totalRefPaid;
 }
 
-// Формирование точной статистики для Карточки Админа
+/**
+ * Формирование точной статистики для Панели Администратора
+ */
 function getSystemStats() {
     const totalUsersList = Array.from(new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]));
-    const totalUsers = totalUsersList.length;
     
+    // Строгий подсчет Админов и Покупателей
     const adminLogins = totalUsersList.filter(u => 
-        u.toLowerCase().includes('admin') || 
-        u.toLowerCase().includes('leader') ||
-        u === 'SYSTEM_ROOT' || 
-        u === 'Admin_System'
+        ADMIN_LOGINS_LIST.some(adminName => adminName.toLowerCase() === u.toLowerCase())
     ).length;
     
+    const totalUsers = totalUsersList.length;
     const buyerLogins = Math.max(0, totalUsers - adminLogins);
 
+    // Подсчет общего прихода денег
     let totalIncome = 0;
-
     Object.values(shopUsersDB).forEach(u => {
         if (u.purchases && u.purchases.certificateAmount) {
             totalIncome += u.purchases.certificateAmount;
         }
     });
 
+    // Подсчет реально выплаченных реферальных из карт всех юзеров
+    let totalRefPaidCalculated = 0;
+    Object.values(shopUsersDB).forEach(u => {
+        if (u.pendingPayouts && Array.isArray(u.pendingPayouts)) {
+            u.pendingPayouts.forEach(p => {
+                totalRefPaidCalculated += (p.amount || 0);
+            });
+        }
+    });
+
     const cashbackPaid = wallets.cashbackPaid || 0;
-    const refPayoutsReleased = wallets.referralPaid || 0;
+    const refPayoutsReleased = Math.max(wallets.referralPaid || 0, totalRefPaidCalculated);
     
-    // Остаток средств в кассе Админа
-    const currentAdminReserve = Math.max(0, totalIncome - cashbackPaid - refPayoutsReleased);
+    // Чистый остаток кассы
+    const netProfit = Math.max(0, totalIncome - cashbackPaid - refPayoutsReleased);
 
     return {
         totalBalance: totalIncome,
@@ -251,8 +263,8 @@ function getSystemStats() {
         incomeMonth: totalIncome,
         cashbackPaid,
         refPayouts: refPayoutsReleased,
-        totalReserve: currentAdminReserve,
-        netProfit: currentAdminReserve,
+        totalReserve: 0, // Резерв DAO Пока 0, вся чистая прибыль в кассе
+        netProfit: netProfit,
         totalUsers,
         adminLogins,
         buyerLogins
@@ -580,6 +592,7 @@ app.post(['/api/reset', '/api/reset-database'], (req, res) => {
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
+        'Admin_System': 'SYSTEM_ROOT',
         'LEADER_1': 'SYSTEM_ROOT',
         'LEADER_2': 'SYSTEM_ROOT'
     };
