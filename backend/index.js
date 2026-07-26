@@ -31,13 +31,12 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 let shopUsersDB = {};
 let wallets = createInitialWallets();
 
-// Список строго системных админ-аккаунтов (ровно 3 аккаунта)
-const ADMIN_LOGINS_LIST = ['SYSTEM_ROOT', 'Admin_System', 'LEADER_1'];
+// Список строго системных админ-аккаунтов
+const ADMIN_LOGINS_LIST = ['SYSTEM_ROOT', 'LEADER_1'];
 
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
     'SYSTEM_ROOT': null,
-    'Admin_System': 'SYSTEM_ROOT',
     'LEADER_1': 'SYSTEM_ROOT',
     'LEADER_2': 'SYSTEM_ROOT'
 };
@@ -89,7 +88,7 @@ function getOrCreateUserCard(username) {
 }
 
 // Первичная инициализация базовых пользователей
-['SYSTEM_ROOT', 'Admin_System', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
+['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
 
 /**
  * Поиск канонического имени спонсора без учета регистра
@@ -286,8 +285,8 @@ function getSystemStats() {
         cashbackPaid,
         refPayouts: refPayoutsReleased,
         productCost: marketplaceProductCost, // Выделено на покупку товара
-        totalReserve: daoReserve,             // 10% в DAO Пул
-        netProfit: netProfit,                 // Итоговая чистая прибыль
+        totalReserve: daoReserve,              // 10% в DAO Пул
+        netProfit: netProfit,                  // Итоговая чистая прибыль
         totalUsers,
         adminLogins,
         buyerLogins
@@ -590,11 +589,11 @@ app.post('/api/admin/delete-user', (req, res) => {
     
     Object.keys(treeDB).forEach(cellId => {
         if (treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === canonicalName.toLowerCase()) {
-            treeDB[cellId].user = 'Admin_System';
+            treeDB[cellId].user = 'SYSTEM_ROOT';
         }
     });
     
-    res.json({ success: true, message: `Пользователь ${canonicalName} заблокирован. Ячейки переданы Admin_System` });
+    res.json({ success: true, message: `Пользователь ${canonicalName} заблокирован. Ячейки переданы SYSTEM_ROOT` });
 });
 
 app.post(['/api/reset', '/api/reset-database'], (req, res) => {
@@ -604,12 +603,11 @@ app.post(['/api/reset', '/api/reset-database'], (req, res) => {
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
-        'Admin_System': 'SYSTEM_ROOT',
         'LEADER_1': 'SYSTEM_ROOT',
         'LEADER_2': 'SYSTEM_ROOT'
     };
     lastRegisteredBot = null;
-    ['SYSTEM_ROOT', 'Admin_System', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
+    ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
     res.json({ success: true });
 });
 
