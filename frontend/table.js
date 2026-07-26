@@ -211,6 +211,7 @@ async function loadReferalsTable(isBackground = false) {
 
     try {
         const response = await fetch(`${API_BASE_URL}/api/referals-tree?t=${Date.now()}`);
+        if (!response.ok) return;
         const result = await response.json();
 
         if (!result.success || !result.tree) return;
@@ -354,28 +355,31 @@ function renderAlignedColumn(wrapper, usersList, columnIndex, parentNode) {
     const column = document.createElement('div');
     column.className = 'referral-column';
 
-    let rawList = [];
-    if (parentNode && parentNode.children) {
-        rawList = parentNode.children.map(childId => referralTreeData[childId]).filter(Boolean);
-    } else if (usersList) {
-        rawList = usersList;
-    }
-
-    // Исключаем ячейку с именем Admin_System
-    const filteredUsers = rawList.filter(user => user && user.login !== 'Admin_System' && user.id !== 'Admin_System');
-
-    if (filteredUsers.length === 0) {
+    if (!usersList || usersList.length === 0) {
         const emptyMsg = document.createElement('div');
         emptyMsg.className = 'empty-column-msg';
         emptyMsg.innerText = 'Нет зарегистрированных личников';
         column.appendChild(emptyMsg);
     } else {
-        filteredUsers.forEach(user => {
-            const slot = document.createElement('div');
-            slot.className = 'table-row-slot';
-            slot.appendChild(createUserCardElement(user, columnIndex));
-            column.appendChild(slot);
-        });
+        if (parentNode && parentNode.children) {
+            parentNode.children.forEach(childId => {
+                const slot = document.createElement('div');
+                slot.className = 'table-row-slot';
+                
+                const user = referralTreeData[childId];
+                if (user) {
+                    slot.appendChild(createUserCardElement(user, columnIndex));
+                }
+                column.appendChild(slot);
+            });
+        } else {
+            usersList.forEach(user => {
+                const slot = document.createElement('div');
+                slot.className = 'table-row-slot';
+                slot.appendChild(createUserCardElement(user, columnIndex));
+                column.appendChild(slot);
+            });
+        }
     }
 
     wrapper.appendChild(column);
@@ -459,7 +463,7 @@ window.searchTableUserByInput = function() {
     const query = input.value.trim().toLowerCase();
     if (!query) return;
 
-    const foundUserKey = Object.keys(referralTreeData).find(key => key.toLowerCase() === query);
+    const foundUserKey = Object.keys(referralTreeData).find(key => key.toLowerCase() === query || (referralTreeData[key].login && referralTreeData[key].login.toLowerCase() === query));
 
     if (foundUserKey) {
         highlightedTableUser = referralTreeData[foundUserKey].login;
@@ -477,6 +481,18 @@ window.searchTableUserByInput = function() {
         if (targetContainer) renderActiveReferralGrid(targetContainer);
     } else {
         alert('Пользователь не найден в структуре');
+    }
+};
+
+window.showSearchedInMatrix = function() {
+    if (highlightedTableUser) {
+        if (typeof window.openUserMatrix === 'function') {
+            window.openUserMatrix(highlightedTableUser);
+        } else {
+            alert(`Показ матрицы для пользователя: ${highlightedTableUser}`);
+        }
+    } else {
+        alert('Сначала найдите пользователя через поиск');
     }
 };
 
