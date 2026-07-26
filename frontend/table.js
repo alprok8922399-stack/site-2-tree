@@ -389,8 +389,6 @@ function createUserCardElement(user, columnIndex) {
     card.className = 'user-cell-card';
     card.id = `table-user-${user.login}`;
     
-    const isAlreadyActive = activePath[columnIndex] === user.id;
-
     if (activePath.includes(user.id)) {
         card.classList.add('active-link');
     }
@@ -417,188 +415,100 @@ function createUserCardElement(user, columnIndex) {
 
     card.appendChild(mainRow);
 
-    if (openDropdownUser === user.id) {
-        const dropdown = document.createElement('div');
-        dropdown.className = 'user-dropdown-menu';
-        dropdown.onclick = (e) => e.stopPropagation(); 
-
-        dropdown.innerHTML = `
-            <button class="dropdown-btn" onclick="window.viewUserCardTrigger('${user.login}')">👤 Открыть Инфо-Карточку</button>
-            <button class="dropdown-btn" onclick="window.focusUserMatrixTrigger('${user.login}')">📊 Показать в Матрице</button>
-            <button class="dropdown-btn" onclick="window.copyToClipboardTrigger('${user.login}', this)">📋 Копировать логин</button>
-        `;
-        card.appendChild(dropdown);
-    }
-
+    // При клике открываем следующую линию пользователей
     card.addEventListener('click', (e) => {
         e.stopPropagation();
         isUserInteracting = true;
 
-        if (isAlreadyActive && activePath.length > columnIndex + 1) {
-            activePath = activePath.slice(0, columnIndex + 1);
+        if (openDropdownUser === user.id) {
             openDropdownUser = null;
         } else {
-            activePath = activePath.slice(0, columnIndex);
-            activePath.push(user.id);
-
-            // Не даем активному пути превышать 5 поколений
-            if (activePath.length > 5) {
-                activePath = activePath.slice(-5);
-            }
-
-            if (openDropdownUser === user.id) {
-                openDropdownUser = null; 
-            } else {
-                openDropdownUser = user.id; 
-            }
+            openDropdownUser = user.id;
         }
+
+        activePath = activePath.slice(0, columnIndex);
+        activePath.push(user.id);
 
         const targetContainer = document.getElementById('referals-table-body');
-        if (targetContainer) {
-            renderActiveReferralGrid(targetContainer, false);
-        }
-
-        setTimeout(() => { isUserInteracting = false; }, 1000);
+        if (targetContainer) renderActiveReferralGrid(targetContainer);
     });
+
+    if (openDropdownUser === user.id) {
+        const dropdown = document.createElement('div');
+        dropdown.className = 'user-dropdown-menu';
+
+        const profileBtn = document.createElement('button');
+        profileBtn.className = 'dropdown-btn';
+        profileBtn.innerText = '👤 Карточка юзера';
+        profileBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (typeof window.openUserModal === 'function') {
+                window.openUserModal(user.login);
+            } else {
+                alert(`Пользователь: ${user.login}`);
+            }
+        };
+
+        dropdown.appendChild(profileBtn);
+        card.appendChild(dropdown);
+    }
 
     return card;
 }
 
-/**
- * Поиск пользователя с фокусировкой строго на 5 поколениях
- */
-async function searchReferralUser(login) {
-    if (!login) return;
-    isUserInteracting = true;
-    
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/get-referral-chain?login=${encodeURIComponent(login.trim())}`);
-        if (!response.ok) {
-            alert('Пользователь не найден в системе!');
-            isUserInteracting = false;
-            return;
+window.searchTableUserByInput = function() {
+    const input = document.getElementById('interactiveTableSearchInput');
+    if (!input) return;
+    const query = input.value.trim().toLowerCase();
+    if (!query) return;
+
+    const foundUserKey = Object.keys(referralTreeData).find(key => key.toLowerCase() === query);
+
+    if (foundUserKey) {
+        highlightedTableUser = referralTreeData[foundUserKey].login;
+        
+        // Восстанавливаем цепочку родителей
+        let path = [foundUserKey];
+        let current = referralTreeData[foundUserKey];
+        while (current && current.parentId && referralTreeData[current.parentId]) {
+            path.unshift(current.parentId);
+            current = referralTreeData[current.parentId];
         }
-
-        const result = await response.json();
-        if (result.success && result.chain && result.chain.length > 0) {
-            const fullChain = result.chain;
-            
-            // Если цепочка длиннее 5 поколений, берём строго последние 5
-            if (fullChain.length > 5) {
-                activePath = fullChain.slice(-5);
-            } else {
-                activePath = fullChain;
-            }
-
-            openDropdownUser = fullChain[fullChain.length - 1];
-            highlightedTableUser = login.trim();
-
-            const targetContainer = document.getElementById('referals-table-body');
-            if (targetContainer) {
-                renderActiveReferralGrid(targetContainer, false);
-            }
-        }
-    } catch (e) {
-        console.error('Ошибка поиска по таблице:', e);
-    } finally {
-        setTimeout(() => { isUserInteracting = false; }, 1000);
+        
+        activePath = path.slice(0, 5);
+        const targetContainer = document.getElementById('referals-table-body');
+        if (targetContainer) renderActiveReferralGrid(targetContainer);
+    } else {
+        alert('Пользователь не найден в структуре');
     }
-}
+};
 
-// Сброс таблицы к главному корню
-window.resetTableToRoot = () => {
-    const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData).find(node => !node.parentId) || Object.values(referralTreeData)[0];
+window.scrollToTableStart = function() {
+    const wrapper = document.getElementById('referralGridWrapper');
+    if (wrapper) wrapper.scrollLeft = 0;
+};
+
+window.scrollToTableEnd = function() {
+    const wrapper = document.getElementById('referralGridWrapper');
+    if (wrapper) wrapper.scrollLeft = wrapper.scrollWidth;
+};
+
+window.resetTableToRoot = function() {
+    const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData)[0];
     if (rootUser) {
         activePath = [rootUser.id];
-        openDropdownUser = null;
         highlightedTableUser = null;
-        
-        const inp = document.getElementById('interactiveTableSearchInput');
-        if (inp) inp.value = '';
-
-        const targetContainer = document.getElementById('referals-table-body');
-        if (targetContainer) {
-            renderActiveReferralGrid(targetContainer, false);
-        }
-    }
-};
-
-// Навигационные функции
-window.scrollToTableStart = () => {
-    const wrapper = document.getElementById('referralGridWrapper');
-    if (wrapper) wrapper.scrollTo({ left: 0, behavior: 'smooth' });
-};
-
-window.scrollToTableEnd = () => {
-    const wrapper = document.getElementById('referralGridWrapper');
-    if (wrapper) wrapper.scrollTo({ left: wrapper.scrollWidth, behavior: 'smooth' });
-};
-
-window.searchTableUserByInput = () => {
-    const inp = document.getElementById('interactiveTableSearchInput');
-    if (inp && inp.value) searchReferralUser(inp.value);
-};
-
-window.showSearchedInMatrix = () => {
-    const inp = document.getElementById('interactiveTableSearchInput');
-    const login = inp && inp.value ? inp.value.trim() : highlightedTableUser;
-    if (login) {
-        if (typeof window.searchMatrixUser === 'function') {
-            window.searchMatrixUser(login);
-        } else {
-            alert(`Поиск по матрице для ${login}`);
-        }
-    } else {
-        alert('Введите логин пользователя!');
-    }
-};
-
-window.searchReferralUser = searchReferralUser;
-window.refreshReferralTable = () => loadReferalsTable(false);
-window.renderUsersTable = () => loadReferalsTable(false);
-
-window.viewUserCardTrigger = (login) => {
-    if (typeof window.showUserCard === 'function') {
-        window.showUserCard(login);
-    } else {
-        alert(`Инфо-Карточка: ${login}`);
-    }
-};
-
-window.focusUserMatrixTrigger = (login) => {
-    if (typeof window.searchMatrixUser === 'function') {
-        window.searchMatrixUser(login);
-    } else {
-        alert(`Поиск по матрице для ${login}`);
-    }
-};
-
-window.copyToClipboardTrigger = (text, btn) => {
-    navigator.clipboard.writeText(text).then(() => {
-        const oldText = btn.innerText;
-        btn.innerText = '✅ Скопировано!';
-        setTimeout(() => { btn.innerText = oldText; }, 1500);
-    }).catch(err => console.error('Ошибка копирования:', err));
-};
-
-document.addEventListener('click', () => {
-    if (openDropdownUser !== null) {
         openDropdownUser = null;
         const targetContainer = document.getElementById('referals-table-body');
-        if (targetContainer) {
-            renderActiveReferralGrid(targetContainer, false);
-        }
+        if (targetContainer) renderActiveReferralGrid(targetContainer);
     }
-});
+};
 
+// Автообновление таблицы каждые 3 секунды
 setInterval(() => {
-    const inp = document.getElementById('interactiveTableSearchInput');
-    if (document.activeElement === inp && inp && inp.value.length > 0) {
-        return;
-    }
     loadReferalsTable(true);
 }, 3000);
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadReferalsTable(false);
+    loadReferalsTable();
 });
