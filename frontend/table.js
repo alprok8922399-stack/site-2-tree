@@ -7,7 +7,7 @@ let lastTreeJsonString = "";
 let isUserInteracting = false;
 let highlightedTableUser = null;
 
-// Динамические стили
+// Динамические стили (настроены под отображение 5 колонок)
 const style = document.createElement('style');
 style.innerHTML = `
     .table-search-container {
@@ -91,18 +91,18 @@ style.innerHTML = `
         flex-direction: row !important;
         flex-wrap: nowrap !important;
         align-items: flex-start !important;
-        gap: 15px !important;
+        gap: 12px !important;
         overflow-x: auto !important;
         padding: 10px 5px !important;
         background: #181818;
         border-radius: 8px;
-        min-height: 400px;
+        min-height: 420px;
         width: 100% !important;
         box-sizing: border-box;
         -webkit-overflow-scrolling: touch;
     }
     .referral-column {
-        flex: 0 0 250px !important;
+        flex: 0 0 220px !important;
         background: #222222 !important;
         border: 1px solid #333333 !important;
         border-radius: 6px !important;
@@ -122,7 +122,7 @@ style.innerHTML = `
     .user-cell-card {
         border: 1px solid #444444 !important;
         border-radius: 5px !important;
-        padding: 10px !important;
+        padding: 8px 10px !important;
         background: #2a2a2a !important;
         cursor: pointer !important;
         transition: all 0.2s ease !important;
@@ -153,7 +153,7 @@ style.innerHTML = `
         display: flex !important;
         justify-content: space-between !important;
         align-items: center !important;
-        font-size: 14px !important;
+        font-size: 13px !important;
     }
     .user-login-text {
         font-weight: 600 !important;
@@ -300,7 +300,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
     wrapper.className = 'referral-grid-wrapper';
     wrapper.id = 'referralGridWrapper';
 
-    // 1. Первая колонка (Либо корень, либо стартовый узел текущего узкого среза)
+    // 1. Первая колонка
     const firstLoginInPath = activePath[0];
     let rootColumnUsers = [];
 
@@ -312,7 +312,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
     
     renderAlignedColumn(wrapper, rootColumnUsers, 0, null);
 
-    // 2. Последующие колонки (Отображаем только активный фокусный путь)
+    // 2. Последующие колонки (отображение до 5 уровней цепи одновременно)
     for (let i = 0; i < activePath.length; i++) {
         const currentLogin = activePath[i];
         const userNode = referralTreeData[currentLogin];
@@ -455,7 +455,7 @@ function createUserCardElement(user, columnIndex) {
 }
 
 /**
- * Поиск пользователя с фокусом на срез
+ * Поиск пользователя с фокусом на срез (до 5 уровней цепи)
  */
 async function searchReferralUser(login) {
     if (!login) return;
@@ -473,8 +473,9 @@ async function searchReferralUser(login) {
         if (result.success && result.chain && result.chain.length > 0) {
             const fullChain = result.chain;
             
-            if (fullChain.length > 3) {
-                activePath = fullChain.slice(-3);
+            // Расширен срез: если цепочка длиннее 5 поколений, берём последние 5
+            if (fullChain.length > 5) {
+                activePath = fullChain.slice(-5);
             } else {
                 activePath = fullChain;
             }
@@ -512,26 +513,20 @@ window.resetTableToRoot = () => {
     }
 };
 
-// Навигационные функции (В начало / В конец)
+// Навигационные функции
 window.scrollToTableStart = () => {
     const wrapper = document.getElementById('referralGridWrapper');
-    if (wrapper) {
-        wrapper.scrollTo({ left: 0, behavior: 'smooth' });
-    }
+    if (wrapper) wrapper.scrollTo({ left: 0, behavior: 'smooth' });
 };
 
 window.scrollToTableEnd = () => {
     const wrapper = document.getElementById('referralGridWrapper');
-    if (wrapper) {
-        wrapper.scrollTo({ left: wrapper.scrollWidth, behavior: 'smooth' });
-    }
+    if (wrapper) wrapper.scrollTo({ left: wrapper.scrollWidth, behavior: 'smooth' });
 };
 
 window.searchTableUserByInput = () => {
     const inp = document.getElementById('interactiveTableSearchInput');
-    if (inp && inp.value) {
-        searchReferralUser(inp.value);
-    }
+    if (inp && inp.value) searchReferralUser(inp.value);
 };
 
 window.showSearchedInMatrix = () => {
