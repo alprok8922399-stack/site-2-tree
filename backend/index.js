@@ -86,6 +86,9 @@ function getOrCreateUserCard(username) {
         if (!shopUsersDB[canonicalName].purchases) {
             shopUsersDB[canonicalName].purchases = { certificateAmount: 0 };
         }
+        if (!shopUsersDB[canonicalName].matrixPosition) {
+            shopUsersDB[canonicalName].matrixPosition = { currentCellId: null, status: 'inactive' };
+        }
         shopUsersDB[canonicalName].isFrozen = false;
         shopUsersDB[canonicalName].pendingPayouts = [];
     }
@@ -467,10 +470,11 @@ app.post('/api/admin/freeze-user', (req, res) => {
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
 
     const canonicalName = getOrCreateUserCard(username);
-    shopUsersDB[canonicalName].isFrozen = freeze !== undefined ? Boolean(freeze) : true;
+    shopUsersDB[canonicalName].isFrozen = freeze !== undefined ? Boolean(freeze) : !shopUsersDB[canonicalName].isFrozen;
 
     res.json({
         success: true,
+        isFrozen: shopUsersDB[canonicalName].isFrozen,
         message: `Статус заморозки пользователя ${canonicalName}: ${shopUsersDB[canonicalName].isFrozen}`
     });
 });
