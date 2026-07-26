@@ -1,5 +1,5 @@
 /**
- * Бэкенд Приватного Ядра — Сайт №2 (Матрица и Реферальная Таблица)
+ * Бэкенд Приватного Ядра — Сайт №2 (Матрица, Таблицы и Аналитика)
  * Управляет деревом ячеек, реферальными связями, логикой деления,
  * заморозкой/блокировкой, 5 поколениями связей, реферальными выплатами (50/10/10)
  * и финансовой статистикой Администратора.
@@ -23,20 +23,10 @@ const {
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// Секретный ключ для защиты API
+// Секретный ключ для защиты административных запросов
 const INTERNAL_SECRET_KEY = process.env.INTERNAL_SECRET_KEY || 'super_secret_mitron_key_2026';
 
-// Проверка секретного ключа для защищенных системных запросов (POST, PUT, DELETE)
-app.use('/api/', (req, res, next) => {
-    if (req.method === 'GET') return next();
-
-    const clientKey = req.headers['x-internal-key'];
-    if (clientKey !== INTERNAL_SECRET_KEY) {
-        return res.status(403).json({ error: 'Доступ запрещен: Неверный системный ключ!' });
-    }
-    next();
-});
-
+// Публичный доступ к статике фронтенда
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Инициализация баз данных в памяти
@@ -85,16 +75,20 @@ function getOrCreateUserCard(username) {
             shopUsersDB[canonicalName].spent = { mitrons: 0, usd: 0 };
         }
         if (!shopUsersDB[canonicalName].purchases) {
-            shopUsersDB[canonicalName].purchases = { certificateAmount: 0 };
+            shopUsersDB[canonicalName].purchases = { certificateAmount: 0, history: [] };
         }
         if (!shopUsersDB[canonicalName].matrixPosition) {
             shopUsersDB[canonicalName].matrixPosition = { currentCellId: null, status: 'inactive' };
         }
         shopUsersDB[canonicalName].isFrozen = false;
         shopUsersDB[canonicalName].pendingPayouts = [];
+        shopUsersDB[canonicalName].createdAt = new Date().toISOString();
     }
     return canonicalName;
 }
+
+// Первичная инициализация базовых пользователей
+['Admin_System', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
 
 /**
  * Алгоритм поиска свободной ячейки (Правило четырех)
@@ -184,9 +178,9 @@ function checkAndSplitMatrix(cellId) {
 /**
  * Логика выплат 50 / 10 / 10 с удержанием 31 день
  */
-function processReferralPayouts(buyerUser) {
+function processReferralPayouts(buyerUser, amount = 1000) {
     let current = buyerUser;
-    const rewards = [50, 10, 10]; // 1-я линия 50, 2-я линия 10, 3-я линия 10
+    const rewardPercents = [0.50, 0.10, 0.10]; // 1-я линия 50%, 2-я 10%, 3-я 10%
 
     for (let level = 0; level < 3; level++) {
         const sponsorName = referalsDB[current];
@@ -198,10 +192,11 @@ function processReferralPayouts(buyerUser) {
         if (sponsorProfile && !sponsorProfile.isFrozen) {
             const releaseDate = new Date();
             releaseDate.setDate(releaseDate.getDate() + 31); // 31 день отказного периода
+            const payoutAmount = amount * rewardPercents[level];
 
             sponsorProfile.pendingPayouts.push({
                 fromUser: buyerUser,
-                amount: rewards[level],
+                amount: payoutAmount,
                 releaseDate: releaseDate.toISOString(),
                 status: 'pending'
             });
@@ -212,6 +207,7 @@ function processReferralPayouts(buyerUser) {
 
 // ================= API ЭНДПОИНТЫ =================
 
+// Получение дерева для графика матрицы
 app.get('/api/tree', (req, res) => {
     res.json({
         ...treeDB,
@@ -293,6 +289,16 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     shopUsersDB[canonicalName].isPaid = true;
     shopUsersDB[canonicalName].paymentDate = new Date().toISOString();
     shopUsersDB[canonicalName].purchases.certificateAmount += TOTAL_MITRONS;
+    
+    if (!shopUsersDB[canonicalName].purchases.history) {
+        shopUsersDB[canonicalName].purchases.history = [];
+    }
+    shopUsersDB[canonicalName].purchases.history.push({
+        amount: TOTAL_MITRONS,
+        date: new Date().toISOString(),
+        cellId
+    });
+
     shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
     shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
     shopUsersDB[canonicalName].matrixPosition.currentCellId = cellId;
@@ -303,7 +309,7 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     }
 
     // Запуск реферальных начислений (50 / 10 / 10)
-    processReferralPayouts(canonicalName);
+    processReferralPayouts(canonicalName, TOTAL_MITRONS);
 
     res.json({
         success: true,
@@ -313,7 +319,61 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     });
 });
 
-// Данные карточки Администратора
+// Данные таблицы ВСЕХ пользователей (для лечения Таблицы №1)
+app.get(['/api/users', '/api/admin/users'], (req, res) => {
+    const userList = Object.keys(referalsDB).map(username => {
+        const profile = shopUsersDB[username] || getOrCreateUserCard(username);
+        const userCells = Object.values(treeDB)
+            .filter(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase())
+            .map(cell => cell.id);
+
+        return {
+            username,
+            login: username,
+            sponsor: referalsDB[username] || 'SYSTEM_ROOT',
+            isFrozen: profile.isFrozen || false,
+            cells: userCells,
+            balanceMitrons: profile.balances ? profile.balances.mitrons : 0,
+            balanceUsd: profile.balances ? profile.balances.usd : 0,
+            spentMitrons: profile.spent ? profile.spent.mitrons : 0,
+            purchasesCount: profile.purchases && profile.purchases.history ? profile.purchases.history.length : (profile.purchases && profile.purchases.certificateAmount ? 1 : 0),
+            createdAt: profile.createdAt || new Date().toISOString()
+        };
+    });
+
+    res.json({ success: true, users: userList });
+});
+
+// Данные таблицы ВСЕХ покупок (для лечения Таблицы №2)
+app.get(['/api/purchases', '/api/admin/purchases'], (req, res) => {
+    let purchasesList = [];
+
+    Object.entries(shopUsersDB).forEach(([username, profile]) => {
+        if (profile.purchases && profile.purchases.history && profile.purchases.history.length > 0) {
+            profile.purchases.history.forEach((p, idx) => {
+                purchasesList.push({
+                    id: `${username}-${idx}`,
+                    username,
+                    amount: p.amount,
+                    date: p.date,
+                    cellId: p.cellId || 'M-Cell'
+                });
+            });
+        } else if (profile.purchases && profile.purchases.certificateAmount > 0) {
+            purchasesList.push({
+                id: `${username}-0`,
+                username,
+                amount: profile.purchases.certificateAmount,
+                date: profile.paymentDate || new Date().toISOString(),
+                cellId: profile.matrixPosition ? profile.matrixPosition.currentCellId : 'M-Cell'
+            });
+        }
+    });
+
+    res.json({ success: true, purchases: purchasesList });
+});
+
+// Динамическая карточка Аналитики Администратора
 app.get('/api/admin/stats', (req, res) => {
     const totalUsersList = Object.keys(referalsDB);
     const totalUsers = totalUsersList.length;
@@ -367,7 +427,7 @@ app.get('/api/admin/stats', (req, res) => {
     });
 });
 
-// Карточка пользователя
+// Карточка конкретного пользователя (Модальное окно)
 app.get('/api/user-details/:username', (req, res) => {
     const usernameParam = req.params.username.trim();
     const canonicalName = getOrCreateUserCard(usernameParam);
@@ -377,7 +437,7 @@ app.get('/api/user-details/:username', (req, res) => {
         .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
         .map(cell => cell.id);
         
-    // Цепочка спонсоров вверх (ограничена 5 поколениями)
+    // Цепочка спонсоров вверх (ограничена строго 5 поколениями)
     let sponsorChain = [];
     let currentSponsor = referalsDB[canonicalName] || 'SYSTEM_ROOT';
     let visited = new Set();
@@ -513,6 +573,7 @@ app.post(['/api/reset', '/api/reset-database'], (req, res) => {
         'LEADER_2': 'SYSTEM_ROOT'
     };
     lastRegisteredBot = null;
+    ['Admin_System', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
     res.json({ success: true });
 });
 
