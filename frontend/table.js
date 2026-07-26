@@ -214,9 +214,10 @@ async function loadReferalsTable(isBackground = false) {
         if (!response.ok) return;
         const result = await response.json();
 
-        if (!result.success || !result.tree) return;
+        const rawTree = result.tree || result.referralsTree || result.data;
+        if (!result.success || !rawTree) return;
 
-        const newTreeJsonString = JSON.stringify(result.tree);
+        const newTreeJsonString = JSON.stringify(rawTree);
         
         if (isBackground && newTreeJsonString === lastTreeJsonString) {
             return;
@@ -227,12 +228,15 @@ async function loadReferalsTable(isBackground = false) {
         }
 
         lastTreeJsonString = newTreeJsonString;
-        referralTreeData = result.tree;
+        referralTreeData = rawTree;
 
-        const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData).find(node => !node.parentId) || Object.values(referralTreeData)[0];
+        // Поиск корневого пользователя (ADMIN или без родителя)
+        const rootUserKey = Object.keys(referralTreeData).find(key => key === 'ADMIN' || key === 'SYSTEM_ROOT' || !referralTreeData[key].parentId) || Object.keys(referralTreeData)[0];
+        const rootUser = referralTreeData[rootUserKey];
 
         if (activePath.length === 0 && rootUser) {
-            activePath = [rootUser.id];
+            const rootLogin = rootUser.login || rootUserKey;
+            activePath = [rootLogin];
         }
 
         renderActiveReferralGrid(targetContainer, isBackground);
@@ -269,7 +273,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
     searchBlock.innerHTML = `
         <input type="text" id="interactiveTableSearchInput" class="table-search-input" placeholder="Поиск пользователя в таблице..." />
         <button type="button" class="table-search-btn" onclick="window.searchTableUserByInput()">Найти</button>
-        <button type="button" class="table-matrix-btn" onclick="window.showSearchedInMatrix()">Показать в матрице</button>
+        <button type="button" class="table-matrix-btn" onclick="window.showSearchedInMatrix()">Показать в карточке</button>
         <button type="button" class="table-nav-btn" onclick="window.scrollToTableStart()">⏮️ В начало</button>
         <button type="button" class="table-nav-btn" onclick="window.scrollToTableEnd()">⏭️ В конец</button>
         <button type="button" class="table-reset-btn" onclick="window.resetTableToRoot()">🏠 К корню</button>
@@ -313,7 +317,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
     if (firstLoginInPath && referralTreeData[firstLoginInPath]) {
         rootColumnUsers = [referralTreeData[firstLoginInPath]];
     } else {
-        rootColumnUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
+        rootColumnUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.login === 'ADMIN' || node.id === 'SYSTEM_ROOT');
     }
     
     renderAlignedColumn(wrapper, rootColumnUsers, 0, null);
@@ -362,11 +366,11 @@ function renderAlignedColumn(wrapper, usersList, columnIndex, parentNode) {
         column.appendChild(emptyMsg);
     } else {
         if (parentNode && parentNode.children) {
-            parentNode.children.forEach(childId => {
+            parentNode.children.forEach(childLogin => {
                 const slot = document.createElement('div');
                 slot.className = 'table-row-slot';
                 
-                const user = referralTreeData[childId];
+                const user = referralTreeData[childLogin];
                 if (user) {
                     slot.appendChild(createUserCardElement(user, columnIndex));
                 }
@@ -386,15 +390,16 @@ function renderAlignedColumn(wrapper, usersList, columnIndex, parentNode) {
 }
 
 function createUserCardElement(user, columnIndex) {
+    const userLogin = user.login || user.id;
     const card = document.createElement('div');
     card.className = 'user-cell-card';
-    card.id = `table-user-${user.login}`;
+    card.id = `table-user-${userLogin}`;
     
-    if (activePath.includes(user.id)) {
+    if (activePath.includes(userLogin)) {
         card.classList.add('active-link');
     }
 
-    if (highlightedTableUser && highlightedTableUser.toLowerCase() === user.login.toLowerCase()) {
+    if (highlightedTableUser && highlightedTableUser.toLowerCase() === userLogin.toLowerCase()) {
         card.classList.add('searched-highlight');
     }
 
@@ -403,7 +408,7 @@ function createUserCardElement(user, columnIndex) {
     
     const loginSpan = document.createElement('span');
     loginSpan.className = 'user-login-text';
-    loginSpan.innerText = user.login;
+    loginSpan.innerText = userLogin;
     mainRow.appendChild(loginSpan);
 
     const childrenCount = (user.children || []).length;
@@ -421,20 +426,20 @@ function createUserCardElement(user, columnIndex) {
         e.stopPropagation();
         isUserInteracting = true;
 
-        if (openDropdownUser === user.id) {
+        if (openDropdownUser === userLogin) {
             openDropdownUser = null;
         } else {
-            openDropdownUser = user.id;
+            openDropdownUser = userLogin;
         }
 
         activePath = activePath.slice(0, columnIndex);
-        activePath.push(user.id);
+        activePath.push(userLogin);
 
         const targetContainer = document.getElementById('referals-table-body');
         if (targetContainer) renderActiveReferralGrid(targetContainer);
     });
 
-    if (openDropdownUser === user.id) {
+    if (openDropdownUser === userLogin) {
         const dropdown = document.createElement('div');
         dropdown.className = 'user-dropdown-menu';
 
@@ -443,10 +448,12 @@ function createUserCardElement(user, columnIndex) {
         profileBtn.innerText = '👤 Карточка юзера';
         profileBtn.onclick = (e) => {
             e.stopPropagation();
-            if (typeof window.openUserModal === 'function') {
-                window.openUserModal(user.login);
+            if (typeof window.showUserCard === 'function') {
+                window.showUserCard(userLogin);
+            } else if (typeof window.openUserModal === 'function') {
+                window.openUserModal(userLogin);
             } else {
-                alert(`Пользователь: ${user.login}`);
+                alert(`Пользователь: ${userLogin}`);
             }
         };
 
@@ -466,14 +473,17 @@ window.searchTableUserByInput = function() {
     const foundUserKey = Object.keys(referralTreeData).find(key => key.toLowerCase() === query || (referralTreeData[key].login && referralTreeData[key].login.toLowerCase() === query));
 
     if (foundUserKey) {
-        highlightedTableUser = referralTreeData[foundUserKey].login;
+        const foundUser = referralTreeData[foundUserKey];
+        const targetLogin = foundUser.login || foundUserKey;
+        highlightedTableUser = targetLogin;
         
         // Восстанавливаем цепочку родителей
-        let path = [foundUserKey];
-        let current = referralTreeData[foundUserKey];
+        let path = [targetLogin];
+        let current = foundUser;
         while (current && current.parentId && referralTreeData[current.parentId]) {
-            path.unshift(current.parentId);
-            current = referralTreeData[current.parentId];
+            const parentUser = referralTreeData[current.parentId];
+            path.unshift(parentUser.login || current.parentId);
+            current = parentUser;
         }
         
         activePath = path.slice(0, 5);
@@ -486,10 +496,10 @@ window.searchTableUserByInput = function() {
 
 window.showSearchedInMatrix = function() {
     if (highlightedTableUser) {
-        if (typeof window.openUserMatrix === 'function') {
-            window.openUserMatrix(highlightedTableUser);
+        if (typeof window.showUserCard === 'function') {
+            window.showUserCard(highlightedTableUser);
         } else {
-            alert(`Показ матрицы для пользователя: ${highlightedTableUser}`);
+            alert(`Пользователь: ${highlightedTableUser}`);
         }
     } else {
         alert('Сначала найдите пользователя через поиск');
@@ -507,9 +517,11 @@ window.scrollToTableEnd = function() {
 };
 
 window.resetTableToRoot = function() {
-    const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData)[0];
+    const rootUserKey = Object.keys(referralTreeData).find(key => key === 'ADMIN' || !referralTreeData[key].parentId) || Object.keys(referralTreeData)[0];
+    const rootUser = referralTreeData[rootUserKey];
     if (rootUser) {
-        activePath = [rootUser.id];
+        const rootLogin = rootUser.login || rootUserKey;
+        activePath = [rootLogin];
         highlightedTableUser = null;
         openDropdownUser = null;
         const targetContainer = document.getElementById('referals-table-body');
