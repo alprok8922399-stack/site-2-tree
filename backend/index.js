@@ -88,7 +88,7 @@ function getOrCreateUserCard(username) {
 }
 
 // Первичная инициализация базовых пользователей
-['Admin_System', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
+['SYSTEM_ROOT', 'Admin_System', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
 
 /**
  * Алгоритм поиска свободной ячейки (Правило четырех)
@@ -213,18 +213,17 @@ function processIncomeDistribution(buyerUser) {
         current = canonicalSponsor;
     }
 
-    if (wallets) {
-        wallets.referralPaid = (wallets.referralPaid || 0) + totalRefPaid;
-    }
+    wallets.referralPaid = (wallets.referralPaid || 0) + totalRefPaid;
 }
 
 // Формирование точной статистики для Карточки Админа
 function getSystemStats() {
-    const totalUsersList = Object.keys(referalsDB);
+    const totalUsersList = Array.from(new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]));
     const totalUsers = totalUsersList.length;
     
     const adminLogins = totalUsersList.filter(u => 
         u.toLowerCase().includes('admin') || 
+        u.toLowerCase().includes('leader') ||
         u === 'SYSTEM_ROOT' || 
         u === 'Admin_System'
     ).length;
@@ -232,26 +231,18 @@ function getSystemStats() {
     const buyerLogins = Math.max(0, totalUsers - adminLogins);
 
     let totalIncome = 0;
-    let refPayoutsReleased = 0;
 
     Object.values(shopUsersDB).forEach(u => {
         if (u.purchases && u.purchases.certificateAmount) {
             totalIncome += u.purchases.certificateAmount;
         }
-        if (u.pendingPayouts && Array.isArray(u.pendingPayouts)) {
-            u.pendingPayouts.forEach(p => {
-                if (p.status === 'released') {
-                    refPayoutsReleased += p.amount;
-                }
-            });
-        }
     });
 
     const cashbackPaid = wallets.cashbackPaid || 0;
-    const totalReserve = 0; // На время тестов
+    const refPayoutsReleased = wallets.referralPaid || 0;
     
-    // Чистая прибыль = Приход - Кешбэк - Реферальные
-    const netProfit = totalIncome - cashbackPaid - refPayoutsReleased;
+    // Остаток средств в кассе Админа
+    const currentAdminReserve = Math.max(0, totalIncome - cashbackPaid - refPayoutsReleased);
 
     return {
         totalBalance: totalIncome,
@@ -260,8 +251,8 @@ function getSystemStats() {
         incomeMonth: totalIncome,
         cashbackPaid,
         refPayouts: refPayoutsReleased,
-        totalReserve,
-        netProfit: Math.max(0, netProfit),
+        totalReserve: currentAdminReserve,
+        netProfit: currentAdminReserve,
         totalUsers,
         adminLogins,
         buyerLogins
@@ -396,7 +387,8 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
 });
 
 app.get(['/api/users', '/api/admin/users'], (req, res) => {
-    const userList = Object.keys(referalsDB).map(username => {
+    const allUsersList = Array.from(new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]));
+    const userList = allUsersList.map(username => {
         const profile = shopUsersDB[username] || getOrCreateUserCard(username);
         const userCells = Object.values(treeDB)
             .filter(cell => cell.user && cell.user.toLowerCase() === username.toLowerCase())
@@ -588,12 +580,11 @@ app.post(['/api/reset', '/api/reset-database'], (req, res) => {
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
-        'Admin_System': 'SYSTEM_ROOT',
         'LEADER_1': 'SYSTEM_ROOT',
         'LEADER_2': 'SYSTEM_ROOT'
     };
     lastRegisteredBot = null;
-    ['Admin_System', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
+    ['SYSTEM_ROOT', 'Admin_System', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
     res.json({ success: true });
 });
 
