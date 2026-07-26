@@ -14,6 +14,54 @@
         <p>Расчеты в Митронах (Mitrons) и USD. Покупка: 1000 Митронов ($130) = 100% на Кошелек Админа</p>
     </header>
 
+    <div class="admin-analytics-card">
+        <div class="admin-card-header">
+            <h2>👑 Панель Администратора & Финансовая Аналитика</h2>
+            <span class="admin-status-badge">Live Analytics</span>
+        </div>
+
+        <div class="analytics-grid">
+            <div class="analytics-item main-balance">
+                <span class="analytics-label">Общий баланс</span>
+                <span class="analytics-value" id="adminTotalBalance">0 M</span>
+            </div>
+            <div class="analytics-item">
+                <span class="analytics-label">Приход (День)</span>
+                <span class="analytics-value green" id="incomeDay">0 M</span>
+            </div>
+            <div class="analytics-item">
+                <span class="analytics-label">Приход (Неделя)</span>
+                <span class="analytics-value green" id="incomeWeek">0 M</span>
+            </div>
+            <div class="analytics-item">
+                <span class="analytics-label">Приход (Месяц)</span>
+                <span class="analytics-value green" id="incomeMonth">0 M</span>
+            </div>
+            <div class="analytics-item">
+                <span class="analytics-label">Выплачено кешбэка (100%)</span>
+                <span class="analytics-value orange" id="paidCashback">0 M</span>
+            </div>
+            <div class="analytics-item">
+                <span class="analytics-label">Выплачено реферальных</span>
+                <span class="analytics-value blue" id="paidRef">0 M</span>
+            </div>
+            <div class="analytics-item">
+                <span class="analytics-label">Резерв (DAO Пул)</span>
+                <span class="analytics-value purple" id="reservePool">0 M</span>
+            </div>
+            <div class="analytics-item">
+                <span class="analytics-label">Чистая прибыль</span>
+                <span class="analytics-value gold" id="netProfit">0 M</span>
+            </div>
+        </div>
+
+        <div class="logins-summary-box">
+            <div class="login-stat">Всего логинов: <strong id="totalLoginsCount">0</strong></div>
+            <div class="login-stat">Админ-аккаунты: <strong id="adminLoginsCount" class="gold-text">0</strong></div>
+            <div class="login-stat">Покупатели: <strong id="buyerLoginsCount" class="green-text">0</strong></div>
+        </div>
+    </div>
+
     <div class="grid" style="grid-template-columns: 1fr;">
         <div class="card">
             <h2>3. Просмотр карточки и Сейфов</h2>
