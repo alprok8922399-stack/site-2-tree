@@ -16,7 +16,35 @@ function setElementText(id, text) {
     }
 }
 
-// === 1. РЕГИСТРАЦИЯ И УПРАВЛЕНИЕ МАТРИЦЕЙ ===
+// === 1. АВТО-ОБНОВЛЕНИЕ ВЕРХНЕЙ КАРТОЧКИ АДМИНИСТРАТОРА ===
+
+async function loadAdminAnalyticsCard() {
+    try {
+        const response = await fetch(`${API_URL}/api/admin/stats`);
+        const data = await response.json();
+
+        if (data.success) {
+            const stats = data.stats || data;
+
+            setElementText('adminTotalBalance', `${stats.totalBalance || 0} M`);
+            setElementText('incomeDay', `${stats.incomeToday || stats.incomeDay || 0} M`);
+            setElementText('incomeWeek', `${stats.incomeWeek || 0} M`);
+            setElementText('incomeMonth', `${stats.incomeMonth || 0} M`);
+            setElementText('paidCashback', `${stats.cashbackPaid || stats.paidCashback || 0} M`);
+            setElementText('paidRef', `${stats.refPayouts || stats.paidRef || 0} M`);
+            setElementText('reservePool', `${stats.totalReserve || stats.reservePool || 0} M`);
+            setElementText('netProfit', `${stats.netProfit || 0} M`);
+
+            setElementText('totalLoginsCount', stats.totalUsers || stats.totalLogins || 0);
+            setElementText('adminLoginsCount', stats.adminLogins || 0);
+            setElementText('buyerLoginsCount', stats.buyerLogins || 0);
+        }
+    } catch (e) {
+        console.error('Ошибка автоматической загрузки аналитики админа:', e);
+    }
+}
+
+// === 2. РЕГИСТРАЦИЯ И УПРАВЛЕНИЕ МАТРИЦЕЙ ===
 
 async function registerInMatrix() {
     const usernameInput = document.getElementById('matrix-username');
@@ -45,6 +73,7 @@ async function registerInMatrix() {
         
         if (result.success) {
             alert(`Успешно! Место занято в ячейке: ${result.cellId || 'OK'}`);
+            loadAdminAnalyticsCard();
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
             }
@@ -59,7 +88,7 @@ async function registerInMatrix() {
     }
 }
 
-// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА И ОПЛАТЫ ===
+// === 3. МОДУЛЬ МАРКЕТПЛЕЙСА И ОПЛАТЫ ===
 
 async function registerShopUser() {
     const shopUserField = document.getElementById('shop-username');
@@ -88,6 +117,7 @@ async function registerShopUser() {
         if (result.success) {
             alert(`Покупатель ${shopUserStr} успешно зарегистрирован!`);
             loadUserProfile(shopUserStr);
+            loadAdminAnalyticsCard();
             if (typeof window.renderUsersTable === 'function') {
                 window.renderUsersTable();
             }
@@ -131,6 +161,7 @@ async function payCertificate() {
             
             loadUserProfile(username);
             loadSystemWallets();
+            loadAdminAnalyticsCard();
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
             }
@@ -159,10 +190,11 @@ async function loadSystemWallets() {
     }
 }
 
-// === 3. ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И КНОПКИ АДМИНИСТРАТОРА ===
+// === 4. ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И КНОПКИ АДМИНИСТРАТОРА ===
 
 function getProfileModalElement() {
-    return document.getElementById('profile-modal') || 
+    return document.getElementById('userModal') || 
+           document.getElementById('profile-modal') || 
            document.querySelector('.user-card-modal') || 
            document.querySelector('.modal') || 
            document.getElementById('user-card');
@@ -182,9 +214,6 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             if (modal) {
                 modal.style.display = 'block';
                 modal.classList.add('active');
-                modal.style.maxWidth = '900px';
-                modal.style.width = '90%';
-                modal.style.transform = 'scale(1.05)';
             }
 
             setElementText('current-profile-user', data.username);
@@ -335,6 +364,7 @@ function renderAdminActionButtons(username, isFrozen) {
             if (data.success) {
                 alert(data.message);
                 loadUserProfile(username);
+                loadAdminAnalyticsCard();
             }
         } catch (e) {
             alert('Ошибка при изменении статуса заморозки');
@@ -353,6 +383,7 @@ function renderAdminActionButtons(username, isFrozen) {
             if (data.success) {
                 alert(data.message);
                 closeUserProfileCard();
+                loadAdminAnalyticsCard();
                 if (typeof window.renderMatrixTree === 'function') window.renderMatrixTree();
                 if (typeof window.renderUsersTable === 'function') window.renderUsersTable();
             }
@@ -438,50 +469,8 @@ function renderReferralsSection(username, refData, currentSearch) {
     container.appendChild(wrapper);
 }
 
-// === 4. КАРТОЧКА АДМИНИСТРАТОРА ===
-
-async function openAdminCard() {
-    try {
-        const response = await fetch(`${API_URL}/api/admin/stats`);
-        const data = await response.json();
-
-        if (data.success) {
-            const stats = data.stats;
-            let modal = document.getElementById('admin-stats-modal');
-
-            if (!modal) {
-                modal = document.createElement('div');
-                modal.id = 'admin-stats-modal';
-                modal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #15151e; color: #fff; border: 2px solid #e74c3c; border-radius: 8px; padding: 20px; z-index: 10000; width: 90%; max-width: 500px; box-shadow: 0 0 25px rgba(231,76,60,0.5);';
-                document.body.appendChild(modal);
-            }
-
-            modal.innerHTML = `
-                <div style="display:flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px;">
-                    <h3 style="margin: 0; color: #e74c3c;">👑 Карточка Администратора</h3>
-                    <button onclick="document.getElementById('admin-stats-modal').style.display='none'" style="background:none; border:none; color:#fff; font-size: 20px; cursor:pointer; font-weight:bold;">✖</button>
-                </div>
-                <div style="display: grid; gap: 8px; font-size: 14px;">
-                    <div>💰 <strong>Общий баланс:</strong> ${stats.totalBalance || 0} M ($${convertMitronsToUsd(stats.totalBalance || 0)})</div>
-                    <div>📈 <strong>Поступило за сегодня:</strong> ${stats.incomeToday || 0} M</div>
-                    <div>📅 <strong>Поступило за неделю:</strong> ${stats.incomeWeek || 0} M</div>
-                    <div>📆 <strong>Поступило за месяц:</strong> ${stats.incomeMonth || 0} M</div>
-                    <hr style="border-color: #333; margin: 4px 0;">
-                    <div>🎁 <strong>Выплачено по акции (кешбэк 100%):</strong> ${stats.cashbackPaid || 0} M</div>
-                    <div>🤝 <strong>Выплачено реферальных:</strong> ${stats.refPayouts || 0} M</div>
-                    <div>🔒 <strong>В резерве на выплаты (всего):</strong> ${stats.totalReserve || 0} M</div>
-                    <div>💵 <strong>Чистая прибыль:</strong> <strong style="color: #2ecc71;">${stats.netProfit || 0} M</strong></div>
-                    <hr style="border-color: #333; margin: 4px 0;">
-                    <div>👥 <strong>Всего Логинов в системе:</strong> ${stats.totalUsers || 0}</div>
-                    <div style="padding-left: 15px; color: #aaa;">• Логинов админа: ${stats.adminLogins || 0}</div>
-                    <div style="padding-left: 15px; color: #aaa;">• Логинов покупателей: ${stats.buyerLogins || 0}</div>
-                </div>
-            `;
-            modal.style.display = 'block';
-        }
-    } catch (e) {
-        alert('Ошибка загрузки статистики Администратора');
-    }
+function loadAdminCard() {
+    loadUserProfile('ADMIN');
 }
 
 function closeUserProfileCard() {
@@ -490,6 +479,10 @@ function closeUserProfileCard() {
         modal.style.display = 'none';
         modal.classList.remove('active');
     }
+}
+
+function closeUserModal() {
+    closeUserProfileCard();
 }
 
 async function resetSystem() {
@@ -510,28 +503,39 @@ async function resetSystem() {
             if (typeof window.renderUsersTable === 'function') window.renderUsersTable();
             closeUserProfileCard();
             loadSystemWallets();
+            loadAdminAnalyticsCard();
         }
     } catch (error) {
         console.error('Ошибка при сбросе системы:', error);
     }
 }
 
+function searchProfile() {
+    const searchInput = document.getElementById('search-username-input');
+    const inputName = searchInput ? searchInput.value.trim() : '';
+    if (inputName) loadUserProfile(inputName);
+}
+
 // === ГЛОБАЛЬНЫЕ МОСТЫ СВЯЗИ ===
 window.showUserCard = loadUserProfile;
 window.closeUserCard = closeUserProfileCard;
-window.openAdminCard = openAdminCard;
+window.closeUserModal = closeUserModal;
+window.loadAdminCard = loadAdminCard;
+window.searchProfile = searchProfile;
+window.payCertificate = payCertificate;
+window.resetSystem = resetSystem;
 
 // Привязка событий после загрузки страницы
 document.addEventListener('DOMContentLoaded', () => {
     loadSystemWallets();
+    loadAdminAnalyticsCard();
+
+    // Авто-обновление карточки админа каждые 10 секунд
+    setInterval(loadAdminAnalyticsCard, 10000);
 
     const searchBtn = document.getElementById('search-profile-btn');
     if (searchBtn) {
-        searchBtn.addEventListener('click', () => {
-            const searchInput = document.getElementById('search-username-input');
-            const inputName = searchInput ? searchInput.value.trim() : '';
-            if (inputName) loadUserProfile(inputName);
-        });
+        searchBtn.addEventListener('click', searchProfile);
     }
 
     // Обработчик закрытия карточки по клику вне ее
@@ -551,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
                           e.target.closest('.dropdown-btn') || 
                           e.target.closest('.user-cell-card') ||
                           e.target.closest('[onclick*="showUserCard"]') ||
-                          e.target.closest('[onclick*="openAdminCard"]');
+                          e.target.closest('[onclick*="loadAdminCard"]');
 
         if (isTrigger) return;
 
