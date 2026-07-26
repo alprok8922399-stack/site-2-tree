@@ -181,6 +181,7 @@ function checkAndSplitMatrix(cellId) {
 function processReferralPayouts(buyerUser, amount = 1000) {
     let current = buyerUser;
     const rewardPercents = [0.50, 0.10, 0.10]; // 1-я линия 50%, 2-я 10%, 3-я 10%
+    let totalRefPaid = 0;
 
     for (let level = 0; level < 3; level++) {
         const sponsorName = referalsDB[current];
@@ -191,12 +192,13 @@ function processReferralPayouts(buyerUser, amount = 1000) {
 
         if (sponsorProfile && !sponsorProfile.isFrozen) {
             const payoutAmount = amount * rewardPercents[level];
+            totalRefPaid += payoutAmount;
 
-            // Записываем выплату со статусом 'released' (без ожидания 31 дня)
+            // Записываем выплату со статусом 'released'
             sponsorProfile.pendingPayouts.push({
                 fromUser: buyerUser,
                 amount: payoutAmount,
-                releaseDate: new Date().toISOString(), // Выплачено прямо сейчас
+                releaseDate: new Date().toISOString(),
                 status: 'released'
             });
 
@@ -206,6 +208,62 @@ function processReferralPayouts(buyerUser, amount = 1000) {
         }
         current = canonicalSponsor;
     }
+
+    // Фиксируем реферальные выплаты в системном кошельке
+    if (wallets) {
+        wallets.referralPaid = (wallets.referralPaid || 0) + totalRefPaid;
+    }
+}
+
+// Вспомогательная функция формирования статистики
+function getSystemStats() {
+    const totalUsersList = Object.keys(referalsDB);
+    const totalUsers = totalUsersList.length;
+    
+    const adminLogins = totalUsersList.filter(u => 
+        u.toLowerCase().includes('admin') || 
+        u === 'SYSTEM_ROOT' || 
+        u === 'Admin_System'
+    ).length;
+    
+    const buyerLogins = Math.max(0, totalUsers - adminLogins);
+
+    let totalIncome = 0;
+    let refPayoutsReleased = 0;
+    let refPayoutsPending = 0;
+
+    Object.values(shopUsersDB).forEach(u => {
+        if (u.purchases && u.purchases.certificateAmount) {
+            totalIncome += u.purchases.certificateAmount;
+        }
+        if (u.pendingPayouts && Array.isArray(u.pendingPayouts)) {
+            u.pendingPayouts.forEach(p => {
+                if (p.status === 'released') {
+                    refPayoutsReleased += p.amount;
+                } else {
+                    refPayoutsPending += p.amount;
+                }
+            });
+        }
+    });
+
+    const cashbackPaid = wallets.cashbackPaid || 0;
+    const totalReserve = wallets.daoWallet ? wallets.daoWallet.balanceMitrons : refPayoutsPending; 
+    const netProfit = totalIncome - refPayoutsReleased - cashbackPaid - totalReserve;
+
+    return {
+        totalBalance: totalIncome,
+        incomeToday: totalIncome,
+        incomeWeek: totalIncome,
+        incomeMonth: totalIncome,
+        cashbackPaid,
+        refPayouts: refPayoutsReleased,
+        totalReserve,
+        netProfit: Math.max(0, netProfit),
+        totalUsers,
+        adminLogins,
+        buyerLogins
+    };
 }
 
 // ================= API ЭНДПОИНТЫ =================
@@ -247,7 +305,7 @@ app.post(['/api/register', '/api/register-matrix'], (req, res) => {
 
 // Регистрация через Сайт 1 (Магазин/Робот)
 app.post(['/api/shop/register', '/api/register-shop'], (req, res) => {
-    const { username, sponsor } = req.body;
+    const { username, sponsor, amount = 4000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const canonicalUser = getOrCreateUserCard(username.trim());
@@ -267,6 +325,24 @@ app.post(['/api/shop/register', '/api/register-shop'], (req, res) => {
     shopUsersDB[canonicalUser].isPaid = true;
     shopUsersDB[canonicalUser].matrixPosition.currentCellId = cellId;
     shopUsersDB[canonicalUser].matrixPosition.status = 'active';
+
+    const TOTAL_MITRONS = Number(amount);
+    shopUsersDB[canonicalUser].purchases.certificateAmount += TOTAL_MITRONS;
+    if (!shopUsersDB[canonicalUser].purchases.history) {
+        shopUsersDB[canonicalUser].purchases.history = [];
+    }
+    shopUsersDB[canonicalUser].purchases.history.push({
+        amount: TOTAL_MITRONS,
+        date: new Date().toISOString(),
+        cellId
+    });
+
+    if (wallets && wallets.adminWallet) {
+        wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
+    }
+
+    // Запуск реферальных выплат
+    processReferralPayouts(canonicalUser, TOTAL_MITRONS);
     
     checkAndSplitMatrix(cellId);
     res.json({ success: true, shopUserStatus: shopUsersDB[canonicalUser], cellId });
@@ -322,7 +398,7 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     });
 });
 
-// Данные таблицы ВСЕХ пользователей (для лечения Таблицы №1)
+// Данные таблицы ВСЕХ пользователей
 app.get(['/api/users', '/api/admin/users'], (req, res) => {
     const userList = Object.keys(referalsDB).map(username => {
         const profile = shopUsersDB[username] || getOrCreateUserCard(username);
@@ -347,7 +423,7 @@ app.get(['/api/users', '/api/admin/users'], (req, res) => {
     res.json({ success: true, users: userList });
 });
 
-// Данные таблицы ВСЕХ покупок (для лечения Таблицы №2)
+// Данные таблицы ВСЕХ покупок
 app.get(['/api/purchases', '/api/admin/purchases'], (req, res) => {
     let purchasesList = [];
 
@@ -378,55 +454,10 @@ app.get(['/api/purchases', '/api/admin/purchases'], (req, res) => {
 
 // Динамическая карточка Аналитики Администратора
 app.get('/api/admin/stats', (req, res) => {
-    const totalUsersList = Object.keys(referalsDB);
-    const totalUsers = totalUsersList.length;
-    
-    const adminLogins = totalUsersList.filter(u => 
-        u.toLowerCase().includes('admin') || 
-        u === 'SYSTEM_ROOT' || 
-        u === 'Admin_System'
-    ).length;
-    
-    const buyerLogins = Math.max(0, totalUsers - adminLogins);
-
-    let totalIncome = 0;
-    let refPayoutsReleased = 0;
-    let refPayoutsPending = 0;
-
-    Object.values(shopUsersDB).forEach(u => {
-        if (u.purchases && u.purchases.certificateAmount) {
-            totalIncome += u.purchases.certificateAmount;
-        }
-        if (u.pendingPayouts && Array.isArray(u.pendingPayouts)) {
-            u.pendingPayouts.forEach(p => {
-                if (p.status === 'released') {
-                    refPayoutsReleased += p.amount;
-                } else {
-                    refPayoutsPending += p.amount;
-                }
-            });
-        }
-    });
-
-    const cashbackPaid = 0; // Настраиваемый кешбэк
-    const totalReserve = refPayoutsPending; 
-    const netProfit = totalIncome - refPayoutsReleased - cashbackPaid - totalReserve;
-
+    const stats = getSystemStats();
     res.json({
         success: true,
-        stats: {
-            totalBalance: wallets.adminWallet ? wallets.adminWallet.balanceMitrons : totalIncome,
-            incomeToday: totalIncome,
-            incomeWeek: totalIncome,
-            incomeMonth: totalIncome,
-            cashbackPaid,
-            refPayouts: refPayoutsReleased,
-            totalReserve,
-            netProfit,
-            totalUsers,
-            adminLogins,
-            buyerLogins
-        }
+        stats
     });
 });
 
@@ -440,7 +471,7 @@ app.get('/api/user-details/:username', (req, res) => {
         .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
         .map(cell => cell.id);
         
-    // Цепочка спонсоров вверх (ограничена строго 5 поколениями)
+    // Цепочка спонсоров вверх (до 5 поколений)
     let sponsorChain = [];
     let currentSponsor = referalsDB[canonicalName] || 'SYSTEM_ROOT';
     let visited = new Set();
@@ -543,7 +574,7 @@ app.post('/api/admin/freeze-user', (req, res) => {
     });
 });
 
-// Блокировка и удаление аккаунта (с передачей ячеек Admin_System)
+// Блокировка и удаление аккаунта
 app.post('/api/admin/delete-user', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
@@ -553,7 +584,6 @@ app.post('/api/admin/delete-user', (req, res) => {
     delete shopUsersDB[canonicalName];
     delete referalsDB[canonicalName];
     
-    // Передаем все ячейки Администрации
     Object.keys(treeDB).forEach(cellId => {
         if (treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === canonicalName.toLowerCase()) {
             treeDB[cellId].user = 'Admin_System';
@@ -580,12 +610,15 @@ app.post(['/api/reset', '/api/reset-database'], (req, res) => {
     res.json({ success: true });
 });
 
+// Единый эндпоинт кошельков и финансовой аналитики
 app.get(['/api/sys-wallets', '/api/system-wallets'], (req, res) => {
+    const stats = getSystemStats();
     res.json({ 
         success: true, 
         wallets,
         adminWallet: wallets.adminWallet ? wallets.adminWallet.balanceMitrons : 0,
-        daoWallet: wallets.daoWallet ? wallets.daoWallet.balanceMitrons : 0
+        daoWallet: wallets.daoWallet ? wallets.daoWallet.balanceMitrons : 0,
+        analytics: stats
     });
 });
 
