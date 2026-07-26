@@ -25,7 +25,7 @@ app.use(express.json());
 // Секретный ключ для защиты API
 const INTERNAL_SECRET_KEY = process.env.INTERNAL_SECRET_KEY || 'super_secret_mitron_key_2026';
 
-// Проверка секретного ключа для защищенных запросов (POST, PUT, DELETE)
+// Проверка секретного ключа для защищенных системных запросов (POST, PUT, DELETE)
 app.use('/api/', (req, res, next) => {
     if (req.method === 'GET') return next();
 
@@ -72,6 +72,7 @@ let activeMatricesList = ['A1']; // Список верхушек активны
  * Вспомогательная функция поиска/инициализации юзера
  */
 function getOrCreateUserCard(username) {
+    if (!username) return 'SYSTEM_ROOT';
     const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) 
                          || username.trim();
     if (!shopUsersDB[canonicalName]) {
@@ -165,7 +166,7 @@ function checkAndSplitMatrix(cellId) {
 
         if (topCell && topCell.user) {
             const canonicalTop = getOrCreateUserCard(topCell.user);
-            if (shopUsersDB[canonicalTop]) {
+            if (shopUsersDB[canonicalTop] && shopUsersDB[canonicalTop].matrixPosition) {
                 shopUsersDB[canonicalTop].matrixPosition.status = 'payout_pending';
             }
         }
@@ -293,7 +294,9 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     shopUsersDB[canonicalName].matrixPosition.currentCellId = cellId;
     shopUsersDB[canonicalName].matrixPosition.status = 'active';
 
-    wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
+    if (wallets && wallets.adminWallet) {
+        wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
+    }
 
     // Запуск реферальных начислений (50 / 10 / 10)
     processReferralPayouts(canonicalName);
@@ -338,7 +341,7 @@ app.get('/api/admin/stats', (req, res) => {
         }
     });
 
-    const cashbackPaid = 0; // По умолчанию
+    const cashbackPaid = 0; // Настраиваемый кешбэк
     const totalReserve = refPayoutsPending; 
     const netProfit = totalIncome - refPayoutsReleased - cashbackPaid - totalReserve;
 
