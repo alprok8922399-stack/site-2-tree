@@ -130,6 +130,7 @@ function findNextEmptyCell(tree) {
 
 /**
  * Проверка и деление матрицы при заполнении 4 нижних ячеек
+ * НА ВРЕМЯ ТЕСТОВ: Выплата 1000 Митронов верхнему лидеру происходит МГНОВЕННО!
  */
 function checkAndSplitMatrix(cellId) {
     const gIdx = cellIdToGlobalIndex(cellId);
@@ -164,8 +165,13 @@ function checkAndSplitMatrix(cellId) {
 
         if (topCell && topCell.user) {
             const canonicalTop = getOrCreateUserCard(topCell.user);
-            if (shopUsersDB[canonicalTop] && shopUsersDB[canonicalTop].matrixPosition) {
-                shopUsersDB[canonicalTop].matrixPosition.status = 'payout_pending';
+            const topProfile = shopUsersDB[canonicalTop];
+            if (topProfile) {
+                topProfile.matrixPosition.status = 'payout_completed';
+                // Мгновенная выплата 1000 Митронов Кешбэка верхнему Лидеру
+                topProfile.balances.mitrons = (topProfile.balances.mitrons || 0) + 1000;
+                topProfile.balances.usd = parseFloat(mitronsToUsd(topProfile.balances.mitrons));
+                wallets.cashbackPaid = (wallets.cashbackPaid || 0) + 1000;
             }
         }
 
@@ -176,22 +182,11 @@ function checkAndSplitMatrix(cellId) {
 }
 
 /**
- * Распределение средств покупки (Кешбэк 80%, DAO Резерв 10%, Реферальные 10%)
+ * Распределение реферальных выплат (НА ВРЕМЯ ТЕСТОВ: 50 / 10 / 10 Митронов мгновенно)
  */
-function processIncomeDistribution(buyerUser, amount = 1000) {
-    // 1. Кешбэк покупателя (80%)
-    const cashbackAmount = amount * 0.80;
-    wallets.cashbackPaid = (wallets.cashbackPaid || 0) + cashbackAmount;
-
-    // 2. Резерв DAO Пул (10%)
-    const daoAmount = amount * 0.10;
-    if (wallets.daoWallet) {
-        wallets.daoWallet.balanceMitrons += daoAmount;
-    }
-
-    // 3. Реферальные выплаты (10% максимум от покупки)
+function processIncomeDistribution(buyerUser) {
     let current = buyerUser;
-    const rewardPercents = [0.50, 0.10, 0.10]; // От реферального пула
+    const fixedRefRewards = [50, 10, 10]; // 1 линия = 50, 2 линия = 10, 3 линия = 10
     let totalRefPaid = 0;
 
     for (let level = 0; level < 3; level++) {
@@ -202,7 +197,7 @@ function processIncomeDistribution(buyerUser, amount = 1000) {
         const sponsorProfile = shopUsersDB[canonicalSponsor];
 
         if (sponsorProfile && !sponsorProfile.isFrozen) {
-            const payoutAmount = (amount * 0.10) * rewardPercents[level];
+            const payoutAmount = fixedRefRewards[level];
             totalRefPaid += payoutAmount;
 
             sponsorProfile.pendingPayouts.push({
@@ -212,7 +207,7 @@ function processIncomeDistribution(buyerUser, amount = 1000) {
                 status: 'released'
             });
 
-            sponsorProfile.balances.mitrons += payoutAmount;
+            sponsorProfile.balances.mitrons = (sponsorProfile.balances.mitrons || 0) + payoutAmount;
             sponsorProfile.balances.usd = parseFloat(mitronsToUsd(sponsorProfile.balances.mitrons));
         }
         current = canonicalSponsor;
@@ -223,7 +218,7 @@ function processIncomeDistribution(buyerUser, amount = 1000) {
     }
 }
 
-// Формирование точной статистики
+// Формирование точной статистики для Карточки Админа
 function getSystemStats() {
     const totalUsersList = Object.keys(referalsDB);
     const totalUsers = totalUsersList.length;
@@ -253,10 +248,10 @@ function getSystemStats() {
     });
 
     const cashbackPaid = wallets.cashbackPaid || 0;
-    const totalReserve = wallets.daoWallet ? wallets.daoWallet.balanceMitrons : 0; 
+    const totalReserve = 0; // На время тестов
     
-    // Чистая прибыль = Общий приход минус выплаченный кешбэк, резерв и реферальные
-    const netProfit = totalIncome - cashbackPaid - totalReserve - refPayoutsReleased;
+    // Чистая прибыль = Приход - Кешбэк - Реферальные
+    const netProfit = totalIncome - cashbackPaid - refPayoutsReleased;
 
     return {
         totalBalance: totalIncome,
@@ -309,7 +304,7 @@ app.post(['/api/register', '/api/register-matrix'], (req, res) => {
 });
 
 app.post(['/api/shop/register', '/api/register-shop'], (req, res) => {
-    const { username, sponsor, amount = 4000 } = req.body;
+    const { username, sponsor, amount = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const canonicalUser = getOrCreateUserCard(username.trim());
@@ -345,8 +340,8 @@ app.post(['/api/shop/register', '/api/register-shop'], (req, res) => {
         wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
     }
 
-    // Распределение начислений и выплат
-    processIncomeDistribution(canonicalUser, TOTAL_MITRONS);
+    // Распределение реферальных 50 / 10 / 10
+    processIncomeDistribution(canonicalUser);
     
     checkAndSplitMatrix(cellId);
     res.json({ success: true, shopUserStatus: shopUsersDB[canonicalUser], cellId });
@@ -365,7 +360,6 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     if (!cellId) {
         cellId = findNextEmptyCell(treeDB);
         treeDB[cellId].user = canonicalName;
-        checkAndSplitMatrix(cellId);
     }
 
     shopUsersDB[canonicalName].isPaid = true;
@@ -381,8 +375,6 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
         cellId
     });
 
-    shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
-    shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
     shopUsersDB[canonicalName].matrixPosition.currentCellId = cellId;
     shopUsersDB[canonicalName].matrixPosition.status = 'active';
 
@@ -390,8 +382,10 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
         wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
     }
 
-    // Распределение начислений и выплат
-    processIncomeDistribution(canonicalName, TOTAL_MITRONS);
+    // Распределение реферальных 50 / 10 / 10
+    processIncomeDistribution(canonicalName);
+
+    checkAndSplitMatrix(cellId);
 
     res.json({
         success: true,
