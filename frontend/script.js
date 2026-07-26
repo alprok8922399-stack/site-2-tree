@@ -159,7 +159,7 @@ async function loadSystemWallets() {
     }
 }
 
-// === 3. ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И UPLINE TRACKING ===
+// === 3. ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И КНОПКИ АДМИНИСТРАТОРА ===
 
 function getProfileModalElement() {
     return document.getElementById('profile-modal') || 
@@ -182,99 +182,115 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             if (modal) {
                 modal.style.display = 'block';
                 modal.classList.add('active');
+                // Увеличение карточки в 2 раза (увеличенная ширина и масштабирование)
+                modal.style.maxWidth = '900px';
+                modal.style.width = '90%';
+                modal.style.transform = 'scale(1.05)';
             }
 
             setElementText('current-profile-user', data.username);
             
-            const cellId = data.cellId || (data.profile && data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null);
-            setElementText('profile-cell-id', cellId || 'Нет места');
+            const cellsList = (data.cells && data.cells.length > 0) ? data.cells.join(', ') : 'Нет места';
+            setElementText('profile-cell-id', cellsList);
             
-            // Расчет дней с момента активации и выбор цвета статус-бара
+            // Расчет дней и статус
             const statusEl = document.getElementById('profile-status');
             const isPaid = data.profile ? data.profile.isPaid : false;
+            const isFrozen = data.profile ? data.profile.isFrozen : false;
+
             if (statusEl) {
-                if (isPaid) {
+                if (isFrozen) {
+                    statusEl.innerText = 'ВЫПЛАТЫ ЗАМОРОЖЕНЫ';
+                    statusEl.style.backgroundColor = '#ff9800';
+                    statusEl.style.color = '#000000';
+                } else if (isPaid) {
                     const paidAt = (data.profile && data.profile.paymentDate) ? new Date(data.profile.paymentDate) : new Date();
-                    const diffTime = Math.abs(new Date() - paidAt);
-                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    const diffDays = Math.floor(Math.abs(new Date() - paidAt) / (1000 * 60 * 60 * 24));
                     
                     statusEl.innerText = `Оплачен (${diffDays} дн.)`;
-                    if (diffDays > 30) {
-                        statusEl.style.backgroundColor = '#d9534f';
-                        statusEl.style.color = '#ffffff';
-                    } else {
-                        statusEl.style.backgroundColor = '#5cb85c';
-                        statusEl.style.color = '#ffffff';
-                    }
-                    statusEl.style.padding = '3px 8px';
-                    statusEl.style.borderRadius = '4px';
+                    statusEl.style.backgroundColor = diffDays > 30 ? '#d9534f' : '#5cb85c';
+                    statusEl.style.color = '#ffffff';
                 } else {
                     statusEl.innerText = 'Не оплачен';
                     statusEl.style.backgroundColor = '#777777';
                     statusEl.style.color = '#ffffff';
-                    statusEl.style.padding = '3px 8px';
-                    statusEl.style.borderRadius = '4px';
                 }
+                statusEl.style.padding = '4px 10px';
+                statusEl.style.borderRadius = '4px';
+                statusEl.style.fontWeight = 'bold';
             }
             
+            // Расширенная информация о балансе и покупках
             const mitronsBalance = data.profile ? (data.profile.balanceMitrons || (data.profile.balances ? data.profile.balances.mitrons : 0)) : 0;
+            const certAmount = data.profile && data.profile.purchases ? data.profile.purchases.certificateAmount : 1000;
+            const spentAmount = data.profile && data.profile.spent ? data.profile.spent.mitrons : 0;
+
             setElementText('balance-mitrons', `${mitronsBalance} Mitrons`);
             setElementText('balance-usd', `($${convertMitronsToUsd(mitronsBalance)})`);
-            
-            // --- ОБРАТНЫЙ СПИСОК СПОНСОРОВ (UPLINE TRACKING) ---
+
+            // Отображаем детальную информацию по балансу
+            let balanceDetailsEl = document.getElementById('profile-balance-details');
+            if (!balanceDetailsEl) {
+                const balanceContainer = document.getElementById('balance-mitrons')?.parentNode;
+                if (balanceContainer) {
+                    balanceDetailsEl = document.createElement('div');
+                    balanceDetailsEl.id = 'profile-balance-details';
+                    balanceDetailsEl.style.cssText = 'font-size: 13px; color: #aaa; margin-top: 6px; background: #111; padding: 8px; border-radius: 4px;';
+                    balanceContainer.appendChild(balanceDetailsEl);
+                }
+            }
+            if (balanceDetailsEl) {
+                balanceDetailsEl.innerHTML = `
+                    <div>Покупка сертификата: <strong>${certAmount} М</strong></div>
+                    <div>Потрачено на товар: <strong>${spentAmount} М</strong></div>
+                    <div>Логин в ячейке/ячейках: <strong style="color:#2ecc71;">${cellsList}</strong></div>
+                `;
+            }
+
+            // Цепочка спонсоров (до 5 поколений вглубь)
             const uplineContainer = document.getElementById('profile-upline-chain');
             if (uplineContainer) {
                 uplineContainer.innerHTML = '';
+                const chain = data.chain || [];
                 
-                try {
-                    const chainRes = await fetch(`${API_URL}/api/get-referral-chain?login=${encodeURIComponent(username)}`);
-                    const chainData = await chainRes.json();
+                if (chain.length > 0) {
+                    const wrapper = document.createElement('div');
+                    wrapper.style.cssText = 'margin-top: 12px; font-size: 14px; background: #1a1a20; padding: 10px; border-radius: 6px; border: 1px solid #33333e;';
                     
-                    if (chainData.success && chainData.chain && chainData.chain.length > 0) {
-                        const wrapper = document.createElement('div');
-                        wrapper.style.cssText = 'margin-top: 12px; font-size: 14px; background: #1a1a20; padding: 10px; border-radius: 6px; border: 1px solid #33333e;';
-                        
-                        const title = document.createElement('div');
-                        title.style.cssText = 'font-weight: bold; color: #a0a0ab; margin-bottom: 6px; font-size: 13px;';
-                        title.innerText = 'Кто пригласил (Цепочка спонсоров):';
-                        wrapper.appendChild(title);
+                    const title = document.createElement('div');
+                    title.style.cssText = 'font-weight: bold; color: #a0a0ab; margin-bottom: 6px; font-size: 13px;';
+                    title.innerText = 'Кто пригласил (Цепочка до 5 поколений):';
+                    wrapper.appendChild(title);
 
-                        const traceDiv = document.createElement('div');
-                        traceDiv.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; align-items:center;';
+                    const traceDiv = document.createElement('div');
+                    traceDiv.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; align-items:center;';
+                    
+                    chain.forEach((uplineLogin, idx) => {
+                        const node = document.createElement('span');
+                        node.innerText = uplineLogin;
+                        node.style.cursor = 'pointer';
+                        node.style.color = '#3498db';
+                        node.style.fontWeight = 'bold';
+                        node.onclick = () => loadUserProfile(uplineLogin);
+                        traceDiv.appendChild(node);
                         
-                        chainData.chain.forEach((uplineLogin, idx) => {
-                            const node = document.createElement('span');
-                            if (idx === chainData.chain.length - 1) {
-                                node.innerHTML = `<strong style="color:#2ecc71; background: #223828; padding: 2px 6px; border-radius: 4px;">${uplineLogin}</strong>`;
-                            } else {
-                                node.innerText = uplineLogin;
-                                node.style.cursor = 'pointer';
-                                node.style.color = '#3498db';
-                                node.style.fontWeight = 'bold';
-                                node.style.textDecoration = 'underline';
-                                node.title = 'Перейти к профилю спонсора';
-                                node.onclick = () => loadUserProfile(uplineLogin);
-                            }
-                            traceDiv.appendChild(node);
-                            
-                            if (idx < chainData.chain.length - 1) {
-                                const arrow = document.createElement('span');
-                                arrow.innerText = ' ➔ ';
-                                arrow.style.color = '#666666';
-                                arrow.style.fontWeight = 'bold';
-                                traceDiv.appendChild(arrow);
-                            }
-                        });
-                        
-                        wrapper.appendChild(traceDiv);
-                        uplineContainer.appendChild(wrapper);
-                    }
-                } catch (e) {
-                    console.error('Не удалось загрузить аплайн-цепочку спонсоров:', e);
+                        if (idx < chain.length - 1) {
+                            const arrow = document.createElement('span');
+                            arrow.innerText = ' ➔ ';
+                            arrow.style.color = '#666';
+                            traceDiv.appendChild(arrow);
+                        }
+                    });
+                    
+                    wrapper.appendChild(traceDiv);
+                    uplineContainer.appendChild(wrapper);
                 }
             }
 
-            // --- БЛОК СПИСКА ЛИЧНИКОВ С ПОИСКОМ И ПАГИНАЦИЕЙ ---
+            // Добавляем кнопки Заморозки и Удаления аккаунта
+            renderAdminActionButtons(data.username, isFrozen);
+
+            // Секция личников
             renderReferralsSection(data.username, data.referralsData, searchQuery);
         }
     } catch (error) {
@@ -282,7 +298,68 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
     }
 }
 
-// Рендер секции личников внутри карточки
+// Кнопки действия админа в карточке пользователя
+function renderAdminActionButtons(username, isFrozen) {
+    let container = document.getElementById('admin-actions-container');
+    if (!container) {
+        const modal = getProfileModalElement();
+        if (modal) {
+            container = document.createElement('div');
+            container.id = 'admin-actions-container';
+            container.style.cssText = 'display: flex; gap: 10px; margin-top: 15px; border-top: 1px solid #333; padding-top: 10px;';
+            modal.appendChild(container);
+        }
+    }
+
+    if (!container) return;
+
+    container.innerHTML = `
+        <button id="btn-freeze-user" style="flex: 1; padding: 8px; background: ${isFrozen ? '#27ae60' : '#f39c12'}; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            ${isFrozen ? 'Разморозить выплаты' : 'Заморозить выплату'}
+        </button>
+        <button id="btn-delete-user" style="flex: 1; padding: 8px; background: #e74c3c; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            Заблокировать и удалить аккаунт
+        </button>
+    `;
+
+    document.getElementById('btn-freeze-user').onclick = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/admin/freeze-user`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-key': INTERNAL_SECRET_KEY },
+                body: JSON.stringify({ username, freeze: !isFrozen })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(data.message);
+                loadUserProfile(username);
+            }
+        } catch (e) {
+            alert('Ошибка при изменении статуса заморозки');
+        }
+    };
+
+    document.getElementById('btn-delete-user').onclick = async () => {
+        if (!confirm(`Удалить аккаунт ${username}? Все его ячейки перейдут Admin_System.`)) return;
+        try {
+            const res = await fetch(`${API_URL}/api/admin/delete-user`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-key': INTERNAL_SECRET_KEY },
+                body: JSON.stringify({ username })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(data.message);
+                closeUserProfileCard();
+                if (typeof window.renderMatrixTree === 'function') window.renderMatrixTree();
+            }
+        } catch (e) {
+            alert('Ошибка при удалении пользователя');
+        }
+    };
+}
+
+// Рендер секции личников
 function renderReferralsSection(username, refData, currentSearch) {
     let container = document.getElementById('profile-referrals-section');
     if (!container) {
@@ -305,7 +382,6 @@ function renderReferralsSection(username, refData, currentSearch) {
     header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount || 0}</strong></span>`;
     wrapper.appendChild(header);
 
-    // Строка поиска по личникам
     if (refData.totalCount > 0) {
         const searchBox = document.createElement('div');
         searchBox.style.cssText = 'margin-bottom: 8px; display: flex; gap: 6px;';
@@ -328,7 +404,6 @@ function renderReferralsSection(username, refData, currentSearch) {
         wrapper.appendChild(searchBox);
     }
 
-    // Список личников (чипсы)
     const listDiv = document.createElement('div');
     listDiv.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-height: 150px; overflow-y: auto; padding: 4px;';
 
@@ -349,7 +424,6 @@ function renderReferralsSection(username, refData, currentSearch) {
 
     wrapper.appendChild(listDiv);
 
-    // Кнопка "Загрузить ещё"
     if (refData.hasMore) {
         const moreBtn = document.createElement('button');
         moreBtn.innerText = 'Показать ещё...';
@@ -359,6 +433,52 @@ function renderReferralsSection(username, refData, currentSearch) {
     }
 
     container.appendChild(wrapper);
+}
+
+// === 4. КАРТОЧКА АДМИНИСТРАТОРА ===
+
+async function openAdminCard() {
+    try {
+        const response = await fetch(`${API_URL}/api/admin/stats`);
+        const data = await response.json();
+
+        if (data.success) {
+            const stats = data.stats;
+            let modal = document.getElementById('admin-stats-modal');
+
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'admin-stats-modal';
+                modal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #15151e; color: #fff; border: 2px solid #e74c3c; border-radius: 8px; padding: 20px; z-index: 10000; width: 90%; max-width: 500px; box-shadow: 0 0 20px rgba(231,76,60,0.4);';
+                document.body.appendChild(modal);
+            }
+
+            modal.innerHTML = `
+                <div style="display:flex; justify-size: space-between; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: #e74c3c;">👑 Карточка Администратора</h3>
+                    <button onclick="document.getElementById('admin-stats-modal').style.display='none'" style="background:none; border:none; color:#fff; font-size: 18px; cursor:pointer;">✖</button>
+                </div>
+                <div style="display: grid; gap: 8px; font-size: 14px;">
+                    <div>💰 <strong>Общий баланс:</strong> ${stats.totalBalance} M ($${convertMitronsToUsd(stats.totalBalance)})</div>
+                    <div>📈 <strong>Поступило за сегодня:</strong> ${stats.incomeToday} M</div>
+                    <div>📅 <strong>Поступило за неделю:</strong> ${stats.incomeWeek} M</div>
+                    <div>📆 <strong>Поступило за месяц:</strong> ${stats.incomeMonth} M</div>
+                    <hr style="border-color: #333; margin: 4px 0;">
+                    <div>🎁 <strong>Выплачено по акции (кешбэк 100%):</strong> ${stats.cashbackPaid} M</div>
+                    <div>🤝 <strong>Выплачено реферальных:</strong> ${stats.refPayouts} M</div>
+                    <div>🔒 <strong>В резерве на выплаты (всего):</strong> ${stats.totalReserve} M</div>
+                    <div>💵 <strong>Чистая прибыль:</strong> <strong style="color: #2ecc71;">${stats.netProfit} M</strong></div>
+                    <hr style="border-color: #333; margin: 4px 0;">
+                    <div>👥 <strong>Всего Логинов в системе:</strong> ${stats.totalUsers}</div>
+                    <div style="padding-left: 15px;">• Логинов админа: ${stats.adminLogins}</div>
+                    <div style="padding-left: 15px;">• Логинов покупателей: ${stats.buyerLogins}</div>
+                </div>
+            `;
+            modal.style.display = 'block';
+        }
+    } catch (e) {
+        alert('Ошибка загрузки статистики Администратора');
+    }
 }
 
 function closeUserProfileCard() {
@@ -383,22 +503,8 @@ async function resetSystem() {
         const result = await response.json();
         if (result.success) {
             alert('Система успешно сброшена к исходному состоянию!');
-            if (typeof window.renderMatrixTree === 'function') {
-                window.renderMatrixTree();
-            }
-            if (typeof window.renderUsersTable === 'function') {
-                window.renderUsersTable();
-            }
-            
-            setElementText('current-profile-user', '—');
-            setElementText('profile-cell-id', '—');
-            setElementText('profile-status', '—');
-            setElementText('balance-mitrons', '0 Mitrons');
-            setElementText('balance-usd', '$0.00');
-            
-            const uplineContainer = document.getElementById('profile-upline-chain');
-            if (uplineContainer) uplineContainer.innerHTML = '';
-            
+            if (typeof window.renderMatrixTree === 'function') window.renderMatrixTree();
+            if (typeof window.renderUsersTable === 'function') window.renderUsersTable();
             closeUserProfileCard();
             loadSystemWallets();
         }
@@ -410,13 +516,7 @@ async function resetSystem() {
 // === ГЛОБАЛЬНЫЕ МОСТЫ СВЯЗИ ===
 window.showUserCard = loadUserProfile;
 window.closeUserCard = closeUserProfileCard;
-window.focusMatrixOnUser = (login) => {
-    if (typeof window.searchMatrixUser === 'function') {
-        window.searchMatrixUser(login);
-    } else {
-        loadUserProfile(login);
-    }
-};
+window.openAdminCard = openAdminCard;
 
 // Привязка событий после загрузки страницы
 document.addEventListener('DOMContentLoaded', () => {
@@ -431,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // === УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ЗАКРЫТИЯ КАРТОЧКИ ПО КЛИКУ ВНЕ ЕЁ ===
+    // Обработчик закрытия карточки по клику вне ее
     document.addEventListener('click', (e) => {
         const modal = getProfileModalElement();
         if (!modal) return;
@@ -448,7 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
                           e.target.closest('.dropdown-btn') || 
                           e.target.closest('.user-cell-card') ||
                           e.target.closest('[onclick*="showUserCard"]') ||
-                          e.target.closest('[onclick*="viewUserCardTrigger"]');
+                          e.target.closest('[onclick*="openAdminCard"]');
 
         if (isTrigger) return;
 
