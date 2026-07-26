@@ -1,7 +1,7 @@
 /**
  * Бэкенд Приватного Ядра — Сайт №2 (Матрица, Таблицы и Аналитика)
  * Управляет деревом ячеек, реферальными связями, логикой деления,
- * заморозкой/блокировкой, 5 поколениями связей, реферальными выплатами (50/10/10)
+ * заморозкой/блокировкой, 5 поколениями связей, реферальными выплатами
  * и финансовой статистикой Администратора.
  */
 
@@ -176,11 +176,22 @@ function checkAndSplitMatrix(cellId) {
 }
 
 /**
- * Логика выплат 50 / 10 / 10 (31 день удержания ВРЕМЕННО ОТКЛЮЧЕН — мгновенная выплата)
+ * Распределение средств покупки (Кешбэк 80%, DAO Резерв 10%, Реферальные 10%)
  */
-function processReferralPayouts(buyerUser, amount = 1000) {
+function processIncomeDistribution(buyerUser, amount = 1000) {
+    // 1. Кешбэк покупателя (80%)
+    const cashbackAmount = amount * 0.80;
+    wallets.cashbackPaid = (wallets.cashbackPaid || 0) + cashbackAmount;
+
+    // 2. Резерв DAO Пул (10%)
+    const daoAmount = amount * 0.10;
+    if (wallets.daoWallet) {
+        wallets.daoWallet.balanceMitrons += daoAmount;
+    }
+
+    // 3. Реферальные выплаты (10% максимум от покупки)
     let current = buyerUser;
-    const rewardPercents = [0.50, 0.10, 0.10]; // 1-я линия 50%, 2-я 10%, 3-я 10%
+    const rewardPercents = [0.50, 0.10, 0.10]; // От реферального пула
     let totalRefPaid = 0;
 
     for (let level = 0; level < 3; level++) {
@@ -191,10 +202,9 @@ function processReferralPayouts(buyerUser, amount = 1000) {
         const sponsorProfile = shopUsersDB[canonicalSponsor];
 
         if (sponsorProfile && !sponsorProfile.isFrozen) {
-            const payoutAmount = amount * rewardPercents[level];
+            const payoutAmount = (amount * 0.10) * rewardPercents[level];
             totalRefPaid += payoutAmount;
 
-            // Записываем выплату со статусом 'released'
             sponsorProfile.pendingPayouts.push({
                 fromUser: buyerUser,
                 amount: payoutAmount,
@@ -202,20 +212,18 @@ function processReferralPayouts(buyerUser, amount = 1000) {
                 status: 'released'
             });
 
-            // Начисляем деньги сразу на баланс спонсора
             sponsorProfile.balances.mitrons += payoutAmount;
             sponsorProfile.balances.usd = parseFloat(mitronsToUsd(sponsorProfile.balances.mitrons));
         }
         current = canonicalSponsor;
     }
 
-    // Фиксируем реферальные выплаты в системном кошельке
     if (wallets) {
         wallets.referralPaid = (wallets.referralPaid || 0) + totalRefPaid;
     }
 }
 
-// Вспомогательная функция формирования статистики
+// Формирование точной статистики
 function getSystemStats() {
     const totalUsersList = Object.keys(referalsDB);
     const totalUsers = totalUsersList.length;
@@ -230,7 +238,6 @@ function getSystemStats() {
 
     let totalIncome = 0;
     let refPayoutsReleased = 0;
-    let refPayoutsPending = 0;
 
     Object.values(shopUsersDB).forEach(u => {
         if (u.purchases && u.purchases.certificateAmount) {
@@ -240,16 +247,16 @@ function getSystemStats() {
             u.pendingPayouts.forEach(p => {
                 if (p.status === 'released') {
                     refPayoutsReleased += p.amount;
-                } else {
-                    refPayoutsPending += p.amount;
                 }
             });
         }
     });
 
     const cashbackPaid = wallets.cashbackPaid || 0;
-    const totalReserve = wallets.daoWallet ? wallets.daoWallet.balanceMitrons : refPayoutsPending; 
-    const netProfit = totalIncome - refPayoutsReleased - cashbackPaid - totalReserve;
+    const totalReserve = wallets.daoWallet ? wallets.daoWallet.balanceMitrons : 0; 
+    
+    // Чистая прибыль = Общий приход минус выплаченный кешбэк, резерв и реферальные
+    const netProfit = totalIncome - cashbackPaid - totalReserve - refPayoutsReleased;
 
     return {
         totalBalance: totalIncome,
@@ -268,7 +275,6 @@ function getSystemStats() {
 
 // ================= API ЭНДПОИНТЫ =================
 
-// Получение дерева для графика матрицы
 app.get('/api/tree', (req, res) => {
     res.json({
         ...treeDB,
@@ -276,7 +282,6 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-// Единый эндпоинт регистрации пользователя в Матрице и Таблице
 app.post(['/api/register', '/api/register-matrix'], (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
@@ -303,7 +308,6 @@ app.post(['/api/register', '/api/register-matrix'], (req, res) => {
     res.json({ success: true, cellId, user: canonicalUser, sponsor: canonicalSponsor });
 });
 
-// Регистрация через Сайт 1 (Магазин/Робот)
 app.post(['/api/shop/register', '/api/register-shop'], (req, res) => {
     const { username, sponsor, amount = 4000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -341,14 +345,13 @@ app.post(['/api/shop/register', '/api/register-shop'], (req, res) => {
         wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
     }
 
-    // Запуск реферальных выплат
-    processReferralPayouts(canonicalUser, TOTAL_MITRONS);
+    // Распределение начислений и выплат
+    processIncomeDistribution(canonicalUser, TOTAL_MITRONS);
     
     checkAndSplitMatrix(cellId);
     res.json({ success: true, shopUserStatus: shopUsersDB[canonicalUser], cellId });
 });
 
-// Покупка сертификата
 app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     const { username, amount = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -387,8 +390,8 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
         wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
     }
 
-    // Запуск реферальных начислений (50 / 10 / 10)
-    processReferralPayouts(canonicalName, TOTAL_MITRONS);
+    // Распределение начислений и выплат
+    processIncomeDistribution(canonicalName, TOTAL_MITRONS);
 
     res.json({
         success: true,
@@ -398,7 +401,6 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     });
 });
 
-// Данные таблицы ВСЕХ пользователей
 app.get(['/api/users', '/api/admin/users'], (req, res) => {
     const userList = Object.keys(referalsDB).map(username => {
         const profile = shopUsersDB[username] || getOrCreateUserCard(username);
@@ -423,7 +425,6 @@ app.get(['/api/users', '/api/admin/users'], (req, res) => {
     res.json({ success: true, users: userList });
 });
 
-// Данные таблицы ВСЕХ покупок
 app.get(['/api/purchases', '/api/admin/purchases'], (req, res) => {
     let purchasesList = [];
 
@@ -452,7 +453,6 @@ app.get(['/api/purchases', '/api/admin/purchases'], (req, res) => {
     res.json({ success: true, purchases: purchasesList });
 });
 
-// Динамическая карточка Аналитики Администратора
 app.get('/api/admin/stats', (req, res) => {
     const stats = getSystemStats();
     res.json({
@@ -461,17 +461,14 @@ app.get('/api/admin/stats', (req, res) => {
     });
 });
 
-// Карточка конкретного пользователя (Модальное окно)
 app.get('/api/user-details/:username', (req, res) => {
     const usernameParam = req.params.username.trim();
     const canonicalName = getOrCreateUserCard(usernameParam);
     
-    // Все ячейки пользователя
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
         .map(cell => cell.id);
         
-    // Цепочка спонсоров вверх (до 5 поколений)
     let sponsorChain = [];
     let currentSponsor = referalsDB[canonicalName] || 'SYSTEM_ROOT';
     let visited = new Set();
@@ -516,7 +513,6 @@ app.get('/api/user-details/:username', (req, res) => {
     });
 });
 
-// Интерактивная Реферальная структура (до 5 уровней)
 app.get('/api/referals-tree', (req, res) => {
     let structure = {};
     let childrenMap = {};
@@ -559,7 +555,6 @@ app.get('/api/referals-tree', (req, res) => {
     res.json({ success: true, tree: structure });
 });
 
-// Заморозка выплат
 app.post('/api/admin/freeze-user', (req, res) => {
     const { username, freeze } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -574,7 +569,6 @@ app.post('/api/admin/freeze-user', (req, res) => {
     });
 });
 
-// Блокировка и удаление аккаунта
 app.post('/api/admin/delete-user', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
@@ -593,7 +587,6 @@ app.post('/api/admin/delete-user', (req, res) => {
     res.json({ success: true, message: `Пользователь ${canonicalName} заблокирован. Ячейки переданы Admin_System` });
 });
 
-// Сброс базы данных
 app.post(['/api/reset', '/api/reset-database'], (req, res) => {
     treeDB = createInitialTree();
     activeMatricesList = ['A1'];
@@ -610,7 +603,6 @@ app.post(['/api/reset', '/api/reset-database'], (req, res) => {
     res.json({ success: true });
 });
 
-// Единый эндпоинт кошельков и финансовой аналитики
 app.get(['/api/sys-wallets', '/api/system-wallets'], (req, res) => {
     const stats = getSystemStats();
     res.json({ 
