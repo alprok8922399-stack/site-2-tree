@@ -7,6 +7,7 @@ const http = require('http');
 
 const BATCH_SIZE = 50; // Количество ботов для генерации
 const API_URL = 'http://localhost:5000/api/shop/pay';
+const SECRET_KEY = process.env.INTERNAL_SECRET_KEY || 'super_secret_mitron_key_2026';
 
 async function sendRequest(username, sponsor) {
     return new Promise((resolve, reject) => {
@@ -16,12 +17,19 @@ async function sendRequest(username, sponsor) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(data)
+                'Content-Length': Buffer.byteLength(data),
+                'x-internal-key': SECRET_KEY
             }
         }, (res) => {
             let body = '';
             res.on('data', chunk => body += chunk);
-            res.on('end', () => resolve(JSON.parse(body)));
+            res.on('end', () => {
+                try {
+                    resolve(JSON.parse(body));
+                } catch (e) {
+                    reject(new Error(`Ошибка парсинга ответа: ${body}`));
+                }
+            });
         });
 
         req.on('error', reject);
@@ -37,9 +45,13 @@ async function runTest() {
         const botName = `Bot_${i}`;
         try {
             const res = await sendRequest(botName, 'SYSTEM_ROOT');
-            console.log(`[${i}/${BATCH_SIZE}] ✅ ${botName} встал в ячейку: ${res.cellId}`);
+            if (res.error) {
+                console.error(`[${i}/${BATCH_SIZE}] ❌ Ошибка сервера для ${botName}:`, res.error);
+            } else {
+                console.log(`[${i}/${BATCH_SIZE}] ✅ ${botName} встал в ячейку: ${res.cellId}`);
+            }
         } catch (err) {
-            console.error(`[${i}/${BATCH_SIZE}] ❌ Ошибка для ${botName}:`, err.message);
+            console.error(`[${i}/${BATCH_SIZE}] ❌ Сбой сети для ${botName}:`, err.message);
         }
     }
     
