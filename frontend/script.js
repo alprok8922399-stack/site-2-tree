@@ -120,12 +120,12 @@ async function payCertificate() {
         if (result.success) {
             const adminMitrons = result.split ? result.split.adminLogistics : 1000;
             const splitInfo = `
-Активация успешна!
+Активация успешная!
 Списано: 1000 Митронов ($130)
 -----------------------------------------
 Распределение:
 💸 Кошелек Администрации (100%): ${adminMitrons} Mitrons ($130.00)
-🔒 DAO Пул (Резерв): 0 Mitrons
+🔒 DAO Пул (Резерв на отказной период 31 день): 1000 Mitrons
             `;
             alert(splitInfo);
             
@@ -192,29 +192,35 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             const cellsList = (data.cells && data.cells.length > 0) ? data.cells.join(', ') : 'Нет места';
             setElementText('profile-cell-id', cellsList);
             
-            // Расчет дней и статус
+            // Расчет дней, статуса и отказного периода (31 день)
             const statusEl = document.getElementById('profile-status');
             const isPaid = data.profile ? data.profile.isPaid : false;
             const isFrozen = data.profile ? data.profile.isFrozen : false;
 
             if (statusEl) {
                 if (isFrozen) {
-                    statusEl.innerText = 'ВЫПЛАТЫ ЗАМОРОЖЕНЫ';
+                    statusEl.innerText = '❄️ ВЫПЛАТЫ ЗАМОРОЖЕНЫ';
                     statusEl.style.backgroundColor = '#ff9800';
                     statusEl.style.color = '#000000';
                 } else if (isPaid) {
                     const paidAt = (data.profile && data.profile.paymentDate) ? new Date(data.profile.paymentDate) : new Date();
                     const diffDays = Math.floor(Math.abs(new Date() - paidAt) / (1000 * 60 * 60 * 24));
                     
-                    statusEl.innerText = `Оплачен (${diffDays} дн.)`;
-                    statusEl.style.backgroundColor = diffDays > 30 ? '#d9534f' : '#5cb85c';
-                    statusEl.style.color = '#ffffff';
+                    if (diffDays <= 31) {
+                        statusEl.innerText = `⏳ Отказной период (${diffDays}/31 дн.)`;
+                        statusEl.style.backgroundColor = '#f39c12';
+                        statusEl.style.color = '#ffffff';
+                    } else {
+                        statusEl.innerText = `✅ Доступно к выплате (${diffDays} дн.)`;
+                        statusEl.style.backgroundColor = '#5cb85c';
+                        statusEl.style.color = '#ffffff';
+                    }
                 } else {
                     statusEl.innerText = 'Не оплачен';
                     statusEl.style.backgroundColor = '#777777';
                     statusEl.style.color = '#ffffff';
                 }
-                statusEl.style.padding = '4px 10px';
+                statusEl.style.padding = '6px 12px';
                 statusEl.style.borderRadius = '4px';
                 statusEl.style.fontWeight = 'bold';
             }
@@ -234,15 +240,15 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 if (balanceContainer) {
                     balanceDetailsEl = document.createElement('div');
                     balanceDetailsEl.id = 'profile-balance-details';
-                    balanceDetailsEl.style.cssText = 'font-size: 13px; color: #aaa; margin-top: 6px; background: #111; padding: 8px; border-radius: 4px;';
+                    balanceDetailsEl.style.cssText = 'font-size: 13px; color: #aaa; margin-top: 6px; background: #111; padding: 10px; border-radius: 6px; border: 1px solid #222;';
                     balanceContainer.appendChild(balanceDetailsEl);
                 }
             }
             if (balanceDetailsEl) {
                 balanceDetailsEl.innerHTML = `
-                    <div>Покупка сертификата: <strong>${certAmount} М</strong></div>
-                    <div>Потрачено на товар: <strong>${spentAmount} М</strong></div>
-                    <div>Логин в ячейке/ячейках: <strong style="color:#2ecc71;">${cellsList}</strong></div>
+                    <div style="margin-bottom: 3px;">🎫 Покупка сертификата: <strong>${certAmount} М</strong></div>
+                    <div style="margin-bottom: 3px;">🛒 Потрачено на товар: <strong>${spentAmount} М</strong></div>
+                    <div>📍 Логин в ячейке/ячейках: <strong style="color:#2ecc71;">${cellsList}</strong></div>
                 `;
             }
 
@@ -310,11 +316,11 @@ function renderAdminActionButtons(username, isFrozen) {
     if (!container) return;
 
     container.innerHTML = `
-        <button id="btn-freeze-user" style="flex: 1; padding: 8px; background: ${isFrozen ? '#27ae60' : '#f39c12'}; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-            ${isFrozen ? 'Разморозить выплаты' : 'Заморозить выплату'}
+        <button id="btn-freeze-user" style="flex: 1; padding: 10px; background: ${isFrozen ? '#27ae60' : '#f39c12'}; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            ${isFrozen ? '🔓 Разморозить выплаты' : '❄️ Заморозить выплату'}
         </button>
-        <button id="btn-delete-user" style="flex: 1; padding: 8px; background: #e74c3c; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-            Заблокировать и удалить аккаунт
+        <button id="btn-delete-user" style="flex: 1; padding: 10px; background: #e74c3c; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            🚫 Заблокировать и удалить (передать логин Админу)
         </button>
     `;
 
@@ -336,18 +342,19 @@ function renderAdminActionButtons(username, isFrozen) {
     };
 
     document.getElementById('btn-delete-user').onclick = async () => {
-        if (!confirm(`Удалить аккаунт ${username}? Все его ячейки перейдут Admin_System.`)) return;
+        if (!confirm(`Вы уверены, что хотите заблокировать и удалить аккаунт ${username}? Все его ячейки перейдут к Администрации!`)) return;
         try {
             const res = await fetch(`${API_URL}/api/admin/delete-user`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-internal-key': INTERNAL_SECRET_KEY },
-                body: JSON.stringify({ username })
+                body: JSON.stringify({ username, transferToAdmin: true })
             });
             const data = await res.json();
             if (data.success) {
                 alert(data.message);
                 closeUserProfileCard();
                 if (typeof window.renderMatrixTree === 'function') window.renderMatrixTree();
+                if (typeof window.renderUsersTable === 'function') window.renderUsersTable();
             }
         } catch (e) {
             alert('Ошибка при удалении пользователя');
@@ -445,29 +452,29 @@ async function openAdminCard() {
             if (!modal) {
                 modal = document.createElement('div');
                 modal.id = 'admin-stats-modal';
-                modal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #15151e; color: #fff; border: 2px solid #e74c3c; border-radius: 8px; padding: 20px; z-index: 10000; width: 90%; max-width: 500px; box-shadow: 0 0 20px rgba(231,76,60,0.4);';
+                modal.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #15151e; color: #fff; border: 2px solid #e74c3c; border-radius: 8px; padding: 20px; z-index: 10000; width: 90%; max-width: 500px; box-shadow: 0 0 25px rgba(231,76,60,0.5);';
                 document.body.appendChild(modal);
             }
 
             modal.innerHTML = `
                 <div style="display:flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px;">
                     <h3 style="margin: 0; color: #e74c3c;">👑 Карточка Администратора</h3>
-                    <button onclick="document.getElementById('admin-stats-modal').style.display='none'" style="background:none; border:none; color:#fff; font-size: 18px; cursor:pointer;">✖</button>
+                    <button onclick="document.getElementById('admin-stats-modal').style.display='none'" style="background:none; border:none; color:#fff; font-size: 20px; cursor:pointer; font-weight:bold;">✖</button>
                 </div>
                 <div style="display: grid; gap: 8px; font-size: 14px;">
-                    <div>💰 <strong>Общий баланс:</strong> ${stats.totalBalance} M ($${convertMitronsToUsd(stats.totalBalance)})</div>
-                    <div>📈 <strong>Поступило за сегодня:</strong> ${stats.incomeToday} M</div>
-                    <div>📅 <strong>Поступило за неделю:</strong> ${stats.incomeWeek} M</div>
-                    <div>📆 <strong>Поступило за месяц:</strong> ${stats.incomeMonth} M</div>
+                    <div>💰 <strong>Общий баланс:</strong> ${stats.totalBalance || 0} M ($${convertMitronsToUsd(stats.totalBalance || 0)})</div>
+                    <div>📈 <strong>Поступило за сегодня:</strong> ${stats.incomeToday || 0} M</div>
+                    <div>📅 <strong>Поступило за неделю:</strong> ${stats.incomeWeek || 0} M</div>
+                    <div>📆 <strong>Поступило за месяц:</strong> ${stats.incomeMonth || 0} M</div>
                     <hr style="border-color: #333; margin: 4px 0;">
-                    <div>🎁 <strong>Выплачено по акции (кешбэк 100%):</strong> ${stats.cashbackPaid} M</div>
-                    <div>🤝 <strong>Выплачено реферальных:</strong> ${stats.refPayouts} M</div>
-                    <div>🔒 <strong>В резерве на выплаты (всего):</strong> ${stats.totalReserve} M</div>
-                    <div>💵 <strong>Чистая прибыль:</strong> <strong style="color: #2ecc71;">${stats.netProfit} M</strong></div>
+                    <div>🎁 <strong>Выплачено по акции (кешбэк 100%):</strong> ${stats.cashbackPaid || 0} M</div>
+                    <div>🤝 <strong>Выплачено реферальных:</strong> ${stats.refPayouts || 0} M</div>
+                    <div>🔒 <strong>В резерве на выплаты (всего):</strong> ${stats.totalReserve || 0} M</div>
+                    <div>💵 <strong>Чистая прибыль:</strong> <strong style="color: #2ecc71;">${stats.netProfit || 0} M</strong></div>
                     <hr style="border-color: #333; margin: 4px 0;">
-                    <div>👥 <strong>Всего Логинов в системе:</strong> ${stats.totalUsers}</div>
-                    <div style="padding-left: 15px;">• Логинов админа: ${stats.adminLogins}</div>
-                    <div style="padding-left: 15px;">• Логинов покупателей: ${stats.buyerLogins}</div>
+                    <div>👥 <strong>Всего Логинов в системе:</strong> ${stats.totalUsers || 0}</div>
+                    <div style="padding-left: 15px; color: #aaa;">• Логинов админа: ${stats.adminLogins || 0}</div>
+                    <div style="padding-left: 15px; color: #aaa;">• Логинов покупателей: ${stats.buyerLogins || 0}</div>
                 </div>
             `;
             modal.style.display = 'block';
