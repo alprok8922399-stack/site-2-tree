@@ -1,6 +1,6 @@
 /**
  * Бэкенд Приватного Ядра — Сайт №2 (Матрица, Таблицы и Аналитика)
- * Полный исправленный модуль аналитики, реферального дерева и выплат.
+ * Полный модуль с учётом Себестоимости Товара (450 M) и Отчислениями в DAO Пул (10%).
  */
 
 const express = require('express');
@@ -238,15 +238,21 @@ function getSystemStats() {
     const totalUsers = totalUsersList.length;
     const buyerLogins = Math.max(0, totalUsers - adminLogins);
 
-    // Подсчет общего прихода
+    // 1. Подсчет общего прихода
     let totalIncome = 0;
+    let totalPurchasesCount = 0;
+
     Object.values(shopUsersDB).forEach(u => {
         if (u.purchases && u.purchases.certificateAmount) {
             totalIncome += u.purchases.certificateAmount;
+            totalPurchasesCount += Math.floor(u.purchases.certificateAmount / 1000);
         }
     });
 
-    // Расчет реферальных выплат со всех пользователей базы
+    // 2. Выделено на покупку товара в Маркетплейс (условно 450 M за каждый купленный сертификат)
+    const marketplaceProductCost = totalPurchasesCount * 450;
+
+    // 3. Расчет реферальных выплат со всех пользователей базы
     let totalRefPaidCalculated = 0;
     Object.values(shopUsersDB).forEach(u => {
         if (u.pendingPayouts && Array.isArray(u.pendingPayouts)) {
@@ -256,19 +262,21 @@ function getSystemStats() {
         }
     });
 
-    // Если в системе покупатели заходили без явного спонсора, начисляем 70 M на каждые 1000 M прихода
-    if (totalRefPaidCalculated === 0 && buyerLogins > 0) {
-        totalRefPaidCalculated = buyerLogins * 70; // 50 + 10 + 10 = 70 M с каждого покупателя
+    if (totalRefPaidCalculated === 0 && totalPurchasesCount > 0) {
+        totalRefPaidCalculated = totalPurchasesCount * 70; // 50 + 10 + 10 = 70 M
     }
 
     const cashbackPaid = wallets.cashbackPaid || 0;
     const refPayoutsReleased = Math.max(wallets.referralPaid || 0, totalRefPaidCalculated);
     
-    // Чистая прибыль кассы
-    const netProfit = Math.max(0, totalIncome - cashbackPaid - refPayoutsReleased);
+    // 4. Оставшийся доход до отчисления в DAO
+    const grossProfit = Math.max(0, totalIncome - cashbackPaid - refPayoutsReleased - marketplaceProductCost);
 
-    // Фактический баланс DAO Пула
-    const daoBalance = wallets.daoWallet ? (wallets.daoWallet.balanceMitrons || 0) : 0;
+    // 5. Отчисление в DAO Пул (10% от чистой прибыли)
+    const daoReserve = Math.round(grossProfit * 0.10);
+
+    // 6. Чистая прибыль Администратора
+    const netProfit = grossProfit - daoReserve;
 
     return {
         totalBalance: totalIncome,
@@ -277,8 +285,9 @@ function getSystemStats() {
         incomeMonth: totalIncome,
         cashbackPaid,
         refPayouts: refPayoutsReleased,
-        totalReserve: daoBalance,
-        netProfit: netProfit,
+        productCost: marketplaceProductCost, // Выделено на покупку товара
+        totalReserve: daoReserve,             // 10% в DAO Пул
+        netProfit: netProfit,                 // Итоговая чистая прибыль
         totalUsers,
         adminLogins,
         buyerLogins
@@ -511,7 +520,6 @@ app.get('/api/user-details/:username', (req, res) => {
     });
 });
 
-// Исправленный эндпоинт построения Дерева Реферальных Связей
 app.get('/api/referals-tree', (req, res) => {
     let structure = {};
     let childrenMap = {};
