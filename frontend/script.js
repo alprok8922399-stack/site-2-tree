@@ -182,7 +182,6 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             if (modal) {
                 modal.style.display = 'block';
                 modal.classList.add('active');
-                // Увеличение карточки в 2 раза (увеличенная ширина и масштабирование)
                 modal.style.maxWidth = '900px';
                 modal.style.width = '90%';
                 modal.style.transform = 'scale(1.05)';
@@ -228,7 +227,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             setElementText('balance-mitrons', `${mitronsBalance} Mitrons`);
             setElementText('balance-usd', `($${convertMitronsToUsd(mitronsBalance)})`);
 
-            // Отображаем детальную информацию по балансу
+            // Детальная информация по балансу
             let balanceDetailsEl = document.getElementById('profile-balance-details');
             if (!balanceDetailsEl) {
                 const balanceContainer = document.getElementById('balance-mitrons')?.parentNode;
@@ -287,10 +286,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 }
             }
 
-            // Добавляем кнопки Заморозки и Удаления аккаунта
             renderAdminActionButtons(data.username, isFrozen);
-
-            // Секция личников
             renderReferralsSection(data.username, data.referralsData, searchQuery);
         }
     } catch (error) {
@@ -454,7 +450,7 @@ async function openAdminCard() {
             }
 
             modal.innerHTML = `
-                <div style="display:flex; justify-size: space-between; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px;">
+                <div style="display:flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px;">
                     <h3 style="margin: 0; color: #e74c3c;">👑 Карточка Администратора</h3>
                     <button onclick="document.getElementById('admin-stats-modal').style.display='none'" style="background:none; border:none; color:#fff; font-size: 18px; cursor:pointer;">✖</button>
                 </div>
