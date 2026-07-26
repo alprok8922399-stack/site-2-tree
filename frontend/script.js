@@ -16,6 +16,18 @@ function setElementText(id, text) {
     }
 }
 
+// Универсальный вызов обновления таблицы и дерева
+function refreshTableAndTree() {
+    if (typeof window.loadReferalsTable === 'function') {
+        window.loadReferalsTable();
+    } else if (typeof window.renderUsersTable === 'function') {
+        window.renderUsersTable();
+    }
+    if (typeof window.renderMatrixTree === 'function') {
+        window.renderMatrixTree();
+    }
+}
+
 // === 1. АВТО-ОБНОВЛЕНИЕ ВЕРХНЕЙ КАРТОЧКИ АДМИНИСТРАТОРА ===
 
 async function loadAdminAnalyticsCard() {
@@ -74,12 +86,7 @@ async function registerInMatrix() {
         if (result.success) {
             alert(`Успешно! Место занято в ячейке: ${result.cellId || 'OK'}`);
             loadAdminAnalyticsCard();
-            if (typeof window.renderMatrixTree === 'function') {
-                window.renderMatrixTree();
-            }
-            if (typeof window.renderUsersTable === 'function') {
-                window.renderUsersTable();
-            }
+            refreshTableAndTree();
         } else {
             alert(`Ошибка: ${result.error}`);
         }
@@ -118,9 +125,7 @@ async function registerShopUser() {
             alert(`Покупатель ${shopUserStr} успешно зарегистрирован!`);
             loadUserProfile(shopUserStr);
             loadAdminAnalyticsCard();
-            if (typeof window.renderUsersTable === 'function') {
-                window.renderUsersTable();
-            }
+            refreshTableAndTree();
         } else {
             alert(`Ошибка: ${result.error}`);
         }
@@ -162,9 +167,7 @@ async function payCertificate() {
             loadUserProfile(username);
             loadSystemWallets();
             loadAdminAnalyticsCard();
-            if (typeof window.renderMatrixTree === 'function') {
-                window.renderMatrixTree();
-            }
+            refreshTableAndTree();
         } else {
             alert(`Ошибка оплаты: ${result.error}`);
         }
@@ -377,6 +380,7 @@ function renderAdminActionButtons(username, isFrozen) {
                 alert(data.message);
                 loadUserProfile(username);
                 loadAdminAnalyticsCard();
+                refreshTableAndTree();
             }
         } catch (e) {
             alert('Ошибка при изменении статуса заморозки');
@@ -396,8 +400,7 @@ function renderAdminActionButtons(username, isFrozen) {
                 alert(data.message);
                 closeUserProfileCard();
                 loadAdminAnalyticsCard();
-                if (typeof window.renderMatrixTree === 'function') window.renderMatrixTree();
-                if (typeof window.renderUsersTable === 'function') window.renderUsersTable();
+                refreshTableAndTree();
             }
         } catch (e) {
             alert('Ошибка при удалении пользователя');
@@ -511,11 +514,10 @@ async function resetSystem() {
         const result = await response.json();
         if (result.success) {
             alert('Система успешно сброшена к исходному состоянию!');
-            if (typeof window.renderMatrixTree === 'function') window.renderMatrixTree();
-            if (typeof window.renderUsersTable === 'function') window.renderUsersTable();
             closeUserProfileCard();
             loadSystemWallets();
             loadAdminAnalyticsCard();
+            refreshTableAndTree();
         }
     } catch (error) {
         console.error('Ошибка при сбросе системы:', error);
