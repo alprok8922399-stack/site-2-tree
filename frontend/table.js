@@ -7,7 +7,7 @@ let lastTreeJsonString = "";
 let isUserInteracting = false;
 let highlightedTableUser = null;
 
-// Динамические стили (настроены под отображение 5 колонок)
+// Динамические стили (настроены под отображение ровно 5 колонок)
 const style = document.createElement('style');
 style.innerHTML = `
     .table-search-container {
@@ -242,7 +242,7 @@ async function loadReferalsTable(isBackground = false) {
 }
 
 /**
- * Отрисовка интерактивной таблицы
+ * Отрисовка интерактивной таблицы (Ограничение строго до 5 колонок/поколений)
  */
 function renderActiveReferralGrid(container, isBackground = false) {
     const oldInput = document.getElementById('interactiveTableSearchInput');
@@ -300,7 +300,12 @@ function renderActiveReferralGrid(container, isBackground = false) {
     wrapper.className = 'referral-grid-wrapper';
     wrapper.id = 'referralGridWrapper';
 
-    // 1. Первая колонка
+    // Жесткое ограничение активной цепочки до 5 уровней
+    if (activePath.length > 5) {
+        activePath = activePath.slice(0, 5);
+    }
+
+    // 1. Первая колонка (Корень / Истоки)
     const firstLoginInPath = activePath[0];
     let rootColumnUsers = [];
 
@@ -312,8 +317,8 @@ function renderActiveReferralGrid(container, isBackground = false) {
     
     renderAlignedColumn(wrapper, rootColumnUsers, 0, null);
 
-    // 2. Последующие колонки (отображение до 5 уровней цепи одновременно)
-    for (let i = 0; i < activePath.length; i++) {
+    // 2. Последующие колонки (Отрисовка строго до 5 поколений)
+    for (let i = 0; i < activePath.length && i < 4; i++) {
         const currentLogin = activePath[i];
         const userNode = referralTreeData[currentLogin];
 
@@ -436,6 +441,11 @@ function createUserCardElement(user, columnIndex) {
             activePath = activePath.slice(0, columnIndex);
             activePath.push(user.id);
 
+            // Не даем активному пути превышать 5 поколений
+            if (activePath.length > 5) {
+                activePath = activePath.slice(-5);
+            }
+
             if (openDropdownUser === user.id) {
                 openDropdownUser = null; 
             } else {
@@ -455,7 +465,7 @@ function createUserCardElement(user, columnIndex) {
 }
 
 /**
- * Поиск пользователя с фокусом на срез (до 5 уровней цепи)
+ * Поиск пользователя с фокусировкой строго на 5 поколениях
  */
 async function searchReferralUser(login) {
     if (!login) return;
@@ -473,7 +483,7 @@ async function searchReferralUser(login) {
         if (result.success && result.chain && result.chain.length > 0) {
             const fullChain = result.chain;
             
-            // Расширен срез: если цепочка длиннее 5 поколений, берём последние 5
+            // Если цепочка длиннее 5 поколений, берём строго последние 5
             if (fullChain.length > 5) {
                 activePath = fullChain.slice(-5);
             } else {
