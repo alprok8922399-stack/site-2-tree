@@ -1,6 +1,7 @@
 /**
  * Бэкенд Приватного Ядра — Сайт №2 (Матрица и Реферальная Таблица)
- * Управляет деревом ячеек, реферальными связями, логикой деления и системными кошельками.
+ * Управляет деревом ячеек, реферальными связями, логикой деления,
+ * заморозкой/блокировкой, 5 поколениями связей и реферальными выплатами (50/10/10).
  */
 
 const express = require('express');
@@ -65,6 +66,29 @@ function createInitialTree() {
 
 let treeDB = createInitialTree();
 let activeMatricesList = ['A1']; // Список верхушек активных матриц
+
+/**
+ * Вспомогательная функция поиска/инициализации юзера
+ */
+function getOrCreateUserCard(username) {
+    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) 
+                        || username.trim();
+    if (!shopUsersDB[canonicalName]) {
+        shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
+        if (!shopUsersDB[canonicalName].balances) {
+            shopUsersDB[canonicalName].balances = { mitrons: 0, usd: 0 };
+        }
+        if (!shopUsersDB[canonicalName].spent) {
+            shopUsersDB[canonicalName].spent = { mitrons: 0, usd: 0 };
+        }
+        if (!shopUsersDB[canonicalName].purchases) {
+            shopUsersDB[canonicalName].purchases = { certificateAmount: 0 };
+        }
+        shopUsersDB[canonicalName].isFrozen = false;
+        shopUsersDB[canonicalName].pendingPayouts = [];
+    }
+    return canonicalName;
+}
 
 /**
  * Алгоритм поиска свободной ячейки (Правило четырех)
@@ -139,14 +163,44 @@ function checkAndSplitMatrix(cellId) {
         const b2Cell = getCellByGIdx(b2G);
 
         if (topCell && topCell.user) {
-            if (shopUsersDB[topCell.user]) {
-                shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
+            const canonicalTop = getOrCreateUserCard(topCell.user);
+            if (shopUsersDB[canonicalTop]) {
+                shopUsersDB[canonicalTop].matrixPosition.status = 'payout_pending';
             }
         }
 
         activeMatricesList = activeMatricesList.filter(id => id !== topCell.id);
         if (b1Cell && b1Cell.id) activeMatricesList.push(b1Cell.id);
         if (b2Cell && b2Cell.id) activeMatricesList.push(b2Cell.id);
+    }
+}
+
+/**
+ * Логика выплат 50 / 10 / 10 с удержанием 31 день
+ */
+function processReferralPayouts(buyerUser) {
+    let current = buyerUser;
+    const rewards = [50, 10, 10]; // 1-я линия 50, 2-я линия 10, 3-я линия 10
+
+    for (let level = 0; level < 3; level++) {
+        const sponsorName = referalsDB[current];
+        if (!sponsorName || sponsorName === 'SYSTEM_ROOT') break;
+
+        const canonicalSponsor = getOrCreateUserCard(sponsorName);
+        const sponsorProfile = shopUsersDB[canonicalSponsor];
+
+        if (sponsorProfile && !sponsorProfile.isFrozen) {
+            const releaseDate = new Date();
+            releaseDate.setDate(releaseDate.getDate() + 31); // 31 день отказного периода
+
+            sponsorProfile.pendingPayouts.push({
+                fromUser: buyerUser,
+                amount: rewards[level],
+                releaseDate: releaseDate.toISOString(),
+                status: 'pending'
+            });
+        }
+        current = canonicalSponsor;
     }
 }
 
@@ -159,12 +213,13 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-// Совместимый эндпоинт для фронтенда и тестов
+// Единый эндпоинт регистрации пользователя в Матрице и Таблице
 app.post(['/api/register', '/api/register-matrix'], (req, res) => {
     const { username, sponsor } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя обязательно' });
     
     const trimmedUser = username.trim();
+    const canonicalUser = getOrCreateUserCard(trimmedUser);
     
     let canonicalSponsor = sponsor ? sponsor.trim() : null;
     if (!canonicalSponsor) {
@@ -172,69 +227,104 @@ app.post(['/api/register', '/api/register-matrix'], (req, res) => {
         canonicalSponsor = allUsers[Math.floor(Math.random() * allUsers.length)] || 'SYSTEM_ROOT';
     }
     
-    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
-    if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
+    referalsDB[canonicalUser] = canonicalSponsor;
 
     const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = trimmedUser;
+    treeDB[cellId].user = canonicalUser;
     
-    referalsDB[trimmedUser] = canonicalSponsor;
-    
-    if (!shopUsersDB[trimmedUser]) {
-        shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
-        shopUsersDB[trimmedUser].isPaid = true;
-        shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
-        shopUsersDB[trimmedUser].matrixPosition.status = 'active';
-    }
+    shopUsersDB[canonicalUser].isPaid = true;
+    shopUsersDB[canonicalUser].matrixPosition.currentCellId = cellId;
+    shopUsersDB[canonicalUser].matrixPosition.status = 'active';
     
     checkAndSplitMatrix(cellId);
-    res.json({ success: true, cellId, user: trimmedUser });
+    res.json({ success: true, cellId, user: canonicalUser, sponsor: canonicalSponsor });
 });
 
-// Сброс базы данных
-app.post(['/api/reset', '/api/reset-database'], (req, res) => {
-    treeDB = createInitialTree();
-    activeMatricesList = ['A1'];
-    shopUsersDB = {};
-    wallets = createInitialWallets();
-    referalsDB = {
-        'SYSTEM_ROOT': null,
-        'Admin_System': 'SYSTEM_ROOT',
-        'LEADER_1': 'SYSTEM_ROOT',
-        'LEADER_2': 'SYSTEM_ROOT'
-    };
-    lastRegisteredBot = null;
-    res.json({ success: true });
+// Регистрация через Сайт 1 (Магазин/Робот)
+app.post(['/api/shop/register', '/api/register-shop'], (req, res) => {
+    const { username, sponsor } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+    
+    const canonicalUser = getOrCreateUserCard(username.trim());
+    
+    let chosenSponsor = sponsor ? sponsor.trim() : null;
+    if (!chosenSponsor) {
+        const availableSponsors = Object.keys(referalsDB);
+        chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
+    }
+
+    referalsDB[canonicalUser] = chosenSponsor;
+    lastRegisteredBot = canonicalUser; 
+
+    const cellId = findNextEmptyCell(treeDB);
+    treeDB[cellId].user = canonicalUser;
+    
+    shopUsersDB[canonicalUser].isPaid = true;
+    shopUsersDB[canonicalUser].matrixPosition.currentCellId = cellId;
+    shopUsersDB[canonicalUser].matrixPosition.status = 'active';
+    
+    checkAndSplitMatrix(cellId);
+    res.json({ success: true, shopUserStatus: shopUsersDB[canonicalUser], cellId });
 });
 
+// Покупка сертификата
+app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
+    const { username, amount = 1000 } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+    
+    const canonicalName = getOrCreateUserCard(username);
+    const TOTAL_MITRONS = Number(amount);
+
+    let existingCell = Object.keys(treeDB).find(cellId => treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === canonicalName.toLowerCase());
+    let cellId = existingCell;
+
+    if (!cellId) {
+        cellId = findNextEmptyCell(treeDB);
+        treeDB[cellId].user = canonicalName;
+        checkAndSplitMatrix(cellId);
+    }
+
+    shopUsersDB[canonicalName].isPaid = true;
+    shopUsersDB[canonicalName].paymentDate = new Date().toISOString();
+    shopUsersDB[canonicalName].purchases.certificateAmount += TOTAL_MITRONS;
+    shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
+    shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
+    shopUsersDB[canonicalName].matrixPosition.currentCellId = cellId;
+    shopUsersDB[canonicalName].matrixPosition.status = 'active';
+
+    wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
+
+    // Запуск реферальных начислений (50 / 10 / 10)
+    processReferralPayouts(canonicalName);
+
+    res.json({
+        success: true,
+        shopUserStatus: shopUsersDB[canonicalName],
+        cellId,
+        amount: TOTAL_MITRONS
+    });
+});
+
+// Карточка пользователя
 app.get('/api/user-details/:username', (req, res) => {
     const usernameParam = req.params.username.trim();
-    const canonicalName = Object.keys(referalsDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                        || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                        || usernameParam;
+    const canonicalName = getOrCreateUserCard(usernameParam);
     
+    // Все ячейки пользователя
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
         .map(cell => cell.id);
         
+    // Цепочка спонсоров вверх (ограничена 5 поколениями)
     let sponsorChain = [];
     let currentSponsor = referalsDB[canonicalName] || 'SYSTEM_ROOT';
     let visited = new Set();
     
-    while (currentSponsor && !visited.has(currentSponsor)) {
+    while (currentSponsor && !visited.has(currentSponsor) && sponsorChain.length < 5) {
         visited.add(currentSponsor);
         sponsorChain.push(currentSponsor);
         const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === currentSponsor.toLowerCase());
         currentSponsor = nextSponsorKey ? referalsDB[nextSponsorKey] : null;
-    }
-    
-    if (!shopUsersDB[canonicalName]) {
-        shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
-        if (userCells.length > 0) {
-            shopUsersDB[canonicalName].isPaid = true;
-            shopUsersDB[canonicalName].matrixPosition.currentCellId = userCells[0];
-            shopUsersDB[canonicalName].matrixPosition.status = 'active';
-        }
     }
 
     const searchQuery = (req.query.search || '').trim().toLowerCase();
@@ -270,20 +360,17 @@ app.get('/api/user-details/:username', (req, res) => {
     });
 });
 
+// Интерактивная Реферальная структура (до 5 уровней)
 app.get('/api/referals-tree', (req, res) => {
     let structure = {};
     let childrenMap = {};
     
-    Object.keys(referalsDB).forEach(user => {
-        childrenMap[user] = [];
-    });
+    Object.keys(referalsDB).forEach(user => { childrenMap[user] = []; });
     
     Object.entries(referalsDB).forEach(([user, sponsor]) => {
         if (sponsor) {
             const canonicalSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === sponsor.toLowerCase()) || sponsor;
-            if (!childrenMap[canonicalSponsor]) {
-                childrenMap[canonicalSponsor] = [];
-            }
+            if (!childrenMap[canonicalSponsor]) childrenMap[canonicalSponsor] = [];
             childrenMap[canonicalSponsor].push(user);
         }
     });
@@ -292,7 +379,7 @@ app.get('/api/referals-tree', (req, res) => {
         let level = 1;
         let current = user;
         let visited = new Set();
-        while (current && current !== 'SYSTEM_ROOT' && !visited.has(current)) {
+        while (current && current !== 'SYSTEM_ROOT' && !visited.has(current) && level <= 5) {
             visited.add(current);
             let sponsor = referalsDB[current];
             if (!sponsor) { level++; break; }
@@ -316,126 +403,54 @@ app.get('/api/referals-tree', (req, res) => {
     res.json({ success: true, tree: structure });
 });
 
-app.get('/api/get-referral-chain', (req, res) => {
-    const { login } = req.query;
-    if (!login) return res.status(400).json({ error: 'Параметр login обязателен' });
-
-    const targetUser = Object.keys(referalsDB).find(k => k.toLowerCase() === login.trim().toLowerCase());
-    if (!targetUser) return res.status(404).json({ error: 'Пользователь не найден' });
-
-    let chain = [];
-    let current = targetUser;
-    let visited = new Set();
-
-    while (current && !visited.has(current)) {
-        visited.add(current);
-        chain.push(current);
-        const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === referalsDB[current]?.toLowerCase());
-        current = nextSponsorKey ? nextSponsorKey : referalsDB[current];
-    }
-
-    chain.reverse();
-    res.json({ success: true, chain });
-});
-
-app.post(['/api/shop/register', '/api/register-shop'], (req, res) => {
-    const { username, sponsor } = req.body;
+// Заморозка выплат
+app.post('/api/admin/freeze-user', (req, res) => {
+    const { username, freeze } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-    
-    const trimmedUser = username.trim();
-    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
-    if (isExist) {
-        return res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser] || createNewUserCard(trimmedUser) });
-    }
-    
-    shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
-    
-    let chosenSponsor = sponsor ? sponsor.trim() : null;
-    if (!chosenSponsor) {
-        const availableSponsors = Object.keys(referalsDB);
-        chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
-    }
 
-    referalsDB[trimmedUser] = chosenSponsor;
-    lastRegisteredBot = trimmedUser; 
-
-    const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = trimmedUser;
-    
-    shopUsersDB[trimmedUser].isPaid = true;
-    shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
-    shopUsersDB[trimmedUser].matrixPosition.status = 'active';
-    
-    checkAndSplitMatrix(cellId);
-    res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser], cellId });
-});
-
-app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
-    const { username, amount = 1000 } = req.body;
-    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-    
-    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) 
-                        || Object.keys(referalsDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) 
-                        || username.trim();
-
-    const TOTAL_MITRONS = amount;
-
-    if (!shopUsersDB[canonicalName]) {
-        shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
-    }
-
-    // Проверяем, есть ли уже у пользователя место в матрице
-    let existingCell = Object.keys(treeDB).find(cellId => treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === canonicalName.toLowerCase());
-    let cellId = existingCell;
-
-    // Если места еще нет — сажаем в ближайшую свободную ячейку
-    if (!cellId) {
-        cellId = findNextEmptyCell(treeDB);
-        treeDB[cellId].user = canonicalName;
-        checkAndSplitMatrix(cellId);
-    }
-
-    // Активируем статус оплаты и пополняем балансы
-    shopUsersDB[canonicalName].isPaid = true;
-    shopUsersDB[canonicalName].paymentDate = new Date().toISOString();
-    shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
-    shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
-    shopUsersDB[canonicalName].matrixPosition.currentCellId = cellId;
-    shopUsersDB[canonicalName].matrixPosition.status = 'active';
-
-    // 100% Поступлений зачисляются в Кошелек Администрации
-    wallets.adminWallet.balanceMitrons += TOTAL_MITRONS;
+    const canonicalName = getOrCreateUserCard(username);
+    shopUsersDB[canonicalName].isFrozen = freeze !== undefined ? Boolean(freeze) : true;
 
     res.json({
         success: true,
-        shopUserStatus: shopUsersDB[canonicalName],
-        cellId,
-        split: {
-            totalMitrons: TOTAL_MITRONS,
-            adminLogistics: TOTAL_MITRONS,
-            adminWallet: TOTAL_MITRONS,
-            reservations: {
-                matrixReserve: 250,
-                tableRefReserve: 70
-            }
-        }
+        message: `Статус заморозки пользователя ${canonicalName}: ${shopUsersDB[canonicalName].isFrozen}`
     });
 });
 
+// Блокировка и удаление аккаунта (с передачей ячеек Admin_System)
 app.post('/api/admin/delete-user', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
     
-    delete shopUsersDB[username];
-    delete referalsDB[username];
+    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
+
+    delete shopUsersDB[canonicalName];
+    delete referalsDB[canonicalName];
     
+    // Передаем все ячейки Администрации
     Object.keys(treeDB).forEach(cellId => {
-        if (treeDB[cellId].user === username) {
+        if (treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === canonicalName.toLowerCase()) {
             treeDB[cellId].user = 'Admin_System';
         }
     });
     
-    res.json({ success: true, message: `Пользователь ${username} удален. Ячейки переданы Admin_System` });
+    res.json({ success: true, message: `Пользователь ${canonicalName} заблокирован. Ячейки переданы Admin_System` });
+});
+
+// Сброс базы данных
+app.post(['/api/reset', '/api/reset-database'], (req, res) => {
+    treeDB = createInitialTree();
+    activeMatricesList = ['A1'];
+    shopUsersDB = {};
+    wallets = createInitialWallets();
+    referalsDB = {
+        'SYSTEM_ROOT': null,
+        'Admin_System': 'SYSTEM_ROOT',
+        'LEADER_1': 'SYSTEM_ROOT',
+        'LEADER_2': 'SYSTEM_ROOT'
+    };
+    lastRegisteredBot = null;
+    res.json({ success: true });
 });
 
 app.get(['/api/sys-wallets', '/api/system-wallets'], (req, res) => {
