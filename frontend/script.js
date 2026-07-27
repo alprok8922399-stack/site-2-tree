@@ -56,7 +56,45 @@ async function loadAdminAnalyticsCard() {
     }
 }
 
-// === 2. РЕГИСТРАЦИЯ И УПРАВЛЕНИЕ МАТРИЦЕЙ ===
+// === 2. ФИЛЬТРАЦИЯ ПОЛЬЗОВАТЕЛЕЙ ПО ДАТАМ "ЗАШЛО В ПРОЕКТ" ===
+
+async function filterUsersByDate() {
+    const dateFrom = document.getElementById('date-from')?.value;
+    const dateTo = document.getElementById('date-to')?.value;
+    const resultsContainer = document.getElementById('date-search-results');
+
+    if (!dateFrom || !dateTo) {
+        alert('Выберите обе даты для поиска');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/users-by-date?from=${dateFrom}&to=${dateTo}`);
+        const data = await response.json();
+
+        if (data.success && resultsContainer) {
+            if (data.users && data.users.length > 0) {
+                resultsContainer.innerHTML = `<strong>Найдено (${data.users.length}):</strong> ` + 
+                    data.users.map(u => `<span style="color:#3498db; cursor:pointer; text-decoration:underline; margin-right:8px;" onclick="loadUserProfile('${u}')">${u}</span>`).join(', ');
+            } else {
+                resultsContainer.innerHTML = '<em>За выбранный период логинов не найдено.</em>';
+            }
+        }
+    } catch (e) {
+        console.error('Ошибка поиска по датам:', e);
+    }
+}
+
+function resetDateFilter() {
+    const dateFrom = document.getElementById('date-from');
+    const dateTo = document.getElementById('date-to');
+    const resultsContainer = document.getElementById('date-search-results');
+    if (dateFrom) dateFrom.value = '';
+    if (dateTo) dateTo.value = '';
+    if (resultsContainer) resultsContainer.innerHTML = '';
+}
+
+// === 3. РЕГИСТРАЦИЯ И УПРАВЛЕНИЕ МАТРИЦЕЙ ===
 
 async function registerInMatrix() {
     const usernameInput = document.getElementById('matrix-username');
@@ -95,44 +133,7 @@ async function registerInMatrix() {
     }
 }
 
-// === 3. МОДУЛЬ МАРКЕТПЛЕЙСА И ОПЛАТЫ ===
-
-async function registerShopUser() {
-    const shopUserField = document.getElementById('shop-username');
-    const shopSponsorField = document.getElementById('shop-sponsor');
-    
-    if (!shopUserField) return;
-    const shopUserStr = shopUserField.value.trim();
-    const shopSponsorStr = shopSponsorField ? shopSponsorField.value.trim() : '';
-    
-    if (!shopUserStr) {
-        alert('Укажите логин покупателя');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_URL}/api/register-shop`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'x-internal-key': INTERNAL_SECRET_KEY
-            },
-            body: JSON.stringify({ username: shopUserStr, sponsor: shopSponsorStr })
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            alert(`Покупатель ${shopUserStr} успешно зарегистрирован!`);
-            loadUserProfile(shopUserStr);
-            loadAdminAnalyticsCard();
-            refreshTableAndTree();
-        } else {
-            alert(`Ошибка: ${result.error}`);
-        }
-    } catch (error) {
-        console.error('Ошибка регистрации покупателя:', error);
-    }
-}
+// === 4. МОДУЛЬ МАРКЕТПЛЕЙСА И ОПЛАТЫ ===
 
 async function payCertificate() {
     const username = document.getElementById('current-profile-user')?.innerText;
@@ -165,7 +166,6 @@ async function payCertificate() {
             alert(splitInfo);
             
             loadUserProfile(username);
-            loadSystemWallets();
             loadAdminAnalyticsCard();
             refreshTableAndTree();
         } else {
@@ -176,37 +176,18 @@ async function payCertificate() {
     }
 }
 
-// Загрузка состояния системных кошельков
-async function loadSystemWallets() {
-    try {
-        const response = await fetch(`${API_URL}/api/system-wallets`);
-        const data = await response.json();
-        if (data.success) {
-            const adminM = data.adminWallet || 0;
-            const daoM = data.daoWallet || 0;
-            
-            setElementText('sys-admin-wallet', `${adminM} M ($${convertMitronsToUsd(adminM)})`);
-            setElementText('sys-dao-wallet', `${daoM} M ($${convertMitronsToUsd(daoM)})`);
-        }
-    } catch (e) {
-        console.error('Не удалось загрузить данные системных кошельков:', e);
-    }
-}
-
-// === 4. НОВАЯ ЕДИНАЯ ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И АДМИНИСТРАТОРА ===
+// === 5. НОВАЯ ЕДИНАЯ ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И АДМИНИСТРАТОРА ===
 
 function getProfileModalElement() {
     return document.getElementById('userModal') || 
            document.getElementById('profile-modal') || 
-           document.querySelector('.user-card-modal') || 
-           document.querySelector('.modal') || 
-           document.getElementById('user-card');
+           document.querySelector('.modal');
 }
 
 async function loadUserProfile(username, searchQuery = '', page = 1) {
     if (!username || username === '—') return;
     
-    // Удаляем любые старые всплывающие окна/карточки, если они остались в DOM
+    // Полное удаление любых старых дублирующих модалок
     const oldCards = document.querySelectorAll('.old-user-card, .legacy-modal, #legacy-profile-card');
     oldCards.forEach(card => card.remove());
 
@@ -261,18 +242,18 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 statusEl.style.fontWeight = 'bold';
             }
             
-            // Расширенная информация о балансе и покупках
+            // Расширенная информация о балансе и стороннем Маркетплейсе
             const mitronsBalance = data.profile ? (data.profile.balanceMitrons || (data.profile.balances ? data.profile.balances.mitrons : 0)) : 0;
             const certAmount = data.profile && data.profile.purchases ? data.profile.purchases.certificateAmount : 1000;
             const spentAmount = data.profile && data.profile.spent ? data.profile.spent.mitrons : 0;
-            const shopPurchasesAmount = data.profile && data.profile.shopPurchases ? data.profile.shopPurchases.totalAmount : (data.isAdmin ? (data.stats?.shopPurchasesTotal || 0) : 0);
+            
+            const shopPurchasesAmount = data.stats?.shopPurchasesTotal || 0;
             const totalBuyers = data.stats?.totalBuyers || 0;
             const totalRefundedBuyers = data.stats?.totalRefundedBuyers || 0;
 
             setElementText('balance-mitrons', `${mitronsBalance} Mitrons`);
             setElementText('balance-usd', `($${convertMitronsToUsd(mitronsBalance)})`);
 
-            // Детальная информация по балансу и стороннему Маркетплейсу
             let balanceDetailsEl = document.getElementById('profile-balance-details');
             if (!balanceDetailsEl) {
                 const balanceContainer = document.getElementById('balance-mitrons')?.parentNode;
@@ -288,12 +269,13 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 let adminExtraRows = '';
                 if (data.username === 'ADMIN' || data.isAdmin) {
                     adminExtraRows = `
-                        <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #333; color: #f39c12;">
-                            <div>🛍️ Куплено товара на стороннем Маркетплейсе на: <strong>${shopPurchasesAmount} М</strong> (одна покупка 450 М)</div>
-                            <div style="font-size:11px; color:#888;">* Прибыль пересчитывается с остатка с 550 М</div>
-                            <div>📦 Куплено товара всего на: <strong>${shopPurchasesAmount} М</strong></div>
-                            <div>👥 Купило товара всего: <strong>${totalBuyers} Покупателей</strong></div>
-                            <div style="color: #e74c3c;">🚫 Отказалось от покупки всего: <strong>${totalRefundedBuyers} Покупателей</strong></div>
+                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #444; color: #f39c12; font-size: 13px; line-height: 1.6;">
+                            <div>🛍️ <strong>Куплено товара на стороннем Маркетплейсе на:</strong> ${shopPurchasesAmount} М (одна покупка 450 М)</div>
+                            <div style="font-size: 11px; color: #95a5a6; margin-left: 15px;">* Прибыль пересчитывается с остатка с 550 М</div>
+                            <div>📦 <strong>Куплено товара всего на:</strong> ${shopPurchasesAmount} М</div>
+                            <div>👥 <strong>Купило товара всего:</strong> ${totalBuyers} Покупателей</div>
+                            <div style="color: #e74c3c;">🚫 <strong>Отказалось от покупки всего:</strong> ${totalRefundedBuyers} Покупателей</div>
+                            <div style="font-size: 11px; color: #e74c3c; margin-left: 15px;">* Доход пересчитывается, реферальные удаляются (деньги в полном объеме возвращаются Покупателю), логин переходит во владение Администрации.</div>
                         </div>
                     `;
                 }
@@ -303,17 +285,6 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                     <div style="margin-bottom: 3px;">🛒 Потрачено на товар: <strong>${spentAmount} М</strong></div>
                     <div>📍 Логин в ячейке/ячейках: <strong style="color:#2ecc71;">${cellsList}</strong></div>
                     ${adminExtraRows}
-                `;
-            }
-
-            // Рендер тела модального окна (для userModal)
-            const modalBody = document.getElementById('modal-user-body');
-            if (modalBody) {
-                modalBody.innerHTML = `
-                    <div><strong>Логин:</strong> ${data.username}</div>
-                    <div><strong>Ячейки:</strong> ${cellsList}</div>
-                    <div><strong>Статус:</strong> ${statusEl ? statusEl.innerText : '—'}</div>
-                    <div><strong>Баланс:</strong> ${mitronsBalance} Mitrons ($${convertMitronsToUsd(mitronsBalance)})</div>
                 `;
             }
 
@@ -386,7 +357,7 @@ function renderAdminActionButtons(username, isFrozen) {
             ${isFrozen ? '🔓 Разморозить выплаты' : '❄️ Заморозить выплату'}
         </button>
         <button id="btn-delete-user" style="flex: 1; padding: 10px; background: #e74c3c; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-            🚫 Заблокировать и удалить (передать логин Админу)
+            🚫 Оформить отказ / Удалить (передать логин Админу)
         </button>
     `;
 
@@ -410,7 +381,7 @@ function renderAdminActionButtons(username, isFrozen) {
     };
 
     document.getElementById('btn-delete-user').onclick = async () => {
-        if (!confirm(`Вы уверены, что хотите заблокировать и удалить аккаунт ${username}? Все его ячейки перейдут к Администрации!`)) return;
+        if (!confirm(`Вы уверены, что покупатель ${username} отказывается от покупки? Средства вернутся Покупателю, реферальные аннулируются, а логин и ячейки перейдут во владение Администрации!`)) return;
         try {
             const res = await fetch(`${API_URL}/api/admin/delete-user`, {
                 method: 'POST',
@@ -425,7 +396,7 @@ function renderAdminActionButtons(username, isFrozen) {
                 refreshTableAndTree();
             }
         } catch (e) {
-            alert('Ошибка при удалении пользователя');
+            alert('Ошибка при оформлении отказа пользователем');
         }
     };
 }
@@ -537,7 +508,6 @@ async function resetSystem() {
         if (result.success) {
             alert('Система успешно сброшена к исходному состоянию!');
             closeUserProfileCard();
-            loadSystemWallets();
             loadAdminAnalyticsCard();
             refreshTableAndTree();
         }
@@ -553,7 +523,6 @@ function searchProfile() {
 }
 
 // === ГЛОБАЛЬНЫЕ МОСТЫ СВЯЗИ ===
-// Перенаправляем все вызовы открытия карточек на единую новую функцию loadUserProfile
 window.showUserCard = loadUserProfile;
 window.openUserProfile = loadUserProfile;
 window.showProfileModal = loadUserProfile;
@@ -563,10 +532,11 @@ window.loadAdminCard = loadAdminCard;
 window.searchProfile = searchProfile;
 window.payCertificate = payCertificate;
 window.resetSystem = resetSystem;
+window.filterUsersByDate = filterUsersByDate;
+window.resetDateFilter = resetDateFilter;
 
 // Привязка событий после загрузки страницы
 document.addEventListener('DOMContentLoaded', () => {
-    loadSystemWallets();
     loadAdminAnalyticsCard();
 
     // Авто-обновление карточки админа каждые 10 секунд
@@ -576,35 +546,4 @@ document.addEventListener('DOMContentLoaded', () => {
     if (searchBtn) {
         searchBtn.addEventListener('click', searchProfile);
     }
-
-    // Обработчик закрытия карточки по клику вне ее
-    document.addEventListener('click', (e) => {
-        const modal = getProfileModalElement();
-        if (!modal) return;
-
-        const computedStyle = window.getComputedStyle(modal);
-        if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') return;
-
-        const contentBox = modal.querySelector('.modal-content') || 
-                           modal.querySelector('.card-body') || 
-                           modal.querySelector('.user-card-content') || 
-                           modal.children[0];
-
-        const isTrigger = e.target.closest('#search-profile-btn') || 
-                          e.target.closest('.dropdown-btn') || 
-                          e.target.closest('.user-cell-card') ||
-                          e.target.closest('[onclick*="showUserCard"]') ||
-                          e.target.closest('[onclick*="loadAdminCard"]') ||
-                          e.target.closest('[onclick*="loadUserProfile"]');
-
-        if (isTrigger) return;
-
-        if (contentBox) {
-            if (!contentBox.contains(e.target)) {
-                closeUserProfileCard();
-            }
-        } else if (modal === e.target) {
-            closeUserProfileCard();
-        }
-    });
 });
