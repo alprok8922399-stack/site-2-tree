@@ -2,10 +2,12 @@ const API_BASE_URL = window.location.origin;
 
 let referralTreeData = {};
 let activePath = [];
-let openDropdownUser = null;
 let lastTreeJsonString = "";
 let isUserInteracting = false;
 let highlightedTableUser = null;
+
+const MAX_COLUMNS = 5; // Срез строго на 5 столбцов
+const SLOT_ROW_HEIGHT = 56; // Базовая высота строки в пикселях
 
 // Динамические стили
 const style = document.createElement('style');
@@ -91,7 +93,7 @@ style.innerHTML = `
         flex-direction: row !important;
         flex-wrap: nowrap !important;
         align-items: flex-start !important;
-        gap: 15px !important;
+        gap: 10px !important;
         overflow-x: auto !important;
         padding: 10px 5px !important;
         background: #181818;
@@ -102,33 +104,48 @@ style.innerHTML = `
         -webkit-overflow-scrolling: touch;
     }
     .referral-column {
-        flex: 0 0 250px !important;
+        flex: 0 0 210px !important;
+        min-width: 190px !important;
         background: #222222 !important;
         border: 1px solid #333333 !important;
         border-radius: 6px !important;
         display: flex !important;
         flex-direction: column !important;
-        max-height: 600px !important;
-        overflow-y: auto !important;
-        padding: 8px !important;
-        gap: 6px !important;
+        padding: 6px !important;
+        box-sizing: border-box;
+    }
+    .column-header {
+        font-weight: bold;
+        font-size: 12px;
+        color: #4CAF50;
+        text-align: center;
+        padding: 6px 4px;
+        border-bottom: 1px solid #444;
+        margin-bottom: 6px;
+        background: #1a1a1a;
+        border-radius: 4px;
     }
     .table-row-slot {
-        min-height: 52px;
         display: flex;
         flex-direction: column;
         justify-content: center;
+        box-sizing: border-box;
+        padding: 2px 0;
+    }
+    .table-row-slot.empty-slot {
+        opacity: 0.2;
     }
     .user-cell-card {
         border: 1px solid #444444 !important;
         border-radius: 5px !important;
-        padding: 10px !important;
+        padding: 8px 10px !important;
         background: #2a2a2a !important;
         cursor: pointer !important;
         transition: all 0.2s ease !important;
         position: relative !important;
         user-select: none !important;
         box-sizing: border-box;
+        width: 100%;
     }
     .user-cell-card:hover {
         background: #333333 !important;
@@ -153,11 +170,12 @@ style.innerHTML = `
         display: flex !important;
         justify-content: space-between !important;
         align-items: center !important;
-        font-size: 14px !important;
+        font-size: 13px !important;
     }
     .user-login-text {
         font-weight: 600 !important;
         color: #4CAF50 !important;
+        word-break: break-word;
     }
     .user-cell-card.searched-highlight .user-login-text {
         color: #ffffff !important;
@@ -165,32 +183,10 @@ style.innerHTML = `
     .children-badge {
         background: #555555 !important;
         color: #fff !important;
-        font-size: 11px !important;
+        font-size: 10px !important;
         padding: 2px 6px !important;
         border-radius: 10px !important;
         font-weight: bold;
-    }
-    .user-dropdown-menu {
-        margin-top: 8px !important;
-        padding-top: 8px !important;
-        border-top: 1px dashed #444444 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 5px !important;
-    }
-    .dropdown-btn {
-        background: #333333 !important;
-        border: 1px solid #555555 !important;
-        color: #ffffff !important;
-        padding: 6px 8px !important;
-        font-size: 12px !important;
-        border-radius: 4px !important;
-        cursor: pointer !important;
-        text-align: left !important;
-    }
-    .dropdown-btn:hover {
-        background: #4CAF50 !important;
-        border-color: #4CAF50 !important;
     }
     .empty-column-msg {
         color: #888888 !important;
@@ -242,7 +238,7 @@ async function loadReferalsTable(isBackground = false) {
 }
 
 /**
- * Отрисовка интерактивной таблицы
+ * Отрисовка интерактивной таблицы (5 колонок с выравниванием высоты)
  */
 function renderActiveReferralGrid(container, isBackground = false) {
     const oldInput = document.getElementById('interactiveTableSearchInput');
@@ -262,7 +258,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
 
     container.innerHTML = '';
     
-    // Блок поиска и кнопок быстрой навигации
+    // Блок поиска и кнопок навигации
     const searchBlock = document.createElement('div');
     searchBlock.className = 'table-search-container';
     searchBlock.innerHTML = `
@@ -300,7 +296,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
     wrapper.className = 'referral-grid-wrapper';
     wrapper.id = 'referralGridWrapper';
 
-    // 1. Первая колонка (Либо корень, либо стартовый узел текущего узкого среза)
+    // 1. Стартовый узел для среза в 5 колонок
     const firstLoginInPath = activePath[0];
     let rootColumnUsers = [];
 
@@ -308,24 +304,105 @@ function renderActiveReferralGrid(container, isBackground = false) {
         rootColumnUsers = [referralTreeData[firstLoginInPath]];
     } else {
         rootColumnUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
-    }
-    
-    renderAlignedColumn(wrapper, rootColumnUsers, 0, null);
-
-    // 2. Последующие колонки (Отображаем только активный фокусный путь)
-    for (let i = 0; i < activePath.length; i++) {
-        const currentLogin = activePath[i];
-        const userNode = referralTreeData[currentLogin];
-
-        if (userNode && userNode.children && userNode.children.length > 0) {
-            const childrenNodes = userNode.children.map(childLogin => referralTreeData[childLogin]).filter(Boolean);
-            renderAlignedColumn(wrapper, childrenNodes, i + 1, userNode);
+        if (rootColumnUsers.length === 0 && Object.keys(referralTreeData).length > 0) {
+            rootColumnUsers = [Object.values(referralTreeData)[0]];
         }
+    }
+
+    // 2. Расчет выравнивания строк по поддеревьям на 5 колонок
+    const columnsData = Array.from({ length: MAX_COLUMNS }, () => []);
+
+    function getNodeHeight(nodeId, depth) {
+        if (depth >= MAX_COLUMNS) return 1;
+        const node = referralTreeData[nodeId];
+        if (!node || !node.children || node.children.length === 0) {
+            return 1;
+        }
+        let totalHeight = 0;
+        node.children.forEach(childId => {
+            totalHeight += getNodeHeight(childId, depth + 1);
+        });
+        return Math.max(1, totalHeight);
+    }
+
+    function populateGrid(nodeId, depth, startRow) {
+        if (depth >= MAX_COLUMNS) return;
+        const node = referralTreeData[nodeId];
+        if (!node) return;
+
+        const span = getNodeHeight(nodeId, depth);
+        
+        columnsData[depth][startRow] = { user: node, span: span, isCard: true };
+        for (let r = 1; r < span; r++) {
+            columnsData[depth][startRow + r] = { isSpacer: true };
+        }
+
+        if (node.children && node.children.length > 0 && depth + 1 < MAX_COLUMNS) {
+            let currentChildRow = startRow;
+            node.children.forEach(childId => {
+                const childSpan = getNodeHeight(childId, depth + 1);
+                populateGrid(childId, depth + 1, currentChildRow);
+                currentChildRow += childSpan;
+            });
+        }
+    }
+
+    let totalGridRows = 0;
+    rootColumnUsers.forEach(rootNode => {
+        const h = getNodeHeight(rootNode.id, 0);
+        populateGrid(rootNode.id, 0, totalGridRows);
+        totalGridRows += h;
+    });
+
+    if (totalGridRows === 0) totalGridRows = 1;
+
+    // 3. Отрисовка 5 колонок
+    for (let colIdx = 0; colIdx < MAX_COLUMNS; colIdx++) {
+        const colDiv = document.createElement('div');
+        colDiv.className = 'referral-column';
+
+        const colHeader = document.createElement('div');
+        colHeader.className = 'column-header';
+        colHeader.innerText = `Уровень ${colIdx + 1}`;
+        colDiv.appendChild(colHeader);
+
+        let rowIdx = 0;
+        let hasAnyUser = false;
+
+        while (rowIdx < totalGridRows) {
+            const cell = columnsData[colIdx][rowIdx];
+            if (cell && cell.isCard) {
+                hasAnyUser = true;
+                const slot = document.createElement('div');
+                slot.className = 'table-row-slot';
+                slot.style.minHeight = `${cell.span * SLOT_ROW_HEIGHT}px`;
+                slot.appendChild(createUserCardElement(cell.user, colIdx));
+                colDiv.appendChild(slot);
+                rowIdx += cell.span;
+            } else if (cell && cell.isSpacer) {
+                rowIdx++;
+            } else {
+                const slot = document.createElement('div');
+                slot.className = 'table-row-slot empty-slot';
+                slot.style.minHeight = `${SLOT_ROW_HEIGHT}px`;
+                colDiv.appendChild(slot);
+                rowIdx++;
+            }
+        }
+
+        if (!hasAnyUser && colIdx > 0) {
+            const emptyMsg = document.createElement('div');
+            emptyMsg.className = 'empty-column-msg';
+            emptyMsg.innerText = 'Нет данных на этом уровне';
+            colDiv.appendChild(emptyMsg);
+        }
+
+        wrapper.appendChild(colDiv);
     }
 
     container.appendChild(wrapper);
 
-    // Восстанавливаем скролл колонок
+    // Восстановление позиции скролла
     const newCols = wrapper.querySelectorAll('.referral-column');
     newCols.forEach((col, idx) => {
         if (columnScrolls[idx]) {
@@ -345,47 +422,14 @@ function renderActiveReferralGrid(container, isBackground = false) {
     }
 }
 
-function renderAlignedColumn(wrapper, usersList, columnIndex, parentNode) {
-    const column = document.createElement('div');
-    column.className = 'referral-column';
-
-    if (!usersList || usersList.length === 0) {
-        const emptyMsg = document.createElement('div');
-        emptyMsg.className = 'empty-column-msg';
-        emptyMsg.innerText = 'Нет зарегистрированных личников';
-        column.appendChild(emptyMsg);
-    } else {
-        if (parentNode && parentNode.children) {
-            parentNode.children.forEach(childId => {
-                const slot = document.createElement('div');
-                slot.className = 'table-row-slot';
-                
-                const user = referralTreeData[childId];
-                if (user) {
-                    slot.appendChild(createUserCardElement(user, columnIndex));
-                }
-                column.appendChild(slot);
-            });
-        } else {
-            usersList.forEach(user => {
-                const slot = document.createElement('div');
-                slot.className = 'table-row-slot';
-                slot.appendChild(createUserCardElement(user, columnIndex));
-                column.appendChild(slot);
-            });
-        }
-    }
-
-    wrapper.appendChild(column);
-}
-
+/**
+ * Создание элемента карточки пользователя в ячейке таблицы
+ */
 function createUserCardElement(user, columnIndex) {
     const card = document.createElement('div');
     card.className = 'user-cell-card';
     card.id = `table-user-${user.login}`;
     
-    const isAlreadyActive = activePath[columnIndex] === user.id;
-
     if (activePath.includes(user.id)) {
         card.classList.add('active-link');
     }
@@ -412,40 +456,26 @@ function createUserCardElement(user, columnIndex) {
 
     card.appendChild(mainRow);
 
-    if (openDropdownUser === user.id) {
-        const dropdown = document.createElement('div');
-        dropdown.className = 'user-dropdown-menu';
-        dropdown.onclick = (e) => e.stopPropagation(); 
-
-        dropdown.innerHTML = `
-            <button class="dropdown-btn" onclick="window.viewUserCardTrigger('${user.login}')">👤 Открыть Инфо-Карточку</button>
-            <button class="dropdown-btn" onclick="window.focusUserMatrixTrigger('${user.login}')">📊 Показать в Матрице</button>
-            <button class="dropdown-btn" onclick="window.copyToClipboardTrigger('${user.login}', this)">📋 Копировать логин</button>
-        `;
-        card.appendChild(dropdown);
-    }
-
+    // При клике на карточку — подсвечиваем путь и СРАЗУ открываем новую карточку пользователя
     card.addEventListener('click', (e) => {
         e.stopPropagation();
         isUserInteracting = true;
 
-        if (isAlreadyActive && activePath.length > columnIndex + 1) {
-            activePath = activePath.slice(0, columnIndex + 1);
-            openDropdownUser = null;
-        } else {
-            activePath = activePath.slice(0, columnIndex);
-            activePath.push(user.id);
+        activePath = activePath.slice(0, columnIndex);
+        activePath.push(user.id);
 
-            if (openDropdownUser === user.id) {
-                openDropdownUser = null; 
-            } else {
-                openDropdownUser = user.id; 
-            }
-        }
+        highlightedTableUser = user.login;
 
         const targetContainer = document.getElementById('referals-table-body');
         if (targetContainer) {
             renderActiveReferralGrid(targetContainer, false);
+        }
+
+        // Открытие НОВОЙ карточки пользователя вместо старой
+        if (typeof window.showUserCard === 'function') {
+            window.showUserCard(user.login);
+        } else if (typeof window.viewUserCardTrigger === 'function') {
+            window.viewUserCardTrigger(user.login);
         }
 
         setTimeout(() => { isUserInteracting = false; }, 1000);
@@ -455,7 +485,7 @@ function createUserCardElement(user, columnIndex) {
 }
 
 /**
- * Поиск пользователя с фокусом на срез (Ограничение длины цепочки для максимальной скорости)
+ * Поиск пользователя с фокусом на срез 5 уровней
  */
 async function searchReferralUser(login) {
     if (!login) return;
@@ -473,20 +503,23 @@ async function searchReferralUser(login) {
         if (result.success && result.chain && result.chain.length > 0) {
             const fullChain = result.chain;
             
-            // Если цепочка длиннее 3 уровней, берем только последних 3 человек (Спонсор -> Пользователь -> Личники)
-            // Это решает проблему 7000 ячеек раз и навсегда!
-            if (fullChain.length > 3) {
-                activePath = fullChain.slice(-3);
+            // Срез строго до 5 уровней
+            if (fullChain.length > MAX_COLUMNS) {
+                activePath = fullChain.slice(-MAX_COLUMNS);
             } else {
                 activePath = fullChain;
             }
 
-            openDropdownUser = fullChain[fullChain.length - 1];
             highlightedTableUser = login.trim();
 
             const targetContainer = document.getElementById('referals-table-body');
             if (targetContainer) {
                 renderActiveReferralGrid(targetContainer, false);
+            }
+
+            // Автоматически выводим новую карточку найденного пользователя
+            if (typeof window.showUserCard === 'function') {
+                window.showUserCard(login.trim());
             }
         }
     } catch (e) {
@@ -496,12 +529,11 @@ async function searchReferralUser(login) {
     }
 }
 
-// Сброс таблицы к главному корню
+// Сброс таблицы к корню
 window.resetTableToRoot = () => {
     const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData).find(node => !node.parentId) || Object.values(referralTreeData)[0];
     if (rootUser) {
         activePath = [rootUser.id];
-        openDropdownUser = null;
         highlightedTableUser = null;
         
         const inp = document.getElementById('interactiveTableSearchInput');
@@ -514,7 +546,7 @@ window.resetTableToRoot = () => {
     }
 };
 
-// Навигационные функции (В начало / В конец)
+// Навигационные функции
 window.scrollToTableStart = () => {
     const wrapper = document.getElementById('referralGridWrapper');
     if (wrapper) {
@@ -532,7 +564,7 @@ window.scrollToTableEnd = () => {
 window.searchTableUserByInput = () => {
     const inp = document.getElementById('interactiveTableSearchInput');
     if (inp && inp.value) {
-        searchReferralUser(inp.value);
+        searchReferralUser(inp.value.trim());
     }
 };
 
@@ -576,16 +608,6 @@ window.copyToClipboardTrigger = (text, btn) => {
         setTimeout(() => { btn.innerText = oldText; }, 1500);
     }).catch(err => console.error('Ошибка копирования:', err));
 };
-
-document.addEventListener('click', () => {
-    if (openDropdownUser !== null) {
-        openDropdownUser = null;
-        const targetContainer = document.getElementById('referals-table-body');
-        if (targetContainer) {
-            renderActiveReferralGrid(targetContainer, false);
-        }
-    }
-});
 
 setInterval(() => {
     const inp = document.getElementById('interactiveTableSearchInput');
