@@ -95,8 +95,9 @@ function getOrCreateUserCard(username) {
  */
 function findCanonicalSponsor(sponsorName) {
     if (!sponsorName) return 'SYSTEM_ROOT';
-    const foundKey = Object.keys(referalsDB).find(k => k.toLowerCase() === sponsorName.trim().toLowerCase());
-    return foundKey || sponsorName.trim();
+    const trimmed = sponsorName.trim();
+    const foundKey = Object.keys(referalsDB).find(k => k.toLowerCase() === trimmed.toLowerCase());
+    return foundKey || trimmed;
 }
 
 /**
@@ -285,8 +286,8 @@ function getSystemStats() {
         cashbackPaid,
         refPayouts: refPayoutsReleased,
         productCost: marketplaceProductCost, // Выделено на покупку товара
-        totalReserve: daoReserve,              // 10% в DAO Пул
-        netProfit: netProfit,                  // Итоговая чистая прибыль
+        totalReserve: daoReserve,               // 10% в DAO Пул
+        netProfit: netProfit,                   // Итоговая чистая прибыль
         totalUsers,
         adminLogins,
         buyerLogins
