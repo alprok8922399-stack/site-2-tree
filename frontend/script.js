@@ -193,7 +193,7 @@ async function loadSystemWallets() {
     }
 }
 
-// === 4. ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И КНОПКИ АДМИНИСТРАТОРА ===
+// === 4. НОВАЯ ЕДИНАЯ ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И АДМИНИСТРАТОРА ===
 
 function getProfileModalElement() {
     return document.getElementById('userModal') || 
@@ -206,6 +206,10 @@ function getProfileModalElement() {
 async function loadUserProfile(username, searchQuery = '', page = 1) {
     if (!username || username === '—') return;
     
+    // Удаляем любые старые всплывающие окна/карточки, если они остались в DOM
+    const oldCards = document.querySelectorAll('.old-user-card, .legacy-modal, #legacy-profile-card');
+    oldCards.forEach(card => card.remove());
+
     try {
         const url = `${API_URL}/api/user-details/${encodeURIComponent(username)}?search=${encodeURIComponent(searchQuery)}&page=${page}`;
         const response = await fetch(url);
@@ -261,11 +265,14 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             const mitronsBalance = data.profile ? (data.profile.balanceMitrons || (data.profile.balances ? data.profile.balances.mitrons : 0)) : 0;
             const certAmount = data.profile && data.profile.purchases ? data.profile.purchases.certificateAmount : 1000;
             const spentAmount = data.profile && data.profile.spent ? data.profile.spent.mitrons : 0;
+            const shopPurchasesAmount = data.profile && data.profile.shopPurchases ? data.profile.shopPurchases.totalAmount : (data.isAdmin ? (data.stats?.shopPurchasesTotal || 0) : 0);
+            const totalBuyers = data.stats?.totalBuyers || 0;
+            const totalRefundedBuyers = data.stats?.totalRefundedBuyers || 0;
 
             setElementText('balance-mitrons', `${mitronsBalance} Mitrons`);
             setElementText('balance-usd', `($${convertMitronsToUsd(mitronsBalance)})`);
 
-            // Детальная информация по балансу
+            // Детальная информация по балансу и стороннему Маркетплейсу
             let balanceDetailsEl = document.getElementById('profile-balance-details');
             if (!balanceDetailsEl) {
                 const balanceContainer = document.getElementById('balance-mitrons')?.parentNode;
@@ -276,11 +283,26 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                     balanceContainer.appendChild(balanceDetailsEl);
                 }
             }
+            
             if (balanceDetailsEl) {
+                let adminExtraRows = '';
+                if (data.username === 'ADMIN' || data.isAdmin) {
+                    adminExtraRows = `
+                        <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #333; color: #f39c12;">
+                            <div>🛍️ Куплено товара на стороннем Маркетплейсе на: <strong>${shopPurchasesAmount} М</strong> (одна покупка 450 М)</div>
+                            <div style="font-size:11px; color:#888;">* Прибыль пересчитывается с остатка с 550 М</div>
+                            <div>📦 Куплено товара всего на: <strong>${shopPurchasesAmount} М</strong></div>
+                            <div>👥 Купило товара всего: <strong>${totalBuyers} Покупателей</strong></div>
+                            <div style="color: #e74c3c;">🚫 Отказалось от покупки всего: <strong>${totalRefundedBuyers} Покупателей</strong></div>
+                        </div>
+                    `;
+                }
+
                 balanceDetailsEl.innerHTML = `
                     <div style="margin-bottom: 3px;">🎫 Покупка сертификата: <strong>${certAmount} М</strong></div>
                     <div style="margin-bottom: 3px;">🛒 Потрачено на товар: <strong>${spentAmount} М</strong></div>
                     <div>📍 Логин в ячейке/ячейках: <strong style="color:#2ecc71;">${cellsList}</strong></div>
+                    ${adminExtraRows}
                 `;
             }
 
@@ -531,7 +553,10 @@ function searchProfile() {
 }
 
 // === ГЛОБАЛЬНЫЕ МОСТЫ СВЯЗИ ===
+// Перенаправляем все вызовы открытия карточек на единую новую функцию loadUserProfile
 window.showUserCard = loadUserProfile;
+window.openUserProfile = loadUserProfile;
+window.showProfileModal = loadUserProfile;
 window.closeUserCard = closeUserProfileCard;
 window.closeUserModal = closeUserModal;
 window.loadAdminCard = loadAdminCard;
@@ -569,7 +594,8 @@ document.addEventListener('DOMContentLoaded', () => {
                           e.target.closest('.dropdown-btn') || 
                           e.target.closest('.user-cell-card') ||
                           e.target.closest('[onclick*="showUserCard"]') ||
-                          e.target.closest('[onclick*="loadAdminCard"]');
+                          e.target.closest('[onclick*="loadAdminCard"]') ||
+                          e.target.closest('[onclick*="loadUserProfile"]');
 
         if (isTrigger) return;
 
