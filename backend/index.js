@@ -287,7 +287,7 @@ function getSystemStats() {
         refPayouts: refPayoutsReleased,
         productCost: marketplaceProductCost, // Выделено на покупку товара
         totalReserve: daoReserve,               // 10% в DAO Пул
-        netProfit: netProfit,                   // Итоговая чистая прибыль
+        netProfit: netProfit,                    // Итоговая чистая прибыль
         totalUsers,
         adminLogins,
         buyerLogins
