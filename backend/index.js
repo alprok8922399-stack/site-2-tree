@@ -1,6 +1,7 @@
 /**
  * Бэкенд Приватного Ядра — Сайт №2 (Матрица, Таблицы и Аналитика)
  * Полный модуль с учётом Себестоимости Товара (450 M) и Отчислениями в DAO Пул (10%).
+ * Включает алгоритм 5-колоночной реферальной таблицы с динамическим раздвижением строк.
  */
 
 const express = require('express');
@@ -225,12 +226,90 @@ function processIncomeDistribution(buyerUser) {
 }
 
 /**
+ * Расчет 5-колоночной реферальной таблицы со сдвигом строк
+ */
+function generateReferralGrid(startRoot = 'SYSTEM_ROOT', maxCols = 5) {
+    let grid = []; // 2D массив ячеек [row][col]
+
+    // Собираем дерево прямых личников
+    let childrenMap = {};
+    Object.entries(referalsDB).forEach(([user, sponsor]) => {
+        if (sponsor) {
+            const canonSponsor = findCanonicalSponsor(sponsor);
+            if (!childrenMap[canonSponsor]) childrenMap[canonSponsor] = [];
+            if (!childrenMap[canonSponsor].includes(user)) {
+                childrenMap[canonSponsor].push(user);
+            }
+        }
+    });
+
+    // Функция вставки пустой строки во ВСЕХ колонках на позицию rowIndex
+    function insertEmptyRow(rowIndex) {
+        grid.splice(rowIndex, 0, []);
+    }
+
+    // Рекурсивный алгоритм размещения
+    function placeUser(username, startRow, colIndex) {
+        if (colIndex >= maxCols) return startRow;
+
+        // Расширяем grid при необходимости
+        while (grid.length <= startRow) grid.push([]);
+
+        // Помещаем пользователя
+        grid[startRow][colIndex] = username;
+
+        const children = childrenMap[username] || [];
+        let currentRow = startRow;
+
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            const nextCol = colIndex + 1;
+
+            if (nextCol >= maxCols) continue;
+
+            if (i === 0) {
+                // 1-й Личник встает строго в следующую колонку в ту же строку
+                placeUser(child, currentRow, nextCol);
+            } else {
+                // 2-й и последующие личники: раздвигаем ВСЮ таблицу во всех колонках вниз!
+                currentRow = currentRow + 1;
+                insertEmptyRow(currentRow);
+                placeUser(child, currentRow, nextCol);
+            }
+        }
+
+        return currentRow;
+    }
+
+    // Корневые лидеры первого уровня
+    const rootUsers = childrenMap[startRoot] && childrenMap[startRoot].length > 0 
+                      ? childrenMap[startRoot] 
+                      : [startRoot];
+
+    let currentRowCursor = 0;
+    rootUsers.forEach((rootUser, idx) => {
+        if (idx > 0) currentRowCursor++;
+        placeUser(rootUser, currentRowCursor, 0);
+    });
+
+    // Приводим все строки к ровной длине в 5 столбцов
+    const formattedGrid = grid.map(row => {
+        const fullRow = [];
+        for (let c = 0; c < maxCols; c++) {
+            fullRow.push(row[c] || null);
+        }
+        return fullRow;
+    });
+
+    return formattedGrid;
+}
+
+/**
  * Формирование точной статистики для Панели Администратора
  */
 function getSystemStats() {
     const totalUsersList = Array.from(new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]));
     
-    // Подсчет Админов и Покупателей
     const adminLogins = totalUsersList.filter(u => 
         ADMIN_LOGINS_LIST.some(adminName => adminName.toLowerCase() === u.toLowerCase())
     ).length;
@@ -238,7 +317,6 @@ function getSystemStats() {
     const totalUsers = totalUsersList.length;
     const buyerLogins = Math.max(0, totalUsers - adminLogins);
 
-    // 1. Подсчет общего прихода
     let totalIncome = 0;
     let totalPurchasesCount = 0;
 
@@ -249,10 +327,8 @@ function getSystemStats() {
         }
     });
 
-    // 2. Выделено на покупку товара в Маркетплейс (условно 450 M за каждый купленный сертификат)
     const marketplaceProductCost = totalPurchasesCount * 450;
 
-    // 3. Расчет реферальных выплат со всех пользователей базы
     let totalRefPaidCalculated = 0;
     Object.values(shopUsersDB).forEach(u => {
         if (u.pendingPayouts && Array.isArray(u.pendingPayouts)) {
@@ -263,19 +339,14 @@ function getSystemStats() {
     });
 
     if (totalRefPaidCalculated === 0 && totalPurchasesCount > 0) {
-        totalRefPaidCalculated = totalPurchasesCount * 70; // 50 + 10 + 10 = 70 M
+        totalRefPaidCalculated = totalPurchasesCount * 70;
     }
 
     const cashbackPaid = wallets.cashbackPaid || 0;
     const refPayoutsReleased = Math.max(wallets.referralPaid || 0, totalRefPaidCalculated);
     
-    // 4. Оставшийся доход до отчисления в DAO
     const grossProfit = Math.max(0, totalIncome - cashbackPaid - refPayoutsReleased - marketplaceProductCost);
-
-    // 5. Отчисление в DAO Пул (10% от чистой прибыли)
     const daoReserve = Math.round(grossProfit * 0.10);
-
-    // 6. Чистая прибыль Администратора
     const netProfit = grossProfit - daoReserve;
 
     return {
@@ -285,9 +356,9 @@ function getSystemStats() {
         incomeMonth: totalIncome,
         cashbackPaid,
         refPayouts: refPayoutsReleased,
-        productCost: marketplaceProductCost, // Выделено на покупку товара
-        totalReserve: daoReserve,               // 10% в DAO Пул
-        netProfit: netProfit,                    // Итоговая чистая прибыль
+        productCost: marketplaceProductCost,
+        totalReserve: daoReserve,
+        netProfit: netProfit,
         totalUsers,
         adminLogins,
         buyerLogins
@@ -563,6 +634,13 @@ app.get('/api/referals-tree', (req, res) => {
     });
 
     res.json({ success: true, tree: structure });
+});
+
+// Новый эндпоинт 5-колоночной сетки сдвигов
+app.get('/api/referals-grid', (req, res) => {
+    const root = req.query.root || 'SYSTEM_ROOT';
+    const grid = generateReferralGrid(root, 5);
+    res.json({ success: true, cols: 5, rowsCount: grid.length, grid });
 });
 
 app.post('/api/admin/freeze-user', (req, res) => {
