@@ -6,7 +6,7 @@ let lastTreeJsonString = "";
 let isUserInteracting = false;
 let highlightedTableUser = null;
 
-const MAX_COLUMNS = 5; // Срез строго на 5 столбцов
+const MAX_COLUMNS = 5; // Срез строго на 5 столбцов 
 const SLOT_ROW_HEIGHT = 56; // Базовая высота строки в пикселях
 
 // Динамические стили
@@ -238,7 +238,7 @@ async function loadReferalsTable(isBackground = false) {
 }
 
 /**
- * Отрисовка интерактивной таблицы (5 колонок с выравниванием высоты)
+ * Отрисовка интерактивной таблицы (5 колонок с логикой раздвижения строк со 2-го личника)
  */
 function renderActiveReferralGrid(container, isBackground = false) {
     const oldInput = document.getElementById('interactiveTableSearchInput');
@@ -309,21 +309,31 @@ function renderActiveReferralGrid(container, isBackground = false) {
         }
     }
 
-    // 2. Расчет выравнивания строк по поддеревьям на 5 колонок
-    const columnsData = Array.from({ length: MAX_COLUMNS }, () => []);
-
+    // 2. Точный расчет высоты поддерева по ТЗ:
+    // Первый личник занимает ТУ ЖЕ строку (высота 1), 2-й и далее раздвигают таблицу на 1 строку вниз.
     function getNodeHeight(nodeId, depth) {
         if (depth >= MAX_COLUMNS) return 1;
         const node = referralTreeData[nodeId];
         if (!node || !node.children || node.children.length === 0) {
             return 1;
         }
-        let totalHeight = 0;
-        node.children.forEach(childId => {
-            totalHeight += getNodeHeight(childId, depth + 1);
+
+        let totalSubRows = 0;
+        node.children.forEach((childId, idx) => {
+            const childHeight = getNodeHeight(childId, depth + 1);
+            if (idx === 0) {
+                // Первый личник стоит в той же строке
+                totalSubRows += childHeight;
+            } else {
+                // Каждая последующий личник раздвигает ВСЮ структуру ниже на свою высоту
+                totalSubRows += childHeight;
+            }
         });
-        return Math.max(1, totalHeight);
+
+        return Math.max(1, totalSubRows);
     }
+
+    const columnsData = Array.from({ length: MAX_COLUMNS }, () => []);
 
     function populateGrid(nodeId, depth, startRow) {
         if (depth >= MAX_COLUMNS) return;
@@ -338,11 +348,11 @@ function renderActiveReferralGrid(container, isBackground = false) {
         }
 
         if (node.children && node.children.length > 0 && depth + 1 < MAX_COLUMNS) {
-            let currentChildRow = startRow;
-            node.children.forEach(childId => {
+            let currentChildRow = startRow; // Первый личник встает строго на startRow!
+            node.children.forEach((childId) => {
                 const childSpan = getNodeHeight(childId, depth + 1);
                 populateGrid(childId, depth + 1, currentChildRow);
-                currentChildRow += childSpan;
+                currentChildRow += childSpan; // Второй и последующие личники сдвигают строки вниз
             });
         }
     }
