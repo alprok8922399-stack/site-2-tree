@@ -1,7 +1,7 @@
 /**
  * Бэкенд Приватного Ядра — Сайт №2 (Матрица, Таблицы и Аналитика)
- * Полный модуль с учётом Себестоимости Товара (450 M) и Отчислениями в DAO Пул (10%).
- * Включает алгоритм 5-колоночной реферальной таблицы с динамическим раздвижением строк.
+ * Полный модуль с алгоритмом раздвижения 5-колоночной реферальной таблицы,
+ * фильтрацией по датам и расширенной аналитикой Администратора.
  */
 
 const express = require('express');
@@ -42,7 +42,7 @@ let referalsDB = {
     'LEADER_2': 'SYSTEM_ROOT'
 };
 
-let lastRegisteredBot = null;
+let canceledUsersCount = 0; // Счетчик отказавшихся покупателей
 
 // Стартовое состояние активных матриц
 function createInitialTree() {
@@ -195,7 +195,7 @@ function checkAndSplitMatrix(cellId) {
  */
 function processIncomeDistribution(buyerUser) {
     let current = buyerUser;
-    const fixedRefRewards = [50, 10, 10]; // 1 линия = 50, 2 линия = 10, 3 линия = 10
+    const fixedRefRewards = [50, 10, 10];
     let totalRefPaid = 0;
 
     for (let level = 0; level < 3; level++) {
@@ -226,12 +226,11 @@ function processIncomeDistribution(buyerUser) {
 }
 
 /**
- * Расчет 5-колоночной реферальной таблицы со сдвигом строк
+ * Расчет 5-колоночной реферальной таблицы с динамическим раздвижением всех строк
  */
 function generateReferralGrid(startRoot = 'SYSTEM_ROOT', maxCols = 5) {
-    let grid = []; // 2D массив ячеек [row][col]
+    let grid = []; 
 
-    // Собираем дерево прямых личников
     let childrenMap = {};
     Object.entries(referalsDB).forEach(([user, sponsor]) => {
         if (sponsor) {
@@ -243,19 +242,16 @@ function generateReferralGrid(startRoot = 'SYSTEM_ROOT', maxCols = 5) {
         }
     });
 
-    // Функция вставки пустой строки во ВСЕХ колонках на позицию rowIndex
+    // Функция вставки пустой строки во ВСЕХ колонках
     function insertEmptyRow(rowIndex) {
         grid.splice(rowIndex, 0, []);
     }
 
-    // Рекурсивный алгоритм размещения
     function placeUser(username, startRow, colIndex) {
         if (colIndex >= maxCols) return startRow;
 
-        // Расширяем grid при необходимости
         while (grid.length <= startRow) grid.push([]);
 
-        // Помещаем пользователя
         grid[startRow][colIndex] = username;
 
         const children = childrenMap[username] || [];
@@ -271,7 +267,7 @@ function generateReferralGrid(startRoot = 'SYSTEM_ROOT', maxCols = 5) {
                 // 1-й Личник встает строго в следующую колонку в ту же строку
                 placeUser(child, currentRow, nextCol);
             } else {
-                // 2-й и последующие личники: раздвигаем ВСЮ таблицу во всех колонках вниз!
+                // 2-й и последующие личники раздвигают ВСЮ таблицу во всех колонках вниз
                 currentRow = currentRow + 1;
                 insertEmptyRow(currentRow);
                 placeUser(child, currentRow, nextCol);
@@ -281,7 +277,6 @@ function generateReferralGrid(startRoot = 'SYSTEM_ROOT', maxCols = 5) {
         return currentRow;
     }
 
-    // Корневые лидеры первого уровня
     const rootUsers = childrenMap[startRoot] && childrenMap[startRoot].length > 0 
                       ? childrenMap[startRoot] 
                       : [startRoot];
@@ -292,7 +287,6 @@ function generateReferralGrid(startRoot = 'SYSTEM_ROOT', maxCols = 5) {
         placeUser(rootUser, currentRowCursor, 0);
     });
 
-    // Приводим все строки к ровной длине в 5 столбцов
     const formattedGrid = grid.map(row => {
         const fullRow = [];
         for (let c = 0; c < maxCols; c++) {
@@ -305,7 +299,7 @@ function generateReferralGrid(startRoot = 'SYSTEM_ROOT', maxCols = 5) {
 }
 
 /**
- * Формирование точной статистики для Панели Администратора
+ * Точная статистика для Панели и Карточки Администратора
  */
 function getSystemStats() {
     const totalUsersList = Array.from(new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]));
@@ -327,7 +321,9 @@ function getSystemStats() {
         }
     });
 
-    const marketplaceProductCost = totalPurchasesCount * 450;
+    // Расчеты согласно обновленным требованиям ТЗ:
+    const externalProductCost = totalPurchasesCount * 450; // Куплено товара на стороннем Маркетплейсе (450 M за единицу)
+    const remainingIncome = totalPurchasesCount * 550; // Прибыль пересчитывается с остатка 550 M
 
     let totalRefPaidCalculated = 0;
     Object.values(shopUsersDB).forEach(u => {
@@ -345,7 +341,7 @@ function getSystemStats() {
     const cashbackPaid = wallets.cashbackPaid || 0;
     const refPayoutsReleased = Math.max(wallets.referralPaid || 0, totalRefPaidCalculated);
     
-    const grossProfit = Math.max(0, totalIncome - cashbackPaid - refPayoutsReleased - marketplaceProductCost);
+    const grossProfit = Math.max(0, remainingIncome - cashbackPaid - refPayoutsReleased);
     const daoReserve = Math.round(grossProfit * 0.10);
     const netProfit = grossProfit - daoReserve;
 
@@ -356,12 +352,15 @@ function getSystemStats() {
         incomeMonth: totalIncome,
         cashbackPaid,
         refPayouts: refPayoutsReleased,
-        productCost: marketplaceProductCost,
+        productCost: externalProductCost,
+        remainingIncome550: remainingIncome,
         totalReserve: daoReserve,
         netProfit: netProfit,
         totalUsers,
         adminLogins,
-        buyerLogins
+        buyerLogins,
+        totalPurchasesCount,
+        canceledUsersCount
     };
 }
 
@@ -402,7 +401,6 @@ app.post(['/api/shop/register', '/api/register-shop'], (req, res) => {
     const chosenSponsor = findCanonicalSponsor(sponsor);
 
     referalsDB[canonicalUser] = chosenSponsor;
-    lastRegisteredBot = canonicalUser; 
 
     const cellId = findNextEmptyCell(treeDB);
     treeDB[cellId].user = canonicalUser;
@@ -478,6 +476,24 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
     });
 });
 
+// Эндпоинт поиска пользователей за период (Зашло в проект с ... по ...)
+app.get('/api/users-by-date', (req, res) => {
+    const { fromDate, toDate } = req.query;
+    const allUsers = Array.from(new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]));
+
+    const fromTime = fromDate ? new Date(fromDate).getTime() : 0;
+    const toTime = toDate ? new Date(toDate).getTime() : Infinity;
+
+    const filtered = allUsers.filter(username => {
+        const profile = shopUsersDB[username];
+        if (!profile || !profile.createdAt) return false;
+        const userTime = new Date(profile.createdAt).getTime();
+        return userTime >= fromTime && userTime <= toTime;
+    });
+
+    res.json({ success: true, count: filtered.length, users: filtered });
+});
+
 app.get(['/api/users', '/api/admin/users'], (req, res) => {
     const allUsersList = Array.from(new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]));
     const userList = allUsersList.map(username => {
@@ -501,34 +517,6 @@ app.get(['/api/users', '/api/admin/users'], (req, res) => {
     });
 
     res.json({ success: true, users: userList });
-});
-
-app.get(['/api/purchases', '/api/admin/purchases'], (req, res) => {
-    let purchasesList = [];
-
-    Object.entries(shopUsersDB).forEach(([username, profile]) => {
-        if (profile.purchases && profile.purchases.history && profile.purchases.history.length > 0) {
-            profile.purchases.history.forEach((p, idx) => {
-                purchasesList.push({
-                    id: `${username}-${idx}`,
-                    username,
-                    amount: p.amount,
-                    date: p.date,
-                    cellId: p.cellId || 'M-Cell'
-                });
-            });
-        } else if (profile.purchases && profile.purchases.certificateAmount > 0) {
-            purchasesList.push({
-                id: `${username}-0`,
-                username,
-                amount: profile.purchases.certificateAmount,
-                date: profile.paymentDate || new Date().toISOString(),
-                cellId: profile.matrixPosition ? profile.matrixPosition.currentCellId : 'M-Cell'
-            });
-        }
-    });
-
-    res.json({ success: true, purchases: purchasesList });
 });
 
 app.get('/api/admin/stats', (req, res) => {
@@ -558,85 +546,16 @@ app.get('/api/user-details/:username', (req, res) => {
         currentSponsor = nextSponsorKey ? referalsDB[nextSponsorKey] : null;
     }
 
-    const searchQuery = (req.query.search || '').trim().toLowerCase();
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 30;
-
-    const allReferrals = Object.keys(referalsDB).filter(user => {
-        const parent = referalsDB[user];
-        return parent && parent.toLowerCase() === canonicalName.toLowerCase();
-    });
-
-    const filteredReferrals = searchQuery
-        ? allReferrals.filter(ref => ref.toLowerCase().includes(searchQuery))
-        : allReferrals;
-
-    const startIndex = (page - 1) * limit;
-    const paginatedReferrals = filteredReferrals.slice(startIndex, startIndex + limit);
-
     res.json({
         success: true,
         username: canonicalName,
         cells: userCells,
         sponsor: referalsDB[canonicalName] || 'SYSTEM_ROOT',
         chain: sponsorChain,
-        profile: shopUsersDB[canonicalName],
-        referralsData: {
-            totalCount: allReferrals.length,
-            filteredCount: filteredReferrals.length,
-            currentPage: page,
-            hasMore: startIndex + limit < filteredReferrals.length,
-            list: paginatedReferrals
-        }
+        profile: shopUsersDB[canonicalName]
     });
 });
 
-app.get('/api/referals-tree', (req, res) => {
-    let structure = {};
-    let childrenMap = {};
-    
-    const allUsersList = Array.from(new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]));
-    allUsersList.forEach(user => { childrenMap[user] = []; });
-    
-    Object.entries(referalsDB).forEach(([user, sponsor]) => {
-        if (sponsor) {
-            const canonicalSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === sponsor.toLowerCase()) || sponsor;
-            if (!childrenMap[canonicalSponsor]) childrenMap[canonicalSponsor] = [];
-            if (!childrenMap[canonicalSponsor].includes(user)) {
-                childrenMap[canonicalSponsor].push(user);
-            }
-        }
-    });
-    
-    function getCalculatedLevel(user) {
-        let level = 1;
-        let current = user;
-        let visited = new Set();
-        while (current && current !== 'SYSTEM_ROOT' && !visited.has(current) && level <= 5) {
-            visited.add(current);
-            let sponsor = referalsDB[current];
-            if (!sponsor) { level++; break; }
-            current = Object.keys(referalsDB).find(k => k.toLowerCase() === sponsor.toLowerCase()) || sponsor;
-            level++;
-        }
-        return level;
-    }
-
-    allUsersList.forEach(username => {
-        structure[username] = {
-            id: username,
-            login: username,
-            parentId: referalsDB[username] || null,
-            level: getCalculatedLevel(username),
-            isExpanded: true,
-            children: childrenMap[username] || []
-        };
-    });
-
-    res.json({ success: true, tree: structure });
-});
-
-// Новый эндпоинт 5-колоночной сетки сдвигов
 app.get('/api/referals-grid', (req, res) => {
     const root = req.query.root || 'SYSTEM_ROOT';
     const grid = generateReferralGrid(root, 5);
@@ -654,6 +573,34 @@ app.post('/api/admin/freeze-user', (req, res) => {
         success: true,
         isFrozen: shopUsersDB[canonicalName].isFrozen,
         message: `Статус заморозки пользователя ${canonicalName}: ${shopUsersDB[canonicalName].isFrozen}`
+    });
+});
+
+// Отмена покупки / Аннулирование и передача ячейки Администрации
+app.post('/api/admin/cancel-user', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
+    
+    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
+
+    // Возврат средств / аннулирование реферальных выплат
+    if (shopUsersDB[canonicalName]) {
+        delete shopUsersDB[canonicalName];
+    }
+    delete referalsDB[canonicalName];
+    
+    // Передача ячеек во владение Администрации (SYSTEM_ROOT)
+    Object.keys(treeDB).forEach(cellId => {
+        if (treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === canonicalName.toLowerCase()) {
+            treeDB[cellId].user = 'SYSTEM_ROOT';
+        }
+    });
+
+    canceledUsersCount++;
+
+    res.json({ 
+        success: true, 
+        message: `Покупка аннулирована. Логин ${canonicalName} передан во владение Администрации (SYSTEM_ROOT).` 
     });
 });
 
@@ -685,7 +632,7 @@ app.post(['/api/reset', '/api/reset-database'], (req, res) => {
         'LEADER_1': 'SYSTEM_ROOT',
         'LEADER_2': 'SYSTEM_ROOT'
     };
-    lastRegisteredBot = null;
+    canceledUsersCount = 0;
     ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
     res.json({ success: true });
 });
