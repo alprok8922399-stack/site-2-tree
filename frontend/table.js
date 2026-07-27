@@ -229,20 +229,21 @@ function renderActiveReferralGrid(container, isBackground = false) {
     wrapper.className = 'referral-grid-wrapper';
     wrapper.id = 'referralGridWrapper';
 
-    // Определение стартовых узлов
+    // Определение корневых элементов
     const firstLoginInPath = activePath[0];
     let rootColumnUsers = [];
 
     if (firstLoginInPath && referralTreeData[firstLoginInPath]) {
         rootColumnUsers = [referralTreeData[firstLoginInPath]];
     } else {
-        rootColumnUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
+        // Гарантируем, что первые верхние 3 ячейки/системные логины встают в 1-й столбец
+        rootColumnUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT' || node.isSystem);
         if (rootColumnUsers.length === 0 && Object.keys(referralTreeData).length > 0) {
-            rootColumnUsers = [Object.values(referralTreeData)[0]];
+            rootColumnUsers = Object.values(referralTreeData).slice(0, 3);
         }
     }
 
-    // Расчет высоты (1-й личник напротив, 2-й и далее - раздвигают ВСЕ 5 колонок)
+    // Расчет высоты: Первый личник встает напротив, 2-й и последующие раздвигают ВСЕ 5 колонок вниз
     function getNodeHeight(nodeId, depth) {
         if (depth >= MAX_COLUMNS) return 1;
         const node = referralTreeData[nodeId];
@@ -275,7 +276,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
             node.children.forEach((childId) => {
                 const childSpan = getNodeHeight(childId, depth + 1);
                 populateGrid(childId, depth + 1, currentChildRow);
-                currentChildRow += childSpan; // 2-й и следующие личники сдвигают строки вниз
+                currentChildRow += childSpan; // Вся таблица раздвигается вниз под каждого личника
             });
         }
     }
@@ -296,7 +297,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
 
         const colHeader = document.createElement('div');
         colHeader.className = 'column-header';
-        colHeader.innerText = `Уровень ${colIdx + 1}`;
+        colHeader.innerText = `Столбец ${colIdx + 1}`;
         colDiv.appendChild(colHeader);
 
         let rowIdx = 0;
@@ -337,7 +338,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
 }
 
 /**
- * Создание карточки ячейки (БЕЗ СТАРОЙ КАРТОЧКИ — ВЫЗЫВАЕТ ТОЛЬКО НОВУЮ)
+ * Создание карточки ячейки (ВЫЗЫВАЕТ ТОЛЬКО НОВУЮ КАРТОЧКУ)
  */
 function createUserCardElement(user, columnIndex) {
     const card = document.createElement('div');
@@ -367,7 +368,7 @@ function createUserCardElement(user, columnIndex) {
 
     card.appendChild(mainRow);
 
-    // Клик открывает НОВУЮ КАРТОЧКУ (старая вырезана навсегда)
+    // Клик вызывает исключительно НОВУЮ КАРТОЧКУ ПОЛЬЗОВАТЕЛЯ
     card.addEventListener('click', (e) => {
         e.stopPropagation();
         isUserInteracting = true;
@@ -379,13 +380,13 @@ function createUserCardElement(user, columnIndex) {
         const targetContainer = document.getElementById('referals-table-body');
         if (targetContainer) renderActiveReferralGrid(targetContainer, false);
 
-        // ВЫЗОВ НОВОЙ КАРТОЧКИ ПОЛЬЗОВАТЕЛЯ С КНОПКАМИ
-        if (typeof window.showUserCard === 'function') {
+        // Показ новой карточки пользователя с кнопками
+        if (typeof window.showAdminUserCard === 'function') {
+            window.showAdminUserCard(user.login);
+        } else if (typeof window.showUserCard === 'function') {
             window.showUserCard(user.login);
         } else if (typeof window.openNewUserCard === 'function') {
             window.openNewUserCard(user.login);
-        } else if (typeof window.searchReferralUser === 'function') {
-            window.searchReferralUser(user.login);
         }
 
         setTimeout(() => { isUserInteracting = false; }, 1000);
@@ -411,7 +412,9 @@ async function searchReferralUser(login) {
             const targetContainer = document.getElementById('referals-table-body');
             if (targetContainer) renderActiveReferralGrid(targetContainer, false);
 
-            if (typeof window.showUserCard === 'function') {
+            if (typeof window.showAdminUserCard === 'function') {
+                window.showAdminUserCard(login.trim());
+            } else if (typeof window.showUserCard === 'function') {
                 window.showUserCard(login.trim());
             }
         }
