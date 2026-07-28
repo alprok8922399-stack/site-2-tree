@@ -4,25 +4,22 @@
     const style = document.createElement('style');
     style.innerHTML = `
         .matrices-container {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: wrap !important; /* Разрешаем перенос на новую строку */
+            display: grid !important;
+            grid-template-columns: repeat(32, 280px) !important; /* Жёстко 32 колонки в ряду */
             gap: 20px !important;
             padding: 10px !important;
-            justify-content: flex-start !important;
-            align-items: flex-start !important;
-            /* Ровно 32 матрицы по 280px + 31 отступ по 20px = 9580px */
-            max-width: 9580px !important; 
+            justify-content: start !important;
+            align-items: start !important;
             width: max-content !important;
         }
 
         .matrix-block {
+            box-sizing: border-box !important;
             background: #17171c;
             border: 2px solid #232329;
             border-radius: 12px;
             padding: 15px;
-            width: 280px;
-            min-width: 280px; /* Чтобы блоки не сжимались */
+            width: 280px !important;
             display: flex;
             flex-direction: column;
             align-items: center;
