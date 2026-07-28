@@ -6,11 +6,14 @@
         .matrices-container {
             display: flex !important;
             flex-direction: row !important;
-            flex-wrap: nowrap !important; /* В ряд без переносов */
+            flex-wrap: wrap !important; /* Разрешаем перенос на новую строку */
             gap: 20px !important;
             padding: 10px !important;
             justify-content: flex-start !important;
             align-items: flex-start !important;
+            /* Ровно 32 матрицы по 280px + 31 отступ по 20px = 9580px */
+            max-width: 9580px !important; 
+            width: max-content !important;
         }
 
         .matrix-block {
@@ -308,8 +311,25 @@ function addCellEvents(element, cellData) {
     });
 }
 
+function setZoom100() {
+    const zoomSlider = document.getElementById('matrix-zoom-slider');
+    const zoomValue = document.getElementById('zoom-value');
+    const zoomWrapper = document.getElementById('matrix-zoom-wrapper');
+
+    if (zoomSlider && zoomWrapper) {
+        zoomSlider.value = 1.0;
+        zoomWrapper.style.transform = 'scale(1.0)';
+        if (zoomValue) {
+            zoomValue.textContent = '100%';
+        }
+    }
+}
+
 function switchFocus(element) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    setZoom100(); // Включаем зум 100% при фокусе
+    setTimeout(() => {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    }, 100);
 }
 
 // Карточка пользователя С ЦЕПОЧКОЙ СПОНСОРОВ
