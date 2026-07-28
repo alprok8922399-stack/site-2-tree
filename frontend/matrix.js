@@ -107,7 +107,7 @@
             border: 2px solid #ffd700;
             border-radius: 12px;
             padding: 20px;
-            width: 310px;
+            width: 320px;
             max-width: 90vw;
             color: #fff;
             text-align: center;
@@ -132,6 +132,8 @@
 
         .timer-badge.active { background: #ff9800; color: #000; }
         .timer-badge.matured { background: #2ecc71; color: #fff; }
+        .timer-badge.suspended { background: #e74c3c; color: #fff; }
+        .timer-badge.admin-owned { background: #8e44ad; color: #fff; }
 
         .modal-upline-box {
             margin-top: 15px;
@@ -359,7 +361,7 @@ function switchFocus(element) {
     }, 100);
 }
 
-// Карточка пользователя С ЦЕПОЧКОЙ СПОНСОРОВ
+// Карточка пользователя С ЦЕПОЧКОЙ СПОНСОРОВ И КНОПКАМИ УПРАВЛЕНИЯ
 async function showUserCard(username) {
     try {
         const res = await fetch(`${MATRIX_API_URL}/api/user-details/${encodeURIComponent(username)}`);
@@ -381,18 +383,50 @@ async function showUserCard(username) {
         modal.className = 'user-card-modal';
 
         const isMature = diffDays >= 31;
-        const badgeClass = isMature ? 'matured' : 'active';
-        const badgeText = isMature ? `Дней в матрице: ${diffDays} (Выплата)` : `Дней в матрице: ${diffDays} / 31`;
+        const isSuspended = profile.payoutsSuspended || false;
+        const isOwnedByAdmin = profile.ownedByAdmin || false;
+
+        let badgeClass = isMature ? 'matured' : 'active';
+        let badgeText = isMature ? `Дней в матрице: ${diffDays} (Выплата)` : `Дней в матрице: ${diffDays} / 31`;
+
+        if (isOwnedByAdmin) {
+            badgeClass = 'admin-owned';
+            badgeText = '👑 Профиль принадлежит Админу';
+        } else if (isSuspended) {
+            badgeClass = 'suspended';
+            badgeText = '⛔ Выплаты приостановлены';
+        }
 
         let uplineHtml = '<div style="color:#777; font-size:11px;">Загрузка спонсоров...</div>';
         
         modal.innerHTML = `
             <div class="user-card-content">
                 <span class="user-card-close" onclick="document.getElementById('userCardModal').remove()">&times;</span>
-                <h3 style="margin-top:0; color:#ffd700;">${data.username}</h3>
-                <p style="font-size:12px; color:#ccc; margin: 10px 0 0 0;">Дата регистрации:<br>${regDate.toLocaleDateString()}</p>
-                <div class="timer-badge ${badgeClass}">${badgeText}</div>
+                <h3 style="margin-top:0; color:#ffd700; word-break: break-all;">
+                    ${data.username} ${isOwnedByAdmin ? '<span style="color:#2ecc71; font-size:12px;">(Админ)</span>' : ''}
+                </h3>
+                <p style="font-size:12px; color:#ccc; margin: 6px 0 0 0;">Дата регистрации:<br>${regDate.toLocaleDateString()}</p>
                 
+                <div class="timer-badge ${badgeClass}">${badgeText}</div>
+
+                ${!isOwnedByAdmin ? `
+                    <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
+                        <button onclick="adminToggleSuspend('${data.username}')" 
+                            style="background: ${isSuspended ? '#27ae60' : '#f39c12'}; color: #fff; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
+                            ${isSuspended ? '▶ Возобновить выплаты' : '⏸ Приостановить выплаты'}
+                        </button>
+
+                        <button onclick="adminBlockAndTransfer('${data.username}')" 
+                            style="background: #c0392b; color: #fff; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
+                            🚫 Заблокировать и передать Админу
+                        </button>
+                    </div>
+                ` : `
+                    <div style="margin-top: 10px; color: #2ecc71; font-size: 11px; font-weight: bold;">
+                        Все выплаты переходят Администратору
+                    </div>
+                `}
+
                 <div class="modal-upline-box">
                     <div class="modal-upline-title">Кто пригласил (Спонсоры):</div>
                     <div class="modal-upline-chain" id="modalUplineContainer">${uplineHtml}</div>
@@ -445,6 +479,87 @@ async function showUserCard(username) {
     }
 }
 
+// Функция переключения режима приостановки выплат
+async function adminToggleSuspend(username) {
+    try {
+        const res = await fetch(`${MATRIX_API_URL}/api/admin/toggle-suspend`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+        });
+        const data = await res.json();
+        alert(data.message);
+        showUserCard(username);
+    } catch (err) {
+        alert('Ошибка при изменении статуса выплат');
+    }
+}
+
+// Функция блокировки и передачи профиля Админу
+async function adminBlockAndTransfer(username) {
+    if (!confirm(`Вы уверены, что хотите заблокировать "${username}" и перевести все выплаты Администратору?`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${MATRIX_API_URL}/api/admin/block-and-transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+        });
+        const data = await res.json();
+        alert(data.message);
+        showUserCard(username);
+        fetchTree();
+    } catch (err) {
+        alert('Ошибка передачи профиля');
+    }
+}
+
+// Функция показа списка забранных логинов Администратора
+async function showAdminLoginsList() {
+    try {
+        const res = await fetch(`${MATRIX_API_URL}/api/admin/owned-logins`);
+        const data = await res.json();
+        
+        if (!data.success) return;
+
+        let modal = document.getElementById('adminLoginsModal');
+        if (modal) modal.remove();
+
+        modal = document.createElement('div');
+        modal.id = 'adminLoginsModal';
+        modal.className = 'user-card-modal';
+
+        let listHtml = data.logins.map(item => `
+            <div style="display:flex; justify-content:space-between; align-items:center; background:#202028; padding:8px 12px; margin-bottom:6px; border-radius:6px; border:1px solid #333;">
+                <span style="color:#ffd700; font-weight:bold; cursor:pointer;" onclick="document.getElementById('adminLoginsModal').remove(); searchMatrixUser('${item.login}');">
+                    ${item.login}
+                </span>
+                <button onclick="document.getElementById('adminLoginsModal').remove(); showUserCard('${item.login}');" 
+                    style="background:#3498db; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;">
+                    Карточка
+                </button>
+            </div>
+        `).join('');
+
+        modal.innerHTML = `
+            <div class="user-card-content" style="width: 320px; max-height: 80vh; overflow-y: auto;">
+                <span class="user-card-close" onclick="document.getElementById('adminLoginsModal').remove()">&times;</span>
+                <h3 style="margin-top:0; color:#2ecc71;">👑 Логины Администратора (${data.logins.length})</h3>
+                <div style="margin-top: 15px; text-align: left;">
+                    ${listHtml || '<div style="color:#aaa; text-align:center;">Нет переданных логинов</div>'}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+    } catch (err) {
+        console.error('Ошибка загрузки логинов админа:', err);
+    }
+}
+
 function searchMatrixUser(login) {
     if (!login) return;
     currentSearchTerm = login.trim();
@@ -477,6 +592,9 @@ function initZoomSlider() {
 
 window.renderMatrixTree = fetchTree;
 window.searchMatrixUser = searchMatrixUser;
+window.showAdminLoginsList = showAdminLoginsList;
+window.adminToggleSuspend = adminToggleSuspend;
+window.adminBlockAndTransfer = adminBlockAndTransfer;
 
 document.addEventListener('DOMContentLoaded', () => {
     initZoomSlider();
