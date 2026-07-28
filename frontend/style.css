@@ -3,28 +3,26 @@ body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #0f0f12;
     margin: 0;
-    padding: 15px;
+    padding: 20px;
     color: #e3e3e8;
     overflow-x: hidden;
 }
 
 .container {
-    max-width: 1400px;
+    max-width: 1200px;
     margin: 0 auto;
-    width: 100%;
-    box-sizing: border-box;
 }
 
 header {
     text-align: center;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
     border-bottom: 2px solid #232329;
 }
 
-h1 { margin: 0; color: #ffffff; font-size: 22px; }
+h1 { margin: 0; color: #ffffff; font-size: 24px; }
 h2 { color: #ffffff; border-left: 5px solid #3498db; padding-left: 10px; font-size: 18px; margin-top: 0; }
-p { color: #a0a0ab; margin: 5px 0; font-size: 13px; }
+p { color: #a0a0ab; margin: 5px 0; }
 
 .grid {
     display: grid;
@@ -39,127 +37,8 @@ p { color: #a0a0ab; margin: 5px 0; font-size: 13px; }
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     border: 1px solid #232329;
-    max-width: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
 }
 
-/* === КАРТОЧКА АДМИНИСТРАТОРА (ОБНОВЛЕННАЯ ФИНАНСОВАЯ АНАЛИТИКА) === */
-.admin-analytics-card {
-    background: linear-gradient(145deg, #161620, #0f0f14);
-    border: 1px solid #2e2e3e;
-    border-radius: 14px;
-    padding: 18px;
-    margin-bottom: 25px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
-}
-
-.admin-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #2a2a38;
-    padding-bottom: 10px;
-    margin-bottom: 16px;
-}
-
-.admin-card-header h2 {
-    color: #ffd700;
-    border-left: 4px solid #ffd700;
-    margin: 0;
-    padding-left: 10px;
-    font-size: 18px;
-}
-
-.admin-status-badge {
-    background: rgba(46, 204, 113, 0.15);
-    color: #2ecc71;
-    border: 1px solid #2ecc71;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-/* Сетка карточек аналитики */
-.analytics-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 10px;
-    margin-bottom: 16px;
-}
-
-.analytics-item {
-    background: #111117;
-    padding: 12px 14px;
-    border-radius: 10px;
-    border: 1px solid #22222e;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    box-shadow: inset 0 1px 3px rgba(255,255,255,0.02);
-}
-
-.analytics-item.main-balance {
-    grid-column: span 2;
-    background: linear-gradient(135deg, #1c1c28, #13131c);
-    border: 1px solid #38bdf8;
-}
-
-.analytics-label {
-    font-size: 11px;
-    color: #94a3b8;
-    margin-bottom: 6px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-
-.analytics-value {
-    font-size: 18px;
-    font-weight: 800;
-    color: #ffffff;
-    letter-spacing: 0.5px;
-}
-
-/* Яркие цветовые подсвечивания значений */
-.analytics-value.green { color: #4ade80; }
-.analytics-value.orange { color: #fb923c; }
-.analytics-value.blue { color: #38bdf8; }
-.analytics-value.purple { color: #c084fc; }
-.analytics-value.gold { 
-    color: #ffd700; 
-    font-size: 22px; 
-    text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
-}
-
-/* Блок статистики логинов */
-.logins-summary-box {
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    background: #0d0d12;
-    padding: 10px 14px;
-    border-radius: 8px;
-    border: 1px solid #20202c;
-    font-size: 13px;
-    color: #cbd5e1;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.login-stat {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.gold-text { color: #ffd700; }
-.green-text { color: #4ade80; }
-
-/* === ФОРМЫ И ВВОД === */
 .form-group {
     margin-bottom: 15px;
 }
@@ -171,7 +50,7 @@ label {
     color: #a0a0ab;
 }
 
-input[type="text"], input[type="number"], select {
+input[type="text"] {
     width: 100%;
     padding: 11px;
     box-sizing: border-box;
@@ -179,10 +58,9 @@ input[type="text"], input[type="number"], select {
     background-color: #202026;
     color: #ffffff;
     border-radius: 6px;
-    font-size: 14px;
 }
 
-input[type="text"]:focus, input[type="number"]:focus, select:focus {
+input[type="text"]:focus {
     border-color: #3498db;
     outline: none;
 }
@@ -195,18 +73,14 @@ button {
     border-radius: 6px;
     cursor: pointer;
     font-weight: bold;
-    transition: background 0.2s, transform 0.1s;
+    transition: background 0.2s;
 }
 
 button:hover { background-color: #2980b9; }
-button:active { transform: scale(0.98); }
-
 .btn-danger { background-color: #e74c3c; }
 .btn-danger:hover { background-color: #c0392b; }
 .btn-success { background-color: #2ecc71; }
 .btn-success:hover { background-color: #27ae60; }
-.btn-warning { background-color: #f39c12; }
-.btn-warning:hover { background-color: #d35400; }
 
 /* === БЛОК УПРАВЛЕНИЯ ЗУМОМ === */
 .zoom-panel {
@@ -219,8 +93,6 @@ button:active { transform: scale(0.98); }
     align-items: center;
     gap: 15px;
     width: fit-content;
-    max-width: 100%;
-    box-sizing: border-box;
 }
 
 .zoom-panel label { font-weight: bold; color: #ffffff; margin: 0; }
@@ -232,13 +104,11 @@ button:active { transform: scale(0.98); }
     background: #09090b;
     padding: 15px;
     border-radius: 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: auto; 
     border: 1px solid #2d2d35;
     min-height: 450px;
     width: 100%;
     box-sizing: border-box;
-    position: relative;
 }
 
 #matrix-zoom-wrapper {
@@ -249,7 +119,7 @@ button:active { transform: scale(0.98); }
     display: block;
 }
 
-/* === СТИЛИ ДЛЯ ВЫРАВНИВАНИЯ МАТРИЦ В СТРОКУ === */
+/* === СТИЛИ ДЛЯ ВЫРАВНИВАНИЯ МАТРИЦ В СТРОКУ (ДО 32 ШТ) === */
 #mainTreeDisplay {
     display: flex !important;
     flex-direction: row !important;
@@ -282,66 +152,20 @@ button:active { transform: scale(0.98); }
     border: 1px solid #4ade80 !important;
 }
 
-/* === ПРОФИЛЬ И СЧЕТА === */
-.profile-info p { margin: 8px 0; font-size: 15px; }
-.balance-box { font-size: 20px; font-weight: bold; color: #4ade80; margin: 15px 0; }
+/* Профиль и Счета */
+.profile-info p { margin: 8px 0; font-size: 16px; }
+.balance-box { font-size: 22px; font-weight: bold; color: #4ade80; margin: 15px 0; }
 
-/* === МОДАЛЬНОЕ ОКНО И ИНФО-КАРТОЧКА === */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 2000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(5px);
+.sys-wallets-box {
+    background: #111116;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px dashed #3498db;
+    margin-top: 15px;
 }
 
-.modal-content {
-    background-color: #17171c;
-    margin: 4% auto;
-    padding: 25px;
-    border: 1px solid #33333d;
-    border-radius: 12px;
-    width: 90%;
-    max-width: 650px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
-    color: #e3e3e8;
-    box-sizing: border-box;
-}
+.sys-wallets-box h3 { margin: 0 0 8px 0; font-size: 14px; color: #3498db; }
 
-/* === ТАБЛИЦА ПОЛЬЗОВАТЕЛЕЙ И ДАННЫХ === */
-.user-safes-table, .data-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 10px 0;
-}
-
-.user-safes-table th, .user-safes-table td,
-.data-table th, .data-table td {
-    padding: 8px 10px;
-    border: 1px solid #2d2d35;
-    text-align: left;
-    font-size: 13px;
-}
-
-.user-safes-table th, .data-table th {
-    background-color: #202026;
-    color: #a0a0ab;
-}
-
-/* === АДАПТИВНОСТЬ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ === */
 @media (max-width: 768px) {
-    body { padding: 8px; }
     .grid { grid-template-columns: 1fr; }
-    .analytics-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
-    .analytics-item.main-balance { grid-column: span 2; }
-    .analytics-value { font-size: 16px; }
-    .analytics-value.gold { font-size: 19px; }
-    .modal-content { margin: 8% auto; width: 95%; padding: 15px; }
-    #matrix-view-container { padding: 8px; min-height: 350px; }
-    .logins-summary-box { font-size: 12px; flex-direction: column; gap: 4px; align-items: flex-start; }
 }
