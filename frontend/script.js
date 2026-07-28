@@ -187,7 +187,7 @@ function getProfileModalElement() {
 async function loadUserProfile(username, searchQuery = '', page = 1) {
     if (!username || username === '—') return;
     
-    // Полное удаление любых старых дублирующих модалок
+    // Полное удаление любых старых дублирующих модалок (Удаляем старую карточку навсегда!)
     const oldCards = document.querySelectorAll('.old-user-card, .legacy-modal, #legacy-profile-card');
     oldCards.forEach(card => card.remove());
 
@@ -283,7 +283,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 balanceDetailsEl.innerHTML = `
                     <div style="margin-bottom: 3px;">🎫 Покупка сертификата: <strong>${certAmount} М</strong></div>
                     <div style="margin-bottom: 3px;">🛒 Потрачено на товар: <strong>${spentAmount} М</strong></div>
-                    <div>📍 Логин в ячейке/ячейках: <strong style="color:#2ecc71;">${cellsList}</strong></div>
+                    <div style="margin-bottom: 3px;">📍 Логин в ячейке/ячейках: <strong style="color:#2ecc71;">${cellsList}</strong></div>
                     ${adminExtraRows}
                 `;
             }
