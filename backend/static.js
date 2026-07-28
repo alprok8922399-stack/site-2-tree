@@ -1,17 +1,12 @@
 /**
- * Вспомогательный модуль статических функций и структур данных для Сайта №2 (static.js)
- */
-
-/**
  * Превращает индекс уровня/столбца в буквенное обозначение по аналогии с Excel:
  * 0 -> A, 1 -> B ... 25 -> Z, 26 -> AA, 27 -> AB и т.д.
  */
 function getLevelLetter(index) {
     let letter = '';
-    let idx = index;
-    while (idx >= 0) {
-        letter = String.fromCharCode((idx % 26) + 65) + letter;
-        idx = Math.floor(idx / 26) - 1;
+    while (index >= 0) {
+        letter = String.fromCharCode((index % 26) + 65) + letter;
+        index = Math.floor(index / 26) - 1;
     }
     return letter;
 }
@@ -32,8 +27,7 @@ function cellIdToGlobalIndex(cellId) {
     }
     levelIndex -= 1; // Корректировка к 0-индексу
     
-    // Используем Math.pow во избежание ограничений 32-битного битового сдвига (1 << levelIndex)
-    const levelStartGIdx = Math.pow(2, levelIndex) - 1;
+    const levelStartGIdx = (1 << levelIndex) - 1;
     return levelStartGIdx + (num - 1);
 }
 
@@ -53,18 +47,9 @@ function createNewUserCard(username) {
         username: username,
         isPaid: false,
         paymentDate: null,
-        isFrozen: false,
-        pendingPayouts: [],
         balances: {
             mitrons: 0,
             usd: 0
-        },
-        spent: {
-            mitrons: 0,
-            usd: 0
-        },
-        purchases: {
-            certificateAmount: 0
         },
         matrixPosition: {
             currentCellId: null,
@@ -79,11 +64,11 @@ function createNewUserCard(username) {
 function createInitialWallets() {
     return {
         adminWallet: {
-            name: 'Кошелек Администрации (100% поступивших средств)',
+            name: 'Административный кошелек (Логистика / Товар)',
             balanceMitrons: 0
         },
         daoWallet: {
-            name: 'DAO Пул (Фонд развития / Резерв выплат)',
+            name: 'DAO Пул (Фонд развития)',
             balanceMitrons: 0
         }
     };
