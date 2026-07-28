@@ -15,6 +15,69 @@ function setElementText(id, text) {
     }
 }
 
+// === 0. ФИНАНСОВАЯ АНАЛИТИКА АДМИНИСТРАТОРА ===
+
+async function loadAdminStats() {
+    try {
+        const response = await fetch(`${API_URL}/api/admin/stats`);
+        if (!response.ok) return;
+        const data = await response.json();
+
+        if (data.success && data.stats) {
+            const s = data.stats;
+            setElementText('stat-total-balance', `${s.totalBalance || 0} M`);
+            setElementText('stat-income-today', `${s.incomeToday || 0} M`);
+            setElementText('stat-income-week', `${s.incomeWeek || 0} M`);
+            setElementText('stat-income-month', `${s.incomeMonth || 0} M`);
+
+            // Внешние закупки (450 M) и статистика покупателей
+            setElementText('stat-goods-bought-m', `${s.goodsBoughtM || 0} M`);
+            setElementText('stat-goods-total-m', `${s.goodsTotalM || 0} M`);
+            setElementText('stat-buyers-count', `${s.buyersCount || 0} чел.`);
+            setElementText('stat-refused-count', `${s.refusedCount || 0} чел.`);
+
+            // Выплаты и резервы
+            setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
+            setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
+            setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
+            setElementText('stat-net-profit', `${s.netProfit || 0} M`);
+
+            // Логины
+            setElementText('stat-total-logins', s.totalLogins || 0);
+            setElementText('stat-admin-logins', s.adminLogins || 0);
+            setElementText('stat-user-logins', s.userLogins || 0);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки статистики администратора:', error);
+    }
+}
+
+async function filterLoginsByDate() {
+    const dateFrom = document.getElementById('admin-date-from')?.value;
+    const dateTo = document.getElementById('admin-date-to')?.value;
+    const resultEl = document.getElementById('logins-date-result');
+
+    if (!dateFrom || !dateTo) {
+        alert('Пожалуйста, выберите обе даты (С ... по ...)');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/logins-by-date?from=${dateFrom}&to=${dateTo}`);
+        const data = await response.json();
+
+        if (data.success) {
+            if (resultEl) {
+                resultEl.innerText = `Найдено: ${data.count} логинов (${data.logins.join(', ') || 'нет'})`;
+            }
+        } else {
+            alert(`Ошибка поиска: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Ошибка поиска логинов за период:', error);
+    }
+}
+
 // === 1. РЕГИСТРАЦИЯ И УПРАВЛЕНИЕ МАТРИЦЕЙ ===
 
 async function registerInMatrix() {
@@ -44,6 +107,7 @@ async function registerInMatrix() {
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
             }
+            loadAdminStats();
         } else {
             alert(`Ошибка: ${result.error}`);
         }
@@ -78,6 +142,7 @@ async function registerShopUser() {
         if (result.success) {
             alert(`Покупатель ${shopUserStr} успешно зарегистрирован!`);
             loadUserProfile(shopUserStr);
+            loadAdminStats();
         } else {
             alert(`Ошибка: ${result.error}`);
         }
@@ -116,6 +181,7 @@ async function payCertificate() {
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
             }
+            loadAdminStats();
         } else {
             alert(`Ошибка оплаты: ${result.error}`);
         }
@@ -355,6 +421,7 @@ async function resetSystem() {
             if (uplineContainer) uplineContainer.innerHTML = '';
             
             closeUserProfileCard();
+            loadAdminStats();
         }
     } catch (error) {
         console.error('Ошибка при сбросе системы:', error);
@@ -364,6 +431,7 @@ async function resetSystem() {
 // === ГЛОБАЛЬНЫЕ МОСТЫ СВЯЗИ ===
 window.showUserCard = loadUserProfile;
 window.closeUserCard = closeUserProfileCard;
+window.filterLoginsByDate = filterLoginsByDate;
 window.focusMatrixOnUser = (login) => {
     if (typeof window.searchMatrixUser === 'function') {
         window.searchMatrixUser(login);
@@ -374,6 +442,8 @@ window.focusMatrixOnUser = (login) => {
 
 // Привязка событий после загрузки страницы
 document.addEventListener('DOMContentLoaded', () => {
+    loadAdminStats();
+
     const searchBtn = document.getElementById('search-profile-btn');
     if (searchBtn) {
         searchBtn.addEventListener('click', () => {
@@ -388,17 +458,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const modal = getProfileModalElement();
         if (!modal) return;
 
-        // Если модальное окно скрыто, ничего не делаем
         const computedStyle = window.getComputedStyle(modal);
         if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') return;
 
-        // Определяем внутренний блок с контентом (если он есть)
         const contentBox = modal.querySelector('.modal-content') || 
                            modal.querySelector('.card-body') || 
                            modal.querySelector('.user-card-content') || 
                            modal.children[0];
 
-        // Проверяем, был ли клик по кнопкам открытия
         const isTrigger = e.target.closest('#search-profile-btn') || 
                           e.target.closest('.dropdown-btn') || 
                           e.target.closest('.user-cell-card') ||
@@ -407,7 +474,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isTrigger) return;
 
-        // Если клик был по самой подложке (вне внутреннего блока карточки) — закрываем
         if (contentBox) {
             if (!contentBox.contains(e.target)) {
                 closeUserProfileCard();
