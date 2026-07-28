@@ -33,7 +33,7 @@ let shopUsersDB = {};
 let wallets = createInitialWallets();
 
 // Список строго системных админ-аккаунтов
-const ADMIN_LOGINS_LIST = ['SYSTEM_ROOT', 'LEADER_1'];
+const ADMIN_LOGINS_LIST = ['SYSTEM_ROOT', 'LEADER_1', 'ADMIN'];
 
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
@@ -89,7 +89,7 @@ function getOrCreateUserCard(username) {
 }
 
 // Первичная инициализация базовых пользователей
-['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
+['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', 'ADMIN'].forEach(u => getOrCreateUserCard(u));
 
 /**
  * Поиск канонического имени спонсора без учета регистра
@@ -321,7 +321,7 @@ function getSystemStats() {
         }
     });
 
-    // Расчеты согласно обновленным требованиям ТЗ:
+    // Расчеты согласно ТЗ:
     const externalProductCost = totalPurchasesCount * 450; // Куплено товара на стороннем Маркетплейсе (450 M за единицу)
     const remainingIncome = totalPurchasesCount * 550; // Прибыль пересчитывается с остатка 550 M
 
@@ -360,7 +360,9 @@ function getSystemStats() {
         adminLogins,
         buyerLogins,
         totalPurchasesCount,
-        canceledUsersCount
+        shopPurchasesTotal: externalProductCost,
+        totalBuyers: buyerLogins,
+        totalRefundedBuyers: canceledUsersCount
     };
 }
 
@@ -477,12 +479,12 @@ app.post(['/api/shop/pay', '/api/pay-certificate'], (req, res) => {
 });
 
 // Эндпоинт поиска пользователей за период (Зашло в проект с ... по ...)
-app.get('/api/users-by-date', (req, res) => {
-    const { fromDate, toDate } = req.query;
+app.get('/api/admin/users-by-date', (req, res) => {
+    const { from, to } = req.query;
     const allUsers = Array.from(new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]));
 
-    const fromTime = fromDate ? new Date(fromDate).getTime() : 0;
-    const toTime = toDate ? new Date(toDate).getTime() : Infinity;
+    const fromTime = from ? new Date(from).getTime() : 0;
+    const toTime = to ? new Date(to).getTime() : Infinity;
 
     const filtered = allUsers.filter(username => {
         const profile = shopUsersDB[username];
@@ -529,7 +531,12 @@ app.get('/api/admin/stats', (req, res) => {
 
 app.get('/api/user-details/:username', (req, res) => {
     const usernameParam = req.params.username.trim();
+    const searchQuery = (req.query.search || '').trim().toLowerCase();
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = 20;
+
     const canonicalName = getOrCreateUserCard(usernameParam);
+    const isAdmin = ADMIN_LOGINS_LIST.some(a => a.toLowerCase() === canonicalName.toLowerCase());
     
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
@@ -546,13 +553,39 @@ app.get('/api/user-details/:username', (req, res) => {
         currentSponsor = nextSponsorKey ? referalsDB[nextSponsorKey] : null;
     }
 
+    // Получаем лично приглашенных (рефералов 1-й линии)
+    const allDirectRefs = Object.keys(referalsDB).filter(u => {
+        const sp = referalsDB[u];
+        return sp && sp.toLowerCase() === canonicalName.toLowerCase();
+    });
+
+    let filteredRefs = allDirectRefs;
+    if (searchQuery) {
+        filteredRefs = allDirectRefs.filter(u => u.toLowerCase().includes(searchQuery));
+    }
+
+    const totalCount = filteredRefs.length;
+    const startIndex = (page - 1) * pageSize;
+    const paginatedList = filteredRefs.slice(startIndex, startIndex + pageSize);
+    const hasMore = startIndex + pageSize < totalCount;
+
+    const stats = getSystemStats();
+
     res.json({
         success: true,
         username: canonicalName,
+        isAdmin,
         cells: userCells,
         sponsor: referalsDB[canonicalName] || 'SYSTEM_ROOT',
         chain: sponsorChain,
-        profile: shopUsersDB[canonicalName]
+        profile: shopUsersDB[canonicalName],
+        referralsData: {
+            totalCount,
+            currentPage: page,
+            hasMore,
+            list: paginatedList
+        },
+        stats: isAdmin ? stats : null
     });
 });
 
@@ -618,6 +651,8 @@ app.post('/api/admin/delete-user', (req, res) => {
             treeDB[cellId].user = 'SYSTEM_ROOT';
         }
     });
+
+    canceledUsersCount++;
     
     res.json({ success: true, message: `Пользователь ${canonicalName} заблокирован. Ячейки переданы SYSTEM_ROOT` });
 });
@@ -633,7 +668,7 @@ app.post(['/api/reset', '/api/reset-database'], (req, res) => {
         'LEADER_2': 'SYSTEM_ROOT'
     };
     canceledUsersCount = 0;
-    ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2'].forEach(u => getOrCreateUserCard(u));
+    ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', 'ADMIN'].forEach(u => getOrCreateUserCard(u));
     res.json({ success: true });
 });
 
