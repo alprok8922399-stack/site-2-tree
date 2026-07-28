@@ -6,7 +6,7 @@ let lastTreeJsonString = "";
 let isUserInteracting = false;
 let highlightedTableUser = null;
 
-// Динамические стили
+// Динамические стили для 5-столбцовой таблицы
 const style = document.createElement('style');
 style.innerHTML = `
     .table-search-container {
@@ -185,7 +185,7 @@ style.innerHTML = `
 document.head.appendChild(style);
 
 /**
- * Загрузка реферального дерева
+ * Загрузка данных реферального дерева
  */
 async function loadReferalsTable(isBackground = false) {
     const targetContainer = document.getElementById('referals-table-body');
@@ -213,7 +213,7 @@ async function loadReferalsTable(isBackground = false) {
 }
 
 /**
- * Отрисовка интерактивной таблицы (Первые 3 места Админа + срез на 5 столбцов)
+ * Отрисовка интерактивной таблицы (Первые 3 места Админа + Срез строго на 5 столбцов)
  */
 function renderActiveReferralGrid(container, isBackground = false) {
     const oldInput = document.getElementById('interactiveTableSearchInput');
@@ -257,7 +257,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
     wrapper.className = 'referral-grid-wrapper';
     wrapper.id = 'referralGridWrapper';
 
-    // Формируем срез из 5 колонок
+    // Формируем срез строго из 5 колонок
     const maxColumns = 5;
     
     // Определяем 1-ю колонку: Первые 3 места Администрации
@@ -279,7 +279,7 @@ function renderActiveReferralGrid(container, isBackground = false) {
         activePath = [adminNodes[0].id];
     }
 
-    // Рендерим 1-ю колонку (Администрация)
+    // Рендерим Столбец 1 (Администрация: Первые 3 логина)
     renderAlignedColumn(wrapper, adminNodes, 0, 'Столбец 1 (Администрация)');
 
     // Рендерим последующие столбцы (от 2 до 5) по активному пути
@@ -338,7 +338,7 @@ function renderAlignedColumn(wrapper, usersList, columnIndex, titleText) {
 }
 
 /**
- * Элемент карточки в таблице
+ * Элемент карточки ячейки в таблице
  */
 function createUserCardElement(user, columnIndex) {
     const card = document.createElement('div');
@@ -388,7 +388,7 @@ function createUserCardElement(user, columnIndex) {
             renderActiveReferralGrid(targetContainer, false);
         }
 
-        // Вызываем НОВУЮ Инфо-Карточку!
+        // ВЫЗОВ НОВОЙ ЕДИНОЙ КАРТОЧКИ ПОЛЬЗОВАТЕЛЯ (Старая карточка полностью удалена!)
         if (typeof window.showUserCard === 'function') {
             window.showUserCard(user.login);
         }
@@ -400,7 +400,7 @@ function createUserCardElement(user, columnIndex) {
 }
 
 /**
- * Поиск по таблице
+ * Поиск пользователя по таблице
  */
 async function searchReferralUser(login) {
     if (!login) return;
@@ -477,6 +477,7 @@ window.showSearchedInMatrix = () => {
 window.searchReferralUser = searchReferralUser;
 window.refreshReferralTable = () => loadReferalsTable(false);
 
+// Автообновление таблицы раз в 3 секунды
 setInterval(() => {
     const inp = document.getElementById('interactiveTableSearchInput');
     if (document.activeElement === inp && inp && inp.value.length > 0) return;
