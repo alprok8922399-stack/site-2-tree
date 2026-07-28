@@ -129,6 +129,89 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
+// === АНАЛИТИКА КАРТОЧКИ АДМИНИСТРАТОРА ===
+app.get('/api/admin/stats', (req, res) => {
+    const users = Object.values(shopUsersDB);
+    const paidUsers = users.filter(u => u.isPaid);
+
+    const now = new Date();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const oneWeek = 7 * oneDay;
+    const oneMonth = 30 * oneDay;
+
+    let incomeToday = 0;
+    let incomeWeek = 0;
+    let incomeMonth = 0;
+
+    paidUsers.forEach(u => {
+        const pDate = u.paymentDate ? new Date(u.paymentDate) : now;
+        const diff = now - pDate;
+        
+        if (diff <= oneDay) incomeToday += 1000;
+        if (diff <= oneWeek) incomeWeek += 1000;
+        if (diff <= oneMonth) incomeMonth += 1000;
+    });
+
+    const buyersCount = paidUsers.length;
+    const goodsBoughtM = buyersCount * 450;
+    const totalIncomeM = buyersCount * 1000;
+
+    // Выплаты и резервы
+    const cashbackPaid = paidUsers.filter(u => u.matrixPosition && u.matrixPosition.status === 'payout_pending').length * 1000;
+    const referralsPaid = Math.floor(totalIncomeM * 0.1); // 10% на реферальные
+    const inReserve = wallets.daoWallet.balanceMitrons || (buyersCount * 550);
+    const netProfit = totalIncomeM - goodsBoughtM - cashbackPaid - referralsPaid;
+
+    const allLogins = Object.keys(referalsDB);
+    const adminLogins = allLogins.filter(l => l.toUpperCase().includes('ADMIN') || l === 'SYSTEM_ROOT');
+    const userLogins = allLogins.length - adminLogins.length;
+
+    res.json({
+        success: true,
+        stats: {
+            totalBalance: totalIncomeM,
+            incomeToday,
+            incomeWeek,
+            incomeMonth,
+            goodsBoughtM,
+            goodsTotalM: goodsBoughtM,
+            buyersCount,
+            refusedCount: users.filter(u => !u.isPaid).length,
+            cashbackPaid,
+            referralsPaid,
+            inReserve,
+            netProfit: netProfit > 0 ? netProfit : 0,
+            totalLogins: allLogins.length,
+            adminLogins: adminLogins.length,
+            userLogins
+        }
+    });
+});
+
+app.get('/api/admin/logins-by-date', (req, res) => {
+    const { from, to } = req.query;
+    if (!from || !to) return res.status(400).json({ error: 'Параметры from и to обязательны' });
+
+    const dateFrom = new Date(from);
+    const dateTo = new Date(to);
+    dateTo.setHours(23, 59, 59, 999);
+
+    const foundLogins = [];
+
+    Object.entries(shopUsersDB).forEach(([username, profile]) => {
+        const pDate = profile.paymentDate ? new Date(profile.paymentDate) : null;
+        if (pDate && pDate >= dateFrom && pDate <= dateTo) {
+            foundLogins.push(username);
+        }
+    });
+
+    res.json({
+        success: true,
+        count: foundLogins.length,
+        logins: foundLogins
+    });
+});
+
 app.get('/api/tree', (req, res) => {
     res.json({
         ...treeDB,
@@ -142,7 +225,6 @@ app.post('/api/register', (req, res) => {
     
     const trimmedUser = username.trim();
     
-    // Рандомный выбор спонсора, если не указан явно
     let canonicalSponsor = sponsor ? sponsor.trim() : null;
     if (!canonicalSponsor) {
         const allUsers = Object.keys(referalsDB);
@@ -160,6 +242,7 @@ app.post('/api/register', (req, res) => {
     if (!shopUsersDB[trimmedUser]) {
         shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
         shopUsersDB[trimmedUser].isPaid = true;
+        shopUsersDB[trimmedUser].paymentDate = new Date().toISOString();
         shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
         shopUsersDB[trimmedUser].matrixPosition.status = 'active';
     }
@@ -212,23 +295,19 @@ app.get('/api/user-details/:username', (req, res) => {
         }
     }
 
-    // === ОПТИМИЗИРОВАННАЯ ВЫДАЧА ЛИЧНИКОВ (ДЛЯ 10 000+ ЧЕЛОВЕК) ===
     const searchQuery = (req.query.search || '').trim().toLowerCase();
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 30; // Порция по 30 человек
+    const limit = parseInt(req.query.limit) || 30;
 
-    // Находим всех личников данного пользователя
     const allReferrals = Object.keys(referalsDB).filter(user => {
         const parent = referalsDB[user];
         return parent && parent.toLowerCase() === canonicalName.toLowerCase();
     });
 
-    // Фильтрация по поисковому запросу (если передан search)
     const filteredReferrals = searchQuery
         ? allReferrals.filter(ref => ref.toLowerCase().includes(searchQuery))
         : allReferrals;
 
-    // Пагинация (вырезаем нужную страницу)
     const startIndex = (page - 1) * limit;
     const paginatedReferrals = filteredReferrals.slice(startIndex, startIndex + limit);
 
@@ -240,11 +319,11 @@ app.get('/api/user-details/:username', (req, res) => {
         chain: sponsorChain,
         profile: shopUsersDB[canonicalName],
         referralsData: {
-            totalCount: allReferrals.length,       // Всего личников
-            filteredCount: filteredReferrals.length, // Найдено по фильтру
+            totalCount: allReferrals.length,
+            filteredCount: filteredReferrals.length,
             currentPage: page,
             hasMore: startIndex + limit < filteredReferrals.length,
-            list: paginatedReferrals               // Отдаем порцией по 30
+            list: paginatedReferrals
         }
     });
 });
@@ -342,6 +421,7 @@ app.post('/api/shop/register', (req, res) => {
     treeDB[cellId].user = trimmedUser;
     
     shopUsersDB[trimmedUser].isPaid = true;
+    shopUsersDB[trimmedUser].paymentDate = new Date().toISOString();
     shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
     shopUsersDB[trimmedUser].matrixPosition.status = 'active';
     
