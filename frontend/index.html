@@ -110,6 +110,8 @@
         button:hover { background-color: #27ae60; }
         .btn-danger { background-color: #e74c3c; }
         .btn-danger:hover { background-color: #c0392b; }
+        .btn-admin { background-color: #8e44ad; }
+        .btn-admin:hover { background-color: #71368a; }
 
         /* === БЛОК УПРАВЛЕНИЯ ЗУМОМ === */
         .zoom-panel {
@@ -278,9 +280,10 @@
 
     <div class="card">
         <h2>1. Просмотр карточки и Сейфов</h2>
-        <div class="form-group" style="display: flex; gap: 10px;">
-            <input type="text" id="search-username-input" placeholder="Введите логин для поиска...">
+        <div class="form-group" style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="text" id="search-username-input" placeholder="Введите логин для поиска..." style="flex: 1; min-width: 200px;">
             <button id="search-profile-btn">Найти</button>
+            <button class="btn-admin" onclick="showAdminLoginsList()">👑 Логины Администратора</button>
         </div>
         
         <div class="profile-info">
@@ -318,8 +321,8 @@
     </div>
 </div>
 
-<script src="script.js?v=12"></script>
-<script src="matrix.js?v=12"></script>
-<script src="table.js?v=12"></script>
+<script src="script.js?v=13"></script>
+<script src="matrix.js?v=13"></script>
+<script src="table.js?v=13"></script>
 </body>
 </html>
