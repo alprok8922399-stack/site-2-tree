@@ -2,11 +2,12 @@ const API_BASE_URL = window.location.origin;
 
 let referralTreeData = {};
 let activePath = [];
+let openDropdownUser = null;
 let lastTreeJsonString = "";
 let isUserInteracting = false;
 let highlightedTableUser = null;
 
-// Динамические стили для 5-столбцовой таблицы
+// Динамические стили
 const style = document.createElement('style');
 style.innerHTML = `
     .table-search-container {
@@ -40,7 +41,9 @@ style.innerHTML = `
         font-size: 13px;
         white-space: nowrap;
     }
-    .table-search-btn:hover { background: #3e8e41; }
+    .table-search-btn:hover {
+        background: #3e8e41;
+    }
     .table-matrix-btn {
         background: #8e44ad;
         color: #fff;
@@ -52,7 +55,9 @@ style.innerHTML = `
         font-size: 13px;
         white-space: nowrap;
     }
-    .table-matrix-btn:hover { background: #9b59b6; }
+    .table-matrix-btn:hover {
+        background: #9b59b6;
+    }
     .table-nav-btn {
         background: #2980b9;
         color: #fff;
@@ -64,7 +69,9 @@ style.innerHTML = `
         font-size: 13px;
         white-space: nowrap;
     }
-    .table-nav-btn:hover { background: #3498db; }
+    .table-nav-btn:hover {
+        background: #3498db;
+    }
     .table-reset-btn {
         background: #d35400;
         color: #fff;
@@ -76,42 +83,35 @@ style.innerHTML = `
         font-size: 13px;
         white-space: nowrap;
     }
-    .table-reset-btn:hover { background: #e67e22; }
+    .table-reset-btn:hover {
+        background: #e67e22;
+    }
     .referral-grid-wrapper {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
         align-items: flex-start !important;
-        gap: 12px !important;
+        gap: 15px !important;
         overflow-x: auto !important;
         padding: 10px 5px !important;
         background: #181818;
         border-radius: 8px;
-        min-height: 450px;
+        min-height: 400px;
         width: 100% !important;
         box-sizing: border-box;
         -webkit-overflow-scrolling: touch;
     }
     .referral-column {
-        flex: 0 0 220px !important;
+        flex: 0 0 250px !important;
         background: #222222 !important;
         border: 1px solid #333333 !important;
         border-radius: 6px !important;
         display: flex !important;
         flex-direction: column !important;
-        max-height: 650px !important;
+        max-height: 600px !important;
         overflow-y: auto !important;
         padding: 8px !important;
-        gap: 8px !important;
-    }
-    .column-header-title {
-        font-size: 12px;
-        font-weight: bold;
-        color: #888;
-        text-align: center;
-        padding-bottom: 4px;
-        border-bottom: 1px solid #333;
-        margin-bottom: 4px;
+        gap: 6px !important;
     }
     .table-row-slot {
         min-height: 52px;
@@ -129,10 +129,6 @@ style.innerHTML = `
         position: relative !important;
         user-select: none !important;
         box-sizing: border-box;
-    }
-    .user-cell-card.admin-card {
-        border-color: #f39c12 !important;
-        background: #342308 !important;
     }
     .user-cell-card:hover {
         background: #333333 !important;
@@ -163,8 +159,8 @@ style.innerHTML = `
         font-weight: 600 !important;
         color: #4CAF50 !important;
     }
-    .user-cell-card.admin-card .user-login-text {
-        color: #f1c40f !important;
+    .user-cell-card.searched-highlight .user-login-text {
+        color: #ffffff !important;
     }
     .children-badge {
         background: #555555 !important;
@@ -173,6 +169,28 @@ style.innerHTML = `
         padding: 2px 6px !important;
         border-radius: 10px !important;
         font-weight: bold;
+    }
+    .user-dropdown-menu {
+        margin-top: 8px !important;
+        padding-top: 8px !important;
+        border-top: 1px dashed #444444 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 5px !important;
+    }
+    .dropdown-btn {
+        background: #333333 !important;
+        border: 1px solid #555555 !important;
+        color: #ffffff !important;
+        padding: 6px 8px !important;
+        font-size: 12px !important;
+        border-radius: 4px !important;
+        cursor: pointer !important;
+        text-align: left !important;
+    }
+    .dropdown-btn:hover {
+        background: #4CAF50 !important;
+        border-color: #4CAF50 !important;
     }
     .empty-column-msg {
         color: #888888 !important;
@@ -185,7 +203,7 @@ style.innerHTML = `
 document.head.appendChild(style);
 
 /**
- * Загрузка данных реферального дерева
+ * Загрузка реферального дерева
  */
 async function loadReferalsTable(isBackground = false) {
     const targetContainer = document.getElementById('referals-table-body');
@@ -199,11 +217,22 @@ async function loadReferalsTable(isBackground = false) {
 
         const newTreeJsonString = JSON.stringify(result.tree);
         
-        if (isBackground && newTreeJsonString === lastTreeJsonString) return;
-        if (isBackground && isUserInteracting) return;
+        if (isBackground && newTreeJsonString === lastTreeJsonString) {
+            return;
+        }
+
+        if (isBackground && isUserInteracting) {
+            return;
+        }
 
         lastTreeJsonString = newTreeJsonString;
         referralTreeData = result.tree;
+
+        const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData).find(node => !node.parentId) || Object.values(referralTreeData)[0];
+
+        if (activePath.length === 0 && rootUser) {
+            activePath = [rootUser.id];
+        }
 
         renderActiveReferralGrid(targetContainer, isBackground);
 
@@ -213,7 +242,7 @@ async function loadReferalsTable(isBackground = false) {
 }
 
 /**
- * Отрисовка интерактивной таблицы (Первые 3 места Админа + Срез строго на 5 столбцов)
+ * Отрисовка интерактивной таблицы
  */
 function renderActiveReferralGrid(container, isBackground = false) {
     const oldInput = document.getElementById('interactiveTableSearchInput');
@@ -223,9 +252,17 @@ function renderActiveReferralGrid(container, isBackground = false) {
     const wrapperOld = document.getElementById('referralGridWrapper');
     const scrollLeftVal = wrapperOld ? wrapperOld.scrollLeft : 0;
     
+    const columnScrolls = {};
+    if (wrapperOld) {
+        const cols = wrapperOld.querySelectorAll('.referral-column');
+        cols.forEach((col, idx) => {
+            columnScrolls[idx] = col.scrollTop;
+        });
+    }
+
     container.innerHTML = '';
     
-    // Поиск и кнопки навигации
+    // Блок поиска и кнопок быстрой навигации
     const searchBlock = document.createElement('div');
     searchBlock.className = 'table-search-container';
     searchBlock.innerHTML = `
@@ -239,7 +276,10 @@ function renderActiveReferralGrid(container, isBackground = false) {
     container.appendChild(searchBlock);
 
     const searchInput = searchBlock.querySelector('input');
-    if (savedSearchValue) searchInput.value = savedSearchValue;
+
+    if (savedSearchValue) {
+        searchInput.value = savedSearchValue;
+    }
 
     if (isInputFocused) {
         setTimeout(() => {
@@ -248,7 +288,10 @@ function renderActiveReferralGrid(container, isBackground = false) {
         }, 0);
     }
 
-    searchInput.addEventListener('input', () => { isUserInteracting = true; });
+    searchInput.addEventListener('input', () => {
+        isUserInteracting = true;
+    });
+
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') window.searchTableUserByInput();
     });
@@ -257,44 +300,38 @@ function renderActiveReferralGrid(container, isBackground = false) {
     wrapper.className = 'referral-grid-wrapper';
     wrapper.id = 'referralGridWrapper';
 
-    // Формируем срез строго из 5 колонок
-    const maxColumns = 5;
-    
-    // Определяем 1-ю колонку: Первые 3 места Администрации
-    let adminNodes = [];
-    const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData).find(n => !n.parentId);
-    
-    if (rootUser) {
-        adminNodes.push(rootUser);
-        if (rootUser.children) {
-            rootUser.children.forEach(childId => {
-                if (referralTreeData[childId] && adminNodes.length < 3) {
-                    adminNodes.push(referralTreeData[childId]);
-                }
-            });
-        }
+    // 1. Первая колонка (Либо корень, либо стартовый узел текущего узкого среза)
+    const firstLoginInPath = activePath[0];
+    let rootColumnUsers = [];
+
+    if (firstLoginInPath && referralTreeData[firstLoginInPath]) {
+        rootColumnUsers = [referralTreeData[firstLoginInPath]];
+    } else {
+        rootColumnUsers = Object.values(referralTreeData).filter(node => !node.parentId || node.id === 'SYSTEM_ROOT');
     }
+    
+    renderAlignedColumn(wrapper, rootColumnUsers, 0, null);
 
-    if (activePath.length === 0 && adminNodes.length > 0) {
-        activePath = [adminNodes[0].id];
-    }
+    // 2. Последующие колонки (Отображаем только активный фокусный путь)
+    for (let i = 0; i < activePath.length; i++) {
+        const currentLogin = activePath[i];
+        const userNode = referralTreeData[currentLogin];
 
-    // Рендерим Столбец 1 (Администрация: Первые 3 логина)
-    renderAlignedColumn(wrapper, adminNodes, 0, 'Столбец 1 (Администрация)');
-
-    // Рендерим последующие столбцы (от 2 до 5) по активному пути
-    for (let colIdx = 1; colIdx < maxColumns; colIdx++) {
-        const parentId = activePath[colIdx - 1];
-        if (parentId && referralTreeData[parentId]) {
-            const parentNode = referralTreeData[parentId];
-            const childrenNodes = (parentNode.children || []).map(id => referralTreeData[id]).filter(Boolean);
-            renderAlignedColumn(wrapper, childrenNodes, colIdx, `Столбец ${colIdx + 1}`);
-        } else {
-            renderAlignedColumn(wrapper, [], colIdx, `Столбец ${colIdx + 1}`);
+        if (userNode && userNode.children && userNode.children.length > 0) {
+            const childrenNodes = userNode.children.map(childLogin => referralTreeData[childLogin]).filter(Boolean);
+            renderAlignedColumn(wrapper, childrenNodes, i + 1, userNode);
         }
     }
 
     container.appendChild(wrapper);
+
+    // Восстанавливаем скролл колонок
+    const newCols = wrapper.querySelectorAll('.referral-column');
+    newCols.forEach((col, idx) => {
+        if (columnScrolls[idx]) {
+            col.scrollTop = columnScrolls[idx];
+        }
+    });
 
     if (highlightedTableUser && !isBackground) {
         setTimeout(() => {
@@ -308,46 +345,46 @@ function renderActiveReferralGrid(container, isBackground = false) {
     }
 }
 
-/**
- * Рендер отдельного столбца
- */
-function renderAlignedColumn(wrapper, usersList, columnIndex, titleText) {
+function renderAlignedColumn(wrapper, usersList, columnIndex, parentNode) {
     const column = document.createElement('div');
     column.className = 'referral-column';
-
-    const header = document.createElement('div');
-    header.className = 'column-header-title';
-    header.innerText = titleText;
-    column.appendChild(header);
 
     if (!usersList || usersList.length === 0) {
         const emptyMsg = document.createElement('div');
         emptyMsg.className = 'empty-column-msg';
-        emptyMsg.innerText = 'Нет личников';
+        emptyMsg.innerText = 'Нет зарегистрированных личников';
         column.appendChild(emptyMsg);
     } else {
-        usersList.forEach((user) => {
-            const slot = document.createElement('div');
-            slot.className = 'table-row-slot';
-            slot.appendChild(createUserCardElement(user, columnIndex));
-            column.appendChild(slot);
-        });
+        if (parentNode && parentNode.children) {
+            parentNode.children.forEach(childId => {
+                const slot = document.createElement('div');
+                slot.className = 'table-row-slot';
+                
+                const user = referralTreeData[childId];
+                if (user) {
+                    slot.appendChild(createUserCardElement(user, columnIndex));
+                }
+                column.appendChild(slot);
+            });
+        } else {
+            usersList.forEach(user => {
+                const slot = document.createElement('div');
+                slot.className = 'table-row-slot';
+                slot.appendChild(createUserCardElement(user, columnIndex));
+                column.appendChild(slot);
+            });
+        }
     }
 
     wrapper.appendChild(column);
 }
 
-/**
- * Элемент карточки ячейки в таблице
- */
 function createUserCardElement(user, columnIndex) {
     const card = document.createElement('div');
     card.className = 'user-cell-card';
     card.id = `table-user-${user.login}`;
-
-    if (user.isAdmin || user.login.toLowerCase().includes('admin') || user.login === 'SYSTEM_ROOT') {
-        card.classList.add('admin-card');
-    }
+    
+    const isAlreadyActive = activePath[columnIndex] === user.id;
 
     if (activePath.includes(user.id)) {
         card.classList.add('active-link');
@@ -375,22 +412,40 @@ function createUserCardElement(user, columnIndex) {
 
     card.appendChild(mainRow);
 
-    // Клики по ячейке
+    if (openDropdownUser === user.id) {
+        const dropdown = document.createElement('div');
+        dropdown.className = 'user-dropdown-menu';
+        dropdown.onclick = (e) => e.stopPropagation(); 
+
+        dropdown.innerHTML = `
+            <button class="dropdown-btn" onclick="window.viewUserCardTrigger('${user.login}')">👤 Открыть Инфо-Карточку</button>
+            <button class="dropdown-btn" onclick="window.focusUserMatrixTrigger('${user.login}')">📊 Показать в Матрице</button>
+            <button class="dropdown-btn" onclick="window.copyToClipboardTrigger('${user.login}', this)">📋 Копировать логин</button>
+        `;
+        card.appendChild(dropdown);
+    }
+
     card.addEventListener('click', (e) => {
         e.stopPropagation();
         isUserInteracting = true;
 
-        activePath = activePath.slice(0, columnIndex);
-        activePath.push(user.id);
+        if (isAlreadyActive && activePath.length > columnIndex + 1) {
+            activePath = activePath.slice(0, columnIndex + 1);
+            openDropdownUser = null;
+        } else {
+            activePath = activePath.slice(0, columnIndex);
+            activePath.push(user.id);
+
+            if (openDropdownUser === user.id) {
+                openDropdownUser = null; 
+            } else {
+                openDropdownUser = user.id; 
+            }
+        }
 
         const targetContainer = document.getElementById('referals-table-body');
         if (targetContainer) {
             renderActiveReferralGrid(targetContainer, false);
-        }
-
-        // ВЫЗОВ НОВОЙ ЕДИНОЙ КАРТОЧКИ ПОЛЬЗОВАТЕЛЯ (Старая карточка полностью удалена!)
-        if (typeof window.showUserCard === 'function') {
-            window.showUserCard(user.login);
         }
 
         setTimeout(() => { isUserInteracting = false; }, 1000);
@@ -400,7 +455,7 @@ function createUserCardElement(user, columnIndex) {
 }
 
 /**
- * Поиск пользователя по таблице
+ * Поиск пользователя с фокусом на срез (Ограничение длины цепочки для максимальной скорости)
  */
 async function searchReferralUser(login) {
     if (!login) return;
@@ -416,7 +471,17 @@ async function searchReferralUser(login) {
 
         const result = await response.json();
         if (result.success && result.chain && result.chain.length > 0) {
-            activePath = result.chain;
+            const fullChain = result.chain;
+            
+            // Если цепочка длиннее 3 уровней, берем только последних 3 человек (Спонсор -> Пользователь -> Личники)
+            // Это решает проблему 7000 ячеек раз и навсегда!
+            if (fullChain.length > 3) {
+                activePath = fullChain.slice(-3);
+            } else {
+                activePath = fullChain;
+            }
+
+            openDropdownUser = fullChain[fullChain.length - 1];
             highlightedTableUser = login.trim();
 
             const targetContainer = document.getElementById('referals-table-body');
@@ -431,33 +496,44 @@ async function searchReferralUser(login) {
     }
 }
 
+// Сброс таблицы к главному корню
 window.resetTableToRoot = () => {
-    const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData).find(n => !n.parentId);
+    const rootUser = referralTreeData['SYSTEM_ROOT'] || Object.values(referralTreeData).find(node => !node.parentId) || Object.values(referralTreeData)[0];
     if (rootUser) {
         activePath = [rootUser.id];
+        openDropdownUser = null;
         highlightedTableUser = null;
         
         const inp = document.getElementById('interactiveTableSearchInput');
         if (inp) inp.value = '';
 
         const targetContainer = document.getElementById('referals-table-body');
-        if (targetContainer) renderActiveReferralGrid(targetContainer, false);
+        if (targetContainer) {
+            renderActiveReferralGrid(targetContainer, false);
+        }
     }
 };
 
+// Навигационные функции (В начало / В конец)
 window.scrollToTableStart = () => {
     const wrapper = document.getElementById('referralGridWrapper');
-    if (wrapper) wrapper.scrollTo({ left: 0, behavior: 'smooth' });
+    if (wrapper) {
+        wrapper.scrollTo({ left: 0, behavior: 'smooth' });
+    }
 };
 
 window.scrollToTableEnd = () => {
     const wrapper = document.getElementById('referralGridWrapper');
-    if (wrapper) wrapper.scrollTo({ left: wrapper.scrollWidth, behavior: 'smooth' });
+    if (wrapper) {
+        wrapper.scrollTo({ left: wrapper.scrollWidth, behavior: 'smooth' });
+    }
 };
 
 window.searchTableUserByInput = () => {
     const inp = document.getElementById('interactiveTableSearchInput');
-    if (inp && inp.value) searchReferralUser(inp.value);
+    if (inp && inp.value) {
+        searchReferralUser(inp.value);
+    }
 };
 
 window.showSearchedInMatrix = () => {
@@ -477,10 +553,45 @@ window.showSearchedInMatrix = () => {
 window.searchReferralUser = searchReferralUser;
 window.refreshReferralTable = () => loadReferalsTable(false);
 
-// Автообновление таблицы раз в 3 секунды
+window.viewUserCardTrigger = (login) => {
+    if (typeof window.showUserCard === 'function') {
+        window.showUserCard(login);
+    } else {
+        alert(`Инфо-Карточка: ${login}`);
+    }
+};
+
+window.focusUserMatrixTrigger = (login) => {
+    if (typeof window.searchMatrixUser === 'function') {
+        window.searchMatrixUser(login);
+    } else {
+        alert(`Поиск по матрице для ${login}`);
+    }
+};
+
+window.copyToClipboardTrigger = (text, btn) => {
+    navigator.clipboard.writeText(text).then(() => {
+        const oldText = btn.innerText;
+        btn.innerText = '✅ Скопировано!';
+        setTimeout(() => { btn.innerText = oldText; }, 1500);
+    }).catch(err => console.error('Ошибка копирования:', err));
+};
+
+document.addEventListener('click', () => {
+    if (openDropdownUser !== null) {
+        openDropdownUser = null;
+        const targetContainer = document.getElementById('referals-table-body');
+        if (targetContainer) {
+            renderActiveReferralGrid(targetContainer, false);
+        }
+    }
+});
+
 setInterval(() => {
     const inp = document.getElementById('interactiveTableSearchInput');
-    if (document.activeElement === inp && inp && inp.value.length > 0) return;
+    if (document.activeElement === inp && inp && inp.value.length > 0) {
+        return;
+    }
     loadReferalsTable(true);
 }, 3000);
 
