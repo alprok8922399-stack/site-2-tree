@@ -163,7 +163,7 @@ app.get('/api/admin/stats', (req, res) => {
     const netProfit = totalIncomeM - goodsBoughtM - cashbackPaid - referralsPaid;
 
     const allLogins = Object.keys(referalsDB);
-    const adminLogins = allLogins.filter(l => l.toUpperCase().includes('ADMIN') || l === 'SYSTEM_ROOT');
+    const adminLogins = allLogins.filter(l => l.toUpperCase().includes('ADMIN') || l === 'SYSTEM_ROOT' || (shopUsersDB[l] && shopUsersDB[l].ownedByAdmin));
     const userLogins = allLogins.length - adminLogins.length;
 
     res.json({
@@ -210,6 +210,64 @@ app.get('/api/admin/logins-by-date', (req, res) => {
         count: foundLogins.length,
         logins: foundLogins
     });
+});
+
+// === АДМИН-ФУНКЦИИ БЛОКИРОВКИ И ВЫПЛАТ ===
+
+// 1. Приостановка / возобновление выплат
+app.post('/api/admin/toggle-suspend', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+
+    if (!shopUsersDB[username]) {
+        shopUsersDB[username] = createNewUserCard(username);
+    }
+    
+    shopUsersDB[username].payoutsSuspended = !shopUsersDB[username].payoutsSuspended;
+    
+    res.json({ 
+        success: true, 
+        suspended: shopUsersDB[username].payoutsSuspended,
+        message: shopUsersDB[username].payoutsSuspended ? 'Выплаты приостановлены' : 'Выплаты возобновлены' 
+    });
+});
+
+// 2. Блокировка и передача логина Администратору
+app.post('/api/admin/block-and-transfer', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+
+    if (!shopUsersDB[username]) {
+        shopUsersDB[username] = createNewUserCard(username);
+    }
+
+    shopUsersDB[username].isBlocked = true;
+    shopUsersDB[username].ownedByAdmin = true;
+    shopUsersDB[username].payoutsSuspended = false; // Выплаты разрешены, так как идут Админу
+
+    res.json({ 
+        success: true, 
+        message: `Логин ${username} заблокирован и передан Администратору!` 
+    });
+});
+
+// 3. Получение списка всех логинов, принадлежащих Администратору
+app.get('/api/admin/owned-logins', (req, res) => {
+    const adminLogins = [];
+    const allLogins = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
+
+    allLogins.forEach(login => {
+        const profile = shopUsersDB[login] || {};
+        if (profile.ownedByAdmin || login === 'SYSTEM_ROOT') {
+            adminLogins.push({
+                login: login,
+                isBlocked: profile.isBlocked || false,
+                paymentDate: profile.paymentDate || null
+            });
+        }
+    });
+
+    res.json({ success: true, logins: adminLogins });
 });
 
 app.get('/api/tree', (req, res) => {
