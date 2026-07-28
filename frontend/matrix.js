@@ -4,12 +4,19 @@
     const style = document.createElement('style');
     style.innerHTML = `
         .matrices-container {
-            display: grid !important;
-            grid-template-columns: repeat(32, 280px) !important; /* Жёстко 32 колонки в ряду */
+            display: flex !important;
+            flex-direction: column !important; /* Строки идут друг под другом */
             gap: 20px !important;
             padding: 10px !important;
-            justify-content: start !important;
-            align-items: start !important;
+            align-items: flex-start !important;
+            width: max-content !important;
+        }
+
+        .matrix-row-32 {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 20px !important;
             width: max-content !important;
         }
 
@@ -20,6 +27,7 @@
             border-radius: 12px;
             padding: 15px;
             width: 280px !important;
+            min-width: 280px !important;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -156,7 +164,7 @@ async function fetchTree() {
     }
 }
 
-// Загрузка списков активных матриц с бэкенда
+// Загрузка списков активных матриц с группировкой по 32 штуки в ряд
 function renderMatrices(treeData) {
     const container = document.getElementById('mainTreeDisplay');
     if (!container) return;
@@ -170,8 +178,16 @@ function renderMatrices(treeData) {
         activeTops = ['A1'];
     }
 
-    activeTops.forEach(topId => {
-        renderSingleMatrixBlock(container, topId, treeData);
+    let currentRow = null;
+
+    activeTops.forEach((topId, index) => {
+        // Каждые 32 матрицы создаем новую строку-контейнер
+        if (index % 32 === 0) {
+            currentRow = document.createElement('div');
+            currentRow.className = 'matrix-row-32';
+            container.appendChild(currentRow);
+        }
+        renderSingleMatrixBlock(currentRow, topId, treeData);
     });
 }
 
@@ -323,7 +339,7 @@ function setZoom100() {
 }
 
 function switchFocus(element) {
-    setZoom100(); // Включаем зум 100% при фокусе
+    setZoom100(); // Автоматический зум на 100%
     setTimeout(() => {
         element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
     }, 100);
