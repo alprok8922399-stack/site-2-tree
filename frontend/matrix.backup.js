@@ -1,25 +1,45 @@
-/* === ИЗОЛИРОВАННЫЕ БЛОКИ МАТРИЦ + КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И ПОИСК === */
+/* === ИЗОЛИРОВАННЫЕ БЛОКИ МАТРИЦ + ЖЁСТКИЙ ПЕРЕНОС КАЖДЫЕ 32 МАТРИЦЫ === */
 
 (function() {
     const style = document.createElement('style');
     style.innerHTML = `
+        /* Сбрасываем ограничения у внешних оберток, чтобы они не растягивали всё в 1 строку */
+        #matrix-zoom-wrapper, 
+        #mainTreeDisplay, 
         .matrices-container {
             display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important; /* В ряд без переносов */
-            gap: 20px !important;
-            padding: 10px !important;
-            justify-content: flex-start !important;
+            flex-direction: column !important; /* Строки strictly друг под другом */
             align-items: flex-start !important;
+            justify-content: flex-start !important;
+            width: max-content !important;
+            max-width: none !important;
+        }
+
+        .matrices-container {
+            gap: 25px !important;
+            padding: 15px !important;
+        }
+
+        /* Ряд, содержащий РОВНО до 32 матриц */
+        .matrix-row-32 {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 20px !important;
+            width: max-content !important;
+            flex-shrink: 0 !important; /* Запрещаем сжимать ряд */
         }
 
         .matrix-block {
+            box-sizing: border-box !important;
             background: #17171c;
             border: 2px solid #232329;
             border-radius: 12px;
             padding: 15px;
-            width: 280px;
-            min-width: 280px; /* Чтобы блоки не сжимались */
+            width: 280px !important;
+            min-width: 280px !important;
+            max-width: 280px !important;
+            flex-shrink: 0 !important; /* Запрещаем матрице сжиматься по ширине */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -156,12 +176,14 @@ async function fetchTree() {
     }
 }
 
-// Загрузка списков активных матриц с бэкенда
+// Загрузка списков активных матриц с разбивкой ровно по 32 штуки в ряд
 function renderMatrices(treeData) {
     const container = document.getElementById('mainTreeDisplay');
     if (!container) return;
 
+    // Принудительно устанавливаем стили контейнеру
     container.className = 'matrices-container';
+    container.style.cssText = "display: flex !important; flex-direction: column !important; width: max-content !important;";
     container.innerHTML = '';
 
     let activeTops = treeData.activeMatrices || [];
@@ -170,8 +192,16 @@ function renderMatrices(treeData) {
         activeTops = ['A1'];
     }
 
-    activeTops.forEach(topId => {
-        renderSingleMatrixBlock(container, topId, treeData);
+    let currentRow = null;
+
+    activeTops.forEach((topId, index) => {
+        // Каждые 32 матрицы (индексы 0, 32, 64 и т.д.) создаем физически новый HTML-блок ряда
+        if (index % 32 === 0) {
+            currentRow = document.createElement('div');
+            currentRow.className = 'matrix-row-32';
+            container.appendChild(currentRow);
+        }
+        renderSingleMatrixBlock(currentRow, topId, treeData);
     });
 }
 
@@ -214,7 +244,7 @@ function cellIdToGlobalIndex(cellId) {
     for (let i = 0; i < letters.length; i++) {
         levelIndex = levelIndex * 26 + (letters.charCodeAt(i) - 64);
     }
-    levelIndex -= 1; // Приведение к 0-индексу уровня
+    levelIndex -= 1;
 
     const levelStart = (1 << levelIndex) - 1;
     return levelStart + (num - 1);
@@ -308,8 +338,25 @@ function addCellEvents(element, cellData) {
     });
 }
 
+function setZoom100() {
+    const zoomSlider = document.getElementById('matrix-zoom-slider');
+    const zoomValue = document.getElementById('zoom-value');
+    const zoomWrapper = document.getElementById('matrix-zoom-wrapper');
+
+    if (zoomSlider && zoomWrapper) {
+        zoomSlider.value = 1.0;
+        zoomWrapper.style.transform = 'scale(1.0)';
+        if (zoomValue) {
+            zoomValue.textContent = '100%';
+        }
+    }
+}
+
 function switchFocus(element) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    setZoom100(); 
+    setTimeout(() => {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    }, 100);
 }
 
 // Карточка пользователя С ЦЕПОЧКОЙ СПОНСОРОВ
