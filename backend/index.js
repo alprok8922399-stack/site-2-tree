@@ -158,8 +158,8 @@ app.get('/api/admin/stats', (req, res) => {
 
     // Выплаты и резервы
     const cashbackPaid = paidUsers.filter(u => u.matrixPosition && u.matrixPosition.status === 'payout_pending').length * 1000;
-    const referralsPaid = Math.floor(totalIncomeM * 0.1); // 10% на реферальные
-    const inReserve = wallets.daoWallet.balanceMitrons || (buyersCount * 550);
+    const referralsPaid = Math.floor(totalIncomeM * 0.07); // 70 M на реферала (7%)
+    const inReserve = wallets.daoWallet.balanceMitrons || (buyersCount * 250);
     const netProfit = totalIncomeM - goodsBoughtM - cashbackPaid - referralsPaid;
 
     const allLogins = Object.keys(referalsDB);
@@ -214,7 +214,6 @@ app.get('/api/admin/logins-by-date', (req, res) => {
 
 // === АДМИН-ФУНКЦИИ БЛОКИРОВКИ И ВЫПЛАТ ===
 
-// 1. Приостановка / возобновление выплат
 app.post('/api/admin/toggle-suspend', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -232,7 +231,6 @@ app.post('/api/admin/toggle-suspend', (req, res) => {
     });
 });
 
-// 2. Блокировка и передача логина Администратору
 app.post('/api/admin/block-and-transfer', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -243,7 +241,7 @@ app.post('/api/admin/block-and-transfer', (req, res) => {
 
     shopUsersDB[username].isBlocked = true;
     shopUsersDB[username].ownedByAdmin = true;
-    shopUsersDB[username].payoutsSuspended = false; // Выплаты разрешены, так как идут Админу
+    shopUsersDB[username].payoutsSuspended = false;
 
     res.json({ 
         success: true, 
@@ -251,7 +249,6 @@ app.post('/api/admin/block-and-transfer', (req, res) => {
     });
 });
 
-// 3. Получение списка всех логинов, принадлежащих Администратору
 app.get('/api/admin/owned-logins', (req, res) => {
     const adminLogins = [];
     const allLogins = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
@@ -277,36 +274,50 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-app.post('/api/register', (req, res) => {
-    const { username, sponsor } = req.body;
-    if (!username) return res.status(400).json({ error: 'Имя обязательно' });
+// Регистрация с поддержкой количества ячеек (мультипокупка)
+app.post('/api/shop/register', (req, res) => {
+    const { username, uplineUser, cellsCount = 1, amountMitrons = 1000 } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const trimmedUser = username.trim();
-    
-    let canonicalSponsor = sponsor ? sponsor.trim() : null;
-    if (!canonicalSponsor) {
-        const allUsers = Object.keys(referalsDB);
-        canonicalSponsor = allUsers[Math.floor(Math.random() * allUsers.length)] || 'SYSTEM_ROOT';
-    }
-    
-    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
-    if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
+    const count = Math.min(Math.max(parseInt(cellsCount) || 1, 1), 5); // от 1 до 5 ячеек
 
-    const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = trimmedUser;
-    
-    referalsDB[trimmedUser] = canonicalSponsor;
-    
     if (!shopUsersDB[trimmedUser]) {
         shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
-        shopUsersDB[trimmedUser].isPaid = true;
-        shopUsersDB[trimmedUser].paymentDate = new Date().toISOString();
-        shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
-        shopUsersDB[trimmedUser].matrixPosition.status = 'active';
     }
     
-    checkAndSplitMatrix(cellId);
-    res.json({ success: true, cellId, user: trimmedUser });
+    let chosenSponsor = uplineUser ? uplineUser.trim() : null;
+    if (!chosenSponsor) {
+        const availableSponsors = Object.keys(referalsDB);
+        chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
+    }
+
+    if (!referalsDB[trimmedUser]) {
+        referalsDB[trimmedUser] = chosenSponsor;
+    }
+    
+    lastRegisteredBot = trimmedUser; 
+
+    const occupiedCells = [];
+    for (let i = 0; i < count; i++) {
+        const cellId = findNextEmptyCell(treeDB);
+        treeDB[cellId].user = trimmedUser;
+        occupiedCells.push(cellId);
+        checkAndSplitMatrix(cellId);
+    }
+    
+    shopUsersDB[trimmedUser].isPaid = true;
+    shopUsersDB[trimmedUser].paymentDate = new Date().toISOString();
+    shopUsersDB[trimmedUser].matrixPosition.currentCellId = occupiedCells[0];
+    shopUsersDB[trimmedUser].matrixPosition.occupiedCells = occupiedCells;
+    shopUsersDB[trimmedUser].matrixPosition.status = 'active';
+    
+    res.json({ 
+        success: true, 
+        shopUserStatus: shopUsersDB[trimmedUser], 
+        cellId: occupiedCells[0],
+        occupiedCells 
+    });
 });
 
 app.post('/api/reset', (req, res) => {
@@ -326,8 +337,8 @@ app.post('/api/reset', (req, res) => {
 app.get('/api/user-details/:username', (req, res) => {
     const usernameParam = req.params.username.trim();
     const canonicalName = Object.keys(referalsDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                        || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                        || usernameParam;
+                         || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
+                         || usernameParam;
     
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
@@ -452,83 +463,6 @@ app.get('/api/get-referral-chain', (req, res) => {
 
     chain.reverse();
     res.json({ success: true, chain });
-});
-
-app.post('/api/shop/register', (req, res) => {
-    const { username, sponsor } = req.body;
-    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-    
-    const trimmedUser = username.trim();
-    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === trimmedUser.toLowerCase());
-    if (isExist) {
-        return res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser] || createNewUserCard(trimmedUser) });
-    }
-    
-    shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
-    
-    let chosenSponsor = sponsor ? sponsor.trim() : null;
-    if (!chosenSponsor) {
-        const availableSponsors = Object.keys(referalsDB);
-        chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
-    }
-
-    referalsDB[trimmedUser] = chosenSponsor;
-    lastRegisteredBot = trimmedUser; 
-
-    const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = trimmedUser;
-    
-    shopUsersDB[trimmedUser].isPaid = true;
-    shopUsersDB[trimmedUser].paymentDate = new Date().toISOString();
-    shopUsersDB[trimmedUser].matrixPosition.currentCellId = cellId;
-    shopUsersDB[trimmedUser].matrixPosition.status = 'active';
-    
-    checkAndSplitMatrix(cellId);
-    res.json({ success: true, shopUserStatus: shopUsersDB[trimmedUser], cellId });
-});
-
-app.post('/api/shop/pay', (req, res) => {
-    const { username } = req.body;
-    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-    
-    const canonicalName = Object.keys(shopUsersDB).find(k => k.toLowerCase() === username.trim().toLowerCase()) || username.trim();
-    const isExist = Object.values(treeDB).some(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase());
-    if (isExist) return res.status(400).json({ error: 'Пользователь уже занял место' });
-
-    const TOTAL_MITRONS = 1000;
-    const ADMIN_LOGISTICS = 450; 
-    const DAO_POOL = 550;        
-
-    if (!shopUsersDB[canonicalName]) {
-        shopUsersDB[canonicalName] = createNewUserCard(canonicalName);
-    }
-
-    shopUsersDB[canonicalName].isPaid = true;
-    shopUsersDB[canonicalName].paymentDate = new Date().toISOString();
-    shopUsersDB[canonicalName].balances.mitrons += TOTAL_MITRONS;
-    shopUsersDB[canonicalName].balances.usd = parseFloat(mitronsToUsd(shopUsersDB[canonicalName].balances.mitrons));
-
-    wallets.adminWallet.balanceMitrons += ADMIN_LOGISTICS;
-    wallets.daoWallet.balanceMitrons += DAO_POOL;
-
-    const cellId = findNextEmptyCell(treeDB);
-    treeDB[cellId].user = canonicalName;
-    
-    shopUsersDB[canonicalName].matrixPosition.currentCellId = cellId;
-    shopUsersDB[canonicalName].matrixPosition.status = 'active';
-
-    checkAndSplitMatrix(cellId);
-
-    res.json({
-        success: true,
-        shopUserStatus: shopUsersDB[canonicalName],
-        cellId,
-        split: {
-            totalMitrons: TOTAL_MITRONS,
-            adminLogistics: ADMIN_LOGISTICS,
-            daoPool: DAO_POOL
-        }
-    });
 });
 
 app.post('/api/admin/delete-user', (req, res) => {
