@@ -207,6 +207,12 @@ app.get('/api/admin/stats', (req, res) => {
     const adminLogins = allLogins.filter(l => l.toUpperCase().includes('ADMIN') || l === 'SYSTEM_ROOT' || (shopUsersDB[l] && shopUsersDB[l].ownedByAdmin));
     const userLogins = allLogins.length - adminLogins.length;
 
+    // Исключаем системные логины (SYSTEM_ROOT, LEADER_*) и админские аккаунты из подсчета отказников
+    const refusedCount = users.filter(u => {
+        const isSystem = u.username === 'SYSTEM_ROOT' || u.username.startsWith('LEADER_');
+        return !u.isPaid && !isSystem && !u.ownedByAdmin;
+    }).length;
+
     res.json({
         success: true,
         stats: {
@@ -217,7 +223,7 @@ app.get('/api/admin/stats', (req, res) => {
             goodsBoughtM,
             goodsTotalM: goodsBoughtM,
             buyersCount,
-            refusedCount: users.filter(u => !u.isPaid).length,
+            refusedCount,
             cashbackPaid,
             referralsPaid,
             inReserve,
