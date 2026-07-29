@@ -110,6 +110,8 @@
         button:hover { background-color: #27ae60; }
         .btn-danger { background-color: #e74c3c; }
         .btn-danger:hover { background-color: #c0392b; }
+        .btn-admin { background-color: #8e44ad; }
+        .btn-admin:hover { background-color: #71368a; }
 
         /* === БЛОК УПРАВЛЕНИЯ ЗУМОМ === */
         .zoom-panel {
@@ -178,7 +180,6 @@
         }
 
         .profile-info p { margin: 8px 0; font-size: 16px; }
-        .balance-box { font-size: 22px; font-weight: bold; color: #4ade80; margin: 15px 0; }
 
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
@@ -279,9 +280,10 @@
 
     <div class="card">
         <h2>1. Просмотр карточки и Сейфов</h2>
-        <div class="form-group" style="display: flex; gap: 10px;">
-            <input type="text" id="search-username-input" placeholder="Введите логин для поиска...">
+        <div class="form-group" style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="text" id="search-username-input" placeholder="Введите логин для поиска..." style="flex: 1; min-width: 200px;">
             <button id="search-profile-btn">Найти</button>
+            <button class="btn-admin" onclick="showAdminLoginsList()">👑 Логины Администратора</button>
         </div>
         
         <div class="profile-info">
@@ -290,13 +292,6 @@
             <p>Статус оплаты: <span id="profile-status">—</span></p>
             
             <div id="profile-upline-chain"></div>
-
-            <div class="balance-box">
-                Баланс: <span id="balance-mitrons">0 Mitrons</span> 
-                <span id="balance-usd" style="font-size: 14px; color: #a0a0ab;">($0.00)</span>
-            </div>
-            
-            <button onclick="payCertificate()">Активировать пакет (1000 Mitrons / $130)</button>
         </div>
     </div>
 
@@ -326,8 +321,8 @@
     </div>
 </div>
 
-<script src="script.js?v=12"></script>
-<script src="matrix.js?v=12"></script>
-<script src="table.js?v=12"></script>
+<script src="script.js?v=13"></script>
+<script src="matrix.js?v=13"></script>
+<script src="table.js?v=13"></script>
 </body>
-            </html>
+</html>
