@@ -1,4 +1,9 @@
 /**
+ * Модуль хелперов и статики (Сайт 2)
+ * Проект: MITRON
+ */
+
+/**
  * Превращает индекс уровня/столбца в буквенное обозначение по аналогии с Excel:
  * 0 -> A, 1 -> B ... 25 -> Z, 26 -> AA, 27 -> AB и т.д.
  */
@@ -32,7 +37,7 @@ function cellIdToGlobalIndex(cellId) {
 }
 
 /**
- * Конвертация внутренних баллов (Mitrons) в USD по курсу
+ * Конвертация внутренних баллов (Mitrons) в USD по курсу (1000 M = $130 USD)
  */
 function mitronsToUsd(mitrons) {
     const RATE = 130 / 1000;
@@ -40,21 +45,29 @@ function mitronsToUsd(mitrons) {
 }
 
 /**
- * Создание новой базовой карточки пользователя
+ * Создание расширенной базовой карточки пользователя (поддержка 31-дневных резервов)
  */
 function createNewUserCard(username) {
     return {
         username: username,
         isPaid: false,
         paymentDate: null,
+        isBlocked: false,
+        ownedByAdmin: false,
+        payoutsSuspended: false,
         balances: {
             mitrons: 0,
             usd: 0
         },
         matrixPosition: {
             currentCellId: null,
-            status: 'inactive'
-        }
+            occupiedCells: [],
+            status: 'inactive', // inactive -> active -> payout_pending -> completed
+            reservedPerCell: 0,  // 250 M с каждой ячейки
+            reservedMatrixM: 0,  // 1000 M при закрытии 4 ячеек
+            payoutEligibleDate: null // Дата разблокировки через 31 день
+        },
+        pendingReferralRewards: [] // Резерв рефералок: [{ fromUser, amount, level, unlockDate, status }]
     };
 }
 
@@ -68,7 +81,7 @@ function createInitialWallets() {
             balanceMitrons: 0
         },
         daoWallet: {
-            name: 'DAO Пул (Фонд развития)',
+            name: 'DAO Пул (Фонд развития и Резерв)',
             balanceMitrons: 0
         }
     };
