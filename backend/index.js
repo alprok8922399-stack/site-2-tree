@@ -1,3 +1,8 @@
+/**
+ * Ядро сервера (Сайт 2 — Матрицы и Таблица)
+ * Проект: MITRON
+ */
+
 const express = require('express');
 const cors = require('cors');
 const app = express();
@@ -46,6 +51,38 @@ let treeDB = createInitialTree();
 let activeMatricesList = ['A1']; // Список верхушек активных матриц
 
 /**
+ * Расчет 31-дневного реферального резерва в Таблице (50, 10, 10 M)
+ */
+function processTableReferrals(username) {
+    let current = referalsDB[username];
+    const referralRates = [50, 10, 10]; // 1-й лидер: 50M, 2-й: 10M, 3-й: 10M
+    const unlockDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+
+    for (let i = 0; i < referralRates.length; i++) {
+        if (!current) break;
+        
+        if (!shopUsersDB[current]) {
+            shopUsersDB[current] = createNewUserCard(current);
+        }
+
+        if (!shopUsersDB[current].pendingReferralRewards) {
+            shopUsersDB[current].pendingReferralRewards = [];
+        }
+
+        // Записываем резерв со сроком выдержки 31 день
+        shopUsersDB[current].pendingReferralRewards.push({
+            fromUser: username,
+            amount: referralRates[i],
+            level: i + 1,
+            unlockDate: unlockDate,
+            status: 'reserved' // reserved -> ready -> paid
+        });
+
+        current = referalsDB[current];
+    }
+}
+
+/**
  * Алгоритм поиска свободной ячейки и деления матриц
  */
 function findNextEmptyCell(tree) {
@@ -83,7 +120,7 @@ function findNextEmptyCell(tree) {
     }
 }
 
-// Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек
+// Проверка и вызов деления при заполнении 4 нижних ячеек (запуск 31-дневного таймера кешбэка)
 function checkAndSplitMatrix(cellId) {
     const gIdx = cellIdToGlobalIndex(cellId);
     const parentGIdx = Math.floor((gIdx - 1) / 2);
@@ -110,6 +147,7 @@ function checkAndSplitMatrix(cellId) {
     const c3 = getCellByGIdx(c3G);
     const c4 = getCellByGIdx(c4G);
 
+    // Заполнение 4 нижних ячеек
     if (c1 && c1.user && c2 && c2.user && c3 && c3.user && c4 && c4.user) {
         const topCell = getCellByGIdx(topGIdx);
         const b1Cell = getCellByGIdx(b1G);
@@ -117,7 +155,10 @@ function checkAndSplitMatrix(cellId) {
 
         if (topCell && topCell.user) {
             if (shopUsersDB[topCell.user]) {
+                // Статус ожидания 31-дневного отказного периода для кешбэка 1000 M
                 shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
+                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+                shopUsersDB[topCell.user].matrixPosition.reservedMatrixM = 1000; // 4 * 250 M
             }
         }
 
@@ -158,7 +199,7 @@ app.get('/api/admin/stats', (req, res) => {
 
     // Выплаты и резервы
     const cashbackPaid = paidUsers.filter(u => u.matrixPosition && u.matrixPosition.status === 'payout_pending').length * 1000;
-    const referralsPaid = Math.floor(totalIncomeM * 0.07); // 70 M на реферала (7%)
+    const referralsPaid = buyersCount * 70; // 70 M на реферальную цепочку (50+10+10)
     const inReserve = wallets.daoWallet.balanceMitrons || (buyersCount * 250);
     const netProfit = totalIncomeM - goodsBoughtM - cashbackPaid - referralsPaid;
 
@@ -274,7 +315,7 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-// Регистрация с поддержкой количества ячеек (мультипокупка)
+// Регистрация с поддержкой мультипокупки (1-5 ячеек) и распределения 31-дневных резервов
 app.post('/api/shop/register', (req, res) => {
     const { username, uplineUser, cellsCount = 1, amountMitrons = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -305,12 +346,16 @@ app.post('/api/shop/register', (req, res) => {
         occupiedCells.push(cellId);
         checkAndSplitMatrix(cellId);
     }
+
+    // Обработка 31-дневных реферальных выплат по Таблице (50, 10, 10 M)
+    processTableReferrals(trimmedUser);
     
     shopUsersDB[trimmedUser].isPaid = true;
     shopUsersDB[trimmedUser].paymentDate = new Date().toISOString();
     shopUsersDB[trimmedUser].matrixPosition.currentCellId = occupiedCells[0];
     shopUsersDB[trimmedUser].matrixPosition.occupiedCells = occupiedCells;
     shopUsersDB[trimmedUser].matrixPosition.status = 'active';
+    shopUsersDB[trimmedUser].matrixPosition.reservedPerCell = 250; // 250 M в резерв Матрицы с каждой ячейки
     
     res.json({ 
         success: true, 
