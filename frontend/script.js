@@ -247,9 +247,18 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 }
             }
             
-            const mitronsBalance = data.profile.balances ? data.profile.balances.mitrons : 0;
-            setElementText('balance-mitrons', `${mitronsBalance} Mitrons`);
-            setElementText('balance-usd', `$${convertMitronsToUsd(mitronsBalance)}`);
+            // --- 3 КОШЕЛЬКА БАЛАНСА ---
+            const balances = data.profile.balances || {};
+            const cleanWithdraw = balances.cleanWithdraw || balances.mitrons || 0;
+            const payoutReserve = balances.payoutReserve || 0;
+            const transitBuffer = balances.transitBuffer || 0;
+
+            setElementText('balance-mitrons', `${cleanWithdraw} M (Вывод) | ${payoutReserve} M (Резерв) | ${transitBuffer} M (Буфер)`);
+            setElementText('balance-usd', `$${convertMitronsToUsd(cleanWithdraw)}`);
+
+            setElementText('balance-clean-withdraw', `${cleanWithdraw} M`);
+            setElementText('balance-payout-reserve', `${payoutReserve} M`);
+            setElementText('balance-transit-buffer', `${transitBuffer} M`);
             
             // --- ОБРАТНЫЙ СПИСОК СПОНСОРОВ (UPLINE TRACKING) ---
             const uplineContainer = document.getElementById('profile-upline-chain');
