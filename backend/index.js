@@ -200,8 +200,8 @@ app.get('/api/admin/stats', (req, res) => {
     // Выплаты и резервы
     const cashbackPaid = paidUsers.filter(u => u.matrixPosition && u.matrixPosition.status === 'payout_pending').length * 1000;
     const referralsPaid = buyersCount * 70; // 70 M на реферальную цепочку (50+10+10)
-    const inReserve = wallets.daoWallet.balanceMitrons || (buyersCount * 250);
-    const netProfit = totalIncomeM - goodsBoughtM - cashbackPaid - referralsPaid;
+    const inReserve = wallets.payoutReserveWallet ? wallets.payoutReserveWallet.balanceMitrons : (buyersCount * 320);
+    const netProfit = wallets.adminProfitWallet ? wallets.adminProfitWallet.balanceMitrons : (totalIncomeM - goodsBoughtM - cashbackPaid - referralsPaid);
 
     const allLogins = Object.keys(referalsDB);
     const adminLogins = allLogins.filter(l => l.toUpperCase().includes('ADMIN') || l === 'SYSTEM_ROOT' || (shopUsersDB[l] && shopUsersDB[l].ownedByAdmin));
@@ -321,13 +321,28 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-// Регистрация с поддержкой мультипокупки (1-5 ячеек) и распределения 31-дневных резервов
+// Регистрация с поддержкой мультипокупки (1-5 ячеек) и транзитной обработкой через 3 кошелька
 app.post('/api/shop/register', (req, res) => {
     const { username, uplineUser, cellsCount = 1, amountMitrons = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const trimmedUser = username.trim();
     const count = Math.min(Math.max(parseInt(cellsCount) || 1, 1), 5); // от 1 до 5 ячеек
+    const totalAmount = count * 1000;
+
+    // --- ТРАНЗИТНАЯ ЛОГИКА 3-Х КОШЕЛЬКОВ ---
+    // 1. Приход средств в Транзитный Буфер
+    wallets.bufferWallet.balanceMitrons += totalAmount;
+
+    // 2. Распределение из Буфера по назначениям
+    const reserveForPayouts = count * (250 + 70); // 250 M (Матрица) + 70 M (Рефералка 50+10+10)
+    const adminProfit = totalAmount - reserveForPayouts; // Чистая прибыль админа
+
+    wallets.payoutReserveWallet.balanceMitrons += reserveForPayouts;
+    wallets.adminProfitWallet.balanceMitrons += adminProfit;
+
+    // 3. Мгновенное списание из Буфера (Буфер остается 0)
+    wallets.bufferWallet.balanceMitrons = 0;
 
     if (!shopUsersDB[trimmedUser]) {
         shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
@@ -367,7 +382,8 @@ app.post('/api/shop/register', (req, res) => {
         success: true, 
         shopUserStatus: shopUsersDB[trimmedUser], 
         cellId: occupiedCells[0],
-        occupiedCells 
+        occupiedCells,
+        walletsState: wallets
     });
 });
 
