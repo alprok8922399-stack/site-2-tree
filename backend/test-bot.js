@@ -6,19 +6,22 @@
 const http = require('http');
 
 const BATCH_SIZE = 50; // Количество ботов для генерации
-const API_URL = 'http://localhost:5000/api/shop/pay';
-const SECRET_KEY = process.env.INTERNAL_SECRET_KEY || 'super_secret_mitron_key_2026';
+const API_URL = 'http://localhost:5000/api/shop/register';
 
-async function sendRequest(username, sponsor) {
+async function sendRequest(username, uplineUser) {
     return new Promise((resolve, reject) => {
-        const data = JSON.stringify({ username, sponsor, amount: 1000 });
+        const data = JSON.stringify({ 
+            username, 
+            uplineUser, 
+            cellsCount: 1, 
+            amountMitrons: 1000 
+        });
         
         const req = http.request(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(data),
-                'x-internal-key': SECRET_KEY
+                'Content-Length': Buffer.byteLength(data)
             }
         }, (res) => {
             let body = '';
