@@ -72,17 +72,27 @@ function createNewUserCard(username) {
 }
 
 /**
- * Инициализация системных кошельков
+ * Инициализация 3-х системных кошельков
  */
 function createInitialWallets() {
     return {
-        adminWallet: {
-            name: 'Административный кошелек (Логистика / Товар)',
-            balanceMitrons: 0
+        adminProfitWallet: {
+            id: 'admin_profit',
+            name: 'Кошелек Администратора (Моя Чистая Прибыль)',
+            balanceMitrons: 0,
+            hasFullAccess: true
         },
-        daoWallet: {
-            name: 'DAO Пул (Фонд развития и Резерв)',
-            balanceMitrons: 0
+        payoutReserveWallet: {
+            id: 'payout_reserve',
+            name: 'Выплатной Кошелек (250 M Резерв + 70 M Рефералка + DAO)',
+            balanceMitrons: 0,
+            hasFullAccess: true
+        },
+        bufferWallet: {
+            id: 'buffer_transient',
+            name: 'Буферный Кошелек (Транзитный / Всегда 0)',
+            balanceMitrons: 0,
+            hasFullAccess: true
         }
     };
 }
