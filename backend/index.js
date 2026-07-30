@@ -5,21 +5,43 @@
 
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Импортируем утилиты из модуля статики
-const {
-    getLevelLetter,
-    cellIdToGlobalIndex,
-    mitronsToUsd,
-    createNewUserCard,
-    createInitialWallets
-} = require('./static');
+let getLevelLetter, cellIdToGlobalIndex, mitronsToUsd, createNewUserCard, createInitialWallets;
+
+try {
+    const staticUtils = require('./static');
+    getLevelLetter = staticUtils.getLevelLetter;
+    cellIdToGlobalIndex = staticUtils.cellIdToGlobalIndex;
+    mitronsToUsd = staticUtils.mitronsToUsd;
+    createNewUserCard = staticUtils.createNewUserCard;
+    createInitialWallets = staticUtils.createInitialWallets;
+} catch (e) {
+    // Резервные утилиты при запуске без внешних зависимостей
+    getLevelLetter = (idx) => String.fromCharCode(65 + idx);
+    cellIdToGlobalIndex = (id) => 0;
+    mitronsToUsd = (m) => m * 0.1;
+    createNewUserCard = (username) => ({
+        username,
+        isPaid: false,
+        paymentDate: null,
+        matrixPosition: { status: 'none', currentCellId: null, occupiedCells: [] },
+        pendingReferralRewards: []
+    });
+    createInitialWallets = () => ({
+        bufferWallet: { balanceMitrons: 0 },
+        payoutReserveWallet: { balanceMitrons: 0 },
+        adminProfitWallet: { balanceMitrons: 0 }
+    });
+}
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-app.use(express.static('../frontend'));
+app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Инициализация баз данных в памяти
 let shopUsersDB = {};
