@@ -1,20 +1,47 @@
+/**
+ * Ядро сервера (Сайт 2 — Матрицы и Таблица)
+ * Проект: MITRON
+ */
+
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Импортируем утилиты из модуля статики
-const {
-    getLevelLetter,
-    cellIdToGlobalIndex,
-    mitronsToUsd,
-    createNewUserCard,
-    createInitialWallets
-} = require('./static');
+let getLevelLetter, cellIdToGlobalIndex, mitronsToUsd, createNewUserCard, createInitialWallets;
+
+try {
+    const staticUtils = require('./static');
+    getLevelLetter = staticUtils.getLevelLetter;
+    cellIdToGlobalIndex = staticUtils.cellIdToGlobalIndex;
+    mitronsToUsd = staticUtils.mitronsToUsd;
+    createNewUserCard = staticUtils.createNewUserCard;
+    createInitialWallets = staticUtils.createInitialWallets;
+} catch (e) {
+    // Резервные утилиты при запуске без внешних зависимостей
+    getLevelLetter = (idx) => String.fromCharCode(65 + idx);
+    cellIdToGlobalIndex = (id) => 0;
+    mitronsToUsd = (m) => m * 0.1;
+    createNewUserCard = (username) => ({
+        username,
+        isPaid: false,
+        paymentDate: null,
+        matrixPosition: { status: 'none', currentCellId: null, occupiedCells: [] },
+        pendingReferralRewards: []
+    });
+    createInitialWallets = () => ({
+        bufferWallet: { balanceMitrons: 0 },
+        payoutReserveWallet: { balanceMitrons: 0 },
+        adminProfitWallet: { balanceMitrons: 0 }
+    });
+}
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-app.use(express.static('../frontend'));
+app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Инициализация баз данных в памяти
 let shopUsersDB = {};
@@ -44,6 +71,38 @@ function createInitialTree() {
 
 let treeDB = createInitialTree();
 let activeMatricesList = ['A1']; // Список верхушек активных матриц
+
+/**
+ * Расчет 31-дневного реферального резерва в Таблице (50, 10, 10 M)
+ */
+function processTableReferrals(username) {
+    let current = referalsDB[username];
+    const referralRates = [50, 10, 10]; // 1-й лидер: 50M, 2-й: 10M, 3-й: 10M
+    const unlockDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+
+    for (let i = 0; i < referralRates.length; i++) {
+        if (!current) break;
+        
+        if (!shopUsersDB[current]) {
+            shopUsersDB[current] = createNewUserCard(current);
+        }
+
+        if (!shopUsersDB[current].pendingReferralRewards) {
+            shopUsersDB[current].pendingReferralRewards = [];
+        }
+
+        // Записываем резерв со сроком выдержки 31 день
+        shopUsersDB[current].pendingReferralRewards.push({
+            fromUser: username,
+            amount: referralRates[i],
+            level: i + 1,
+            unlockDate: unlockDate,
+            status: 'reserved' // reserved -> ready -> paid
+        });
+
+        current = referalsDB[current];
+    }
+}
 
 /**
  * Алгоритм поиска свободной ячейки и деления матриц
@@ -83,7 +142,7 @@ function findNextEmptyCell(tree) {
     }
 }
 
-// Проверка и вызов деления при заполнении нижнего ряда из 4 ячеек
+// Проверка и вызов деления при заполнении 4 нижних ячеек (запуск 31-дневного таймера кешбэка)
 function checkAndSplitMatrix(cellId) {
     const gIdx = cellIdToGlobalIndex(cellId);
     const parentGIdx = Math.floor((gIdx - 1) / 2);
@@ -110,6 +169,7 @@ function checkAndSplitMatrix(cellId) {
     const c3 = getCellByGIdx(c3G);
     const c4 = getCellByGIdx(c4G);
 
+    // Заполнение 4 нижних ячеек
     if (c1 && c1.user && c2 && c2.user && c3 && c3.user && c4 && c4.user) {
         const topCell = getCellByGIdx(topGIdx);
         const b1Cell = getCellByGIdx(b1G);
@@ -117,7 +177,10 @@ function checkAndSplitMatrix(cellId) {
 
         if (topCell && topCell.user) {
             if (shopUsersDB[topCell.user]) {
+                // Статус ожидания 31-дневного отказного периода для кешбэка 1000 M
                 shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
+                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+                shopUsersDB[topCell.user].matrixPosition.reservedMatrixM = 1000; // 4 * 250 M
             }
         }
 
@@ -153,18 +216,31 @@ app.get('/api/admin/stats', (req, res) => {
     });
 
     const buyersCount = paidUsers.length;
-    const goodsBoughtM = buyersCount * 450;
     const totalIncomeM = buyersCount * 1000;
+    const goodsBoughtM = buyersCount * 450; // Товар на стороннем МП (450 M)
 
-    // Выплаты и резервы
+    // Выплаты и резервы по формуле:
+    // Обязательства: 450 M (товар) + 250 M (резерв в матрицу) + 70 M (рефералка 50+10+10) = 770 M
+    // Базовый остаток = 1000 M - 770 M = 230 M
+    // Фонд DAO (10% от остатка) = 23 M
+    // Чистая прибыль админа = 230 M - 23 M = 207 M (20.7%)
+    const matrixReserve = buyersCount * 250;
+    const referralsPaid = buyersCount * 70;
+    const daoFund = buyersCount * 23;
+    const netProfit = buyersCount * 207;
+
     const cashbackPaid = paidUsers.filter(u => u.matrixPosition && u.matrixPosition.status === 'payout_pending').length * 1000;
-    const referralsPaid = Math.floor(totalIncomeM * 0.07); // 70 M на реферала (7%)
-    const inReserve = wallets.daoWallet.balanceMitrons || (buyersCount * 250);
-    const netProfit = totalIncomeM - goodsBoughtM - cashbackPaid - referralsPaid;
+    const inReserve = matrixReserve + referralsPaid; // Общий резерв на выплаты (320 M на каждого покупателя)
 
     const allLogins = Object.keys(referalsDB);
     const adminLogins = allLogins.filter(l => l.toUpperCase().includes('ADMIN') || l === 'SYSTEM_ROOT' || (shopUsersDB[l] && shopUsersDB[l].ownedByAdmin));
     const userLogins = allLogins.length - adminLogins.length;
+
+    // Исключаем системные логины (SYSTEM_ROOT, LEADER_*) и админские аккаунты из подсчета отказников
+    const refusedCount = users.filter(u => {
+        const isSystem = u.username === 'SYSTEM_ROOT' || u.username.startsWith('LEADER_');
+        return !u.isPaid && !isSystem && !u.ownedByAdmin;
+    }).length;
 
     res.json({
         success: true,
@@ -176,11 +252,12 @@ app.get('/api/admin/stats', (req, res) => {
             goodsBoughtM,
             goodsTotalM: goodsBoughtM,
             buyersCount,
-            refusedCount: users.filter(u => !u.isPaid).length,
+            refusedCount,
             cashbackPaid,
             referralsPaid,
             inReserve,
-            netProfit: netProfit > 0 ? netProfit : 0,
+            netProfit,
+            daoFund,
             totalLogins: allLogins.length,
             adminLogins: adminLogins.length,
             userLogins
@@ -274,13 +351,28 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-// Регистрация с поддержкой количества ячеек (мультипокупка)
+// Регистрация с поддержкой мультипокупки (1-5 ячеек) и транзитной обработкой через 3 кошелька
 app.post('/api/shop/register', (req, res) => {
     const { username, uplineUser, cellsCount = 1, amountMitrons = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const trimmedUser = username.trim();
     const count = Math.min(Math.max(parseInt(cellsCount) || 1, 1), 5); // от 1 до 5 ячеек
+    const totalAmount = count * 1000;
+
+    // --- ТРАНЗИТНАЯ ЛОГИКА 3-Х КОШЕЛЬКОВ ---
+    // 1. Приход средств в Транзитный Буфер
+    wallets.bufferWallet.balanceMitrons += totalAmount;
+
+    // 2. Распределение из Буфера по назначениям
+    const reserveForPayouts = count * (250 + 70); // 250 M (Матрица) + 70 M (Рефералка 50+10+10)
+    const adminProfit = totalAmount - reserveForPayouts; // Чистая прибыль админа + товар
+
+    wallets.payoutReserveWallet.balanceMitrons += reserveForPayouts;
+    wallets.adminProfitWallet.balanceMitrons += adminProfit;
+
+    // 3. Мгновенное списание из Буфера (Буфер остается 0)
+    wallets.bufferWallet.balanceMitrons = 0;
 
     if (!shopUsersDB[trimmedUser]) {
         shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
@@ -305,18 +397,23 @@ app.post('/api/shop/register', (req, res) => {
         occupiedCells.push(cellId);
         checkAndSplitMatrix(cellId);
     }
+
+    // Обработка 31-дневных реферальных выплат по Таблице (50, 10, 10 M)
+    processTableReferrals(trimmedUser);
     
     shopUsersDB[trimmedUser].isPaid = true;
     shopUsersDB[trimmedUser].paymentDate = new Date().toISOString();
     shopUsersDB[trimmedUser].matrixPosition.currentCellId = occupiedCells[0];
     shopUsersDB[trimmedUser].matrixPosition.occupiedCells = occupiedCells;
     shopUsersDB[trimmedUser].matrixPosition.status = 'active';
+    shopUsersDB[trimmedUser].matrixPosition.reservedPerCell = 250; // 250 M в резерв Матрицы с каждой ячейки
     
     res.json({ 
         success: true, 
         shopUserStatus: shopUsersDB[trimmedUser], 
         cellId: occupiedCells[0],
-        occupiedCells 
+        occupiedCells,
+        walletsState: wallets
     });
 });
 
