@@ -33,6 +33,7 @@ async function loadAdminStats() {
             // Внешние закупки и статистика покупателей
             setElementText('stat-goods-bought-m', `${s.goodsBoughtM || 0} M`);
             setElementText('stat-buyers-count', `${s.buyersCount || 0} чел.`);
+            setElementText('stat-refused-today-count', `${s.refusedTodayCount || s.refusedToday || 0} чел.`);
             setElementText('stat-refused-count', `${s.refusedCount || 0} чел.`);
 
             // Выплаты, резервы, Фонд DAO (23 M с 1000 M) и Чистая прибыль
@@ -167,8 +168,6 @@ async function payCertificate() {
         const result = await response.json();
         
         if (result.success) {
-            // Точный расчёт по регламенту ТЗ (при сумме 1000 M):
-            // Выкуп: 450 M | Резерв Лидеру: 250 M | Реферальные: 70 M | Остаток: 230 M | DAO (10%): 23 M | Чистая прибыль: 207 M
             const split = result.split || {};
             const goodsCost = split.adminLogistics || 450;
             const daoFund = split.daoPool || 23;
