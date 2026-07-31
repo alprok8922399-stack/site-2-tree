@@ -216,14 +216,21 @@ app.get('/api/admin/stats', (req, res) => {
     });
 
     const buyersCount = paidUsers.length;
-    const goodsBoughtM = buyersCount * 450;
     const totalIncomeM = buyersCount * 1000;
+    const goodsBoughtM = buyersCount * 450; // Товар на стороннем МП (450 M)
 
-    // Выплаты и резервы
+    // Выплаты и резервы по формуле:
+    // Обязательства: 450 M (товар) + 250 M (резерв в матрицу) + 70 M (рефералка 50+10+10) = 770 M
+    // Базовый остаток = 1000 M - 770 M = 230 M
+    // Фонд DAO (10%) = 23 M
+    // Чистая прибыль админа = 230 M - 23 M = 207 M (20.7%)
+    const matrixReserve = buyersCount * 250;
+    const referralsPaid = buyersCount * 70;
+    const daoFund = buyersCount * 23;
+    const netProfit = buyersCount * 207;
+
     const cashbackPaid = paidUsers.filter(u => u.matrixPosition && u.matrixPosition.status === 'payout_pending').length * 1000;
-    const referralsPaid = buyersCount * 70; // 70 M на реферальную цепочку (50+10+10)
-    const inReserve = wallets.payoutReserveWallet ? wallets.payoutReserveWallet.balanceMitrons : (buyersCount * 320);
-    const netProfit = wallets.adminProfitWallet ? wallets.adminProfitWallet.balanceMitrons : (totalIncomeM - goodsBoughtM - cashbackPaid - referralsPaid);
+    const inReserve = matrixReserve + referralsPaid; // Общий резерв на выплаты (320 M на каждого покупателя)
 
     const allLogins = Object.keys(referalsDB);
     const adminLogins = allLogins.filter(l => l.toUpperCase().includes('ADMIN') || l === 'SYSTEM_ROOT' || (shopUsersDB[l] && shopUsersDB[l].ownedByAdmin));
@@ -249,7 +256,8 @@ app.get('/api/admin/stats', (req, res) => {
             cashbackPaid,
             referralsPaid,
             inReserve,
-            netProfit: netProfit > 0 ? netProfit : 0,
+            netProfit,
+            daoFund,
             totalLogins: allLogins.length,
             adminLogins: adminLogins.length,
             userLogins
@@ -358,7 +366,7 @@ app.post('/api/shop/register', (req, res) => {
 
     // 2. Распределение из Буфера по назначениям
     const reserveForPayouts = count * (250 + 70); // 250 M (Матрица) + 70 M (Рефералка 50+10+10)
-    const adminProfit = totalAmount - reserveForPayouts; // Чистая прибыль админа
+    const adminProfit = totalAmount - reserveForPayouts; // Чистая прибыль админа + товар
 
     wallets.payoutReserveWallet.balanceMitrons += reserveForPayouts;
     wallets.adminProfitWallet.balanceMitrons += adminProfit;
