@@ -197,6 +197,14 @@ app.get('/api/admin/stats', (req, res) => {
     const users = Object.values(shopUsersDB);
     const paidUsers = users.filter(u => u.isPaid);
 
+    // Вся занятая сетка ячеек за исключением системных аккаунтов (SYSTEM_ROOT, LEADER_1, LEADER_2)
+    const paidCells = Object.values(treeDB).filter(cell => {
+        return cell.user && cell.user !== 'SYSTEM_ROOT' && !cell.user.startsWith('LEADER_');
+    });
+
+    const purchasesCount = paidCells.length; // Общее количество выкупленных ячеек/покупок
+    const totalIncomeM = purchasesCount * 1000;
+
     const now = new Date();
     const oneDay = 24 * 60 * 60 * 1000;
     const oneWeek = 7 * oneDay;
@@ -206,37 +214,35 @@ app.get('/api/admin/stats', (req, res) => {
     let incomeWeek = 0;
     let incomeMonth = 0;
 
+    // Расчет временных интервалов по дате оплаты пользователей
     paidUsers.forEach(u => {
         const pDate = u.paymentDate ? new Date(u.paymentDate) : now;
         const diff = now - pDate;
+        const userCellsCount = (u.matrixPosition && u.matrixPosition.occupiedCells) ? u.matrixPosition.occupiedCells.length : 1;
+        const userSum = userCellsCount * 1000;
         
-        if (diff <= oneDay) incomeToday += 1000;
-        if (diff <= oneWeek) incomeWeek += 1000;
-        if (diff <= oneMonth) incomeMonth += 1000;
+        if (diff <= oneDay) incomeToday += userSum;
+        if (diff <= oneWeek) incomeWeek += userSum;
+        if (diff <= oneMonth) incomeMonth += userSum;
     });
 
-    const buyersCount = paidUsers.length;
-    const totalIncomeM = buyersCount * 1000;
-    const goodsBoughtM = buyersCount * 450; // Товар на стороннем МП (450 M)
+    // Уникальные покупатели
+    const buyersCount = paidUsers.filter(u => u.username !== 'SYSTEM_ROOT' && !u.username.startsWith('LEADER_')).length;
+    const goodsBoughtM = purchasesCount * 450; // Товар на стороннем МП (450 M за каждую покупку)
 
-    // Выплаты и резервы по формуле:
-    // Обязательства: 450 M (товар) + 250 M (резерв в матрицу) + 70 M (рефералка 50+10+10) = 770 M
-    // Базовый остаток = 1000 M - 770 M = 230 M
-    // Фонд DAO (10% от остатка) = 23 M
-    // Чистая прибыль админа = 230 M - 23 M = 207 M (20.7%)
-    const matrixReserve = buyersCount * 250;
-    const referralsPaid = buyersCount * 70;
-    const daoFund = buyersCount * 23;
-    const netProfit = buyersCount * 207;
+    const matrixReserve = purchasesCount * 250;
+    const referralsPaid = purchasesCount * 70;
+    const daoFund = purchasesCount * 23;
+    const netProfit = purchasesCount * 207;
 
     const cashbackPaid = paidUsers.filter(u => u.matrixPosition && u.matrixPosition.status === 'payout_pending').length * 1000;
-    const inReserve = matrixReserve + referralsPaid; // Общий резерв на выплаты (320 M на каждого покупателя)
+    const inReserve = matrixReserve + referralsPaid; // Общий резерв на выплаты
 
     const allLogins = Object.keys(referalsDB);
     const adminLogins = allLogins.filter(l => l.toUpperCase().includes('ADMIN') || l === 'SYSTEM_ROOT' || (shopUsersDB[l] && shopUsersDB[l].ownedByAdmin));
     const userLogins = allLogins.length - adminLogins.length;
 
-    // Исключаем системные логины (SYSTEM_ROOT, LEADER_*) и админские аккаунты из подсчета отказников
+    // Исключаем системные логины из подсчета отказников
     const refusedCount = users.filter(u => {
         const isSystem = u.username === 'SYSTEM_ROOT' || u.username.startsWith('LEADER_');
         return !u.isPaid && !isSystem && !u.ownedByAdmin;
