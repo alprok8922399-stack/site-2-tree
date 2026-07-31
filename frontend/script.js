@@ -36,7 +36,7 @@ async function loadAdminStats() {
             setElementText('stat-refused-today-count', `${s.refusedTodayCount || s.refusedToday || 0} чел.`);
             setElementText('stat-refused-count', `${s.refusedCount || 0} чел.`);
 
-            // Выплаты, резервы, Фонд DAO (23 M с 1000 M) и Чистая прибыль
+            // Выплаты, резервы, Фонд DAO и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
             setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
             setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
@@ -199,6 +199,33 @@ async function payCertificate() {
     }
 }
 
+// === ФУНКЦИЯ ОТКАЗА ОТ ПОКУПКИ ===
+async function cancelPurchase(username) {
+    if (!confirm(`Вы уверены, что хотите оформить возврат/отказ от покупки для ${username}?`)) return;
+
+    try {
+        const response = await fetch(`${API_URL}/api/shop/refuse`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Отказ обработан! Ячейка ${username} передана Администратору.`);
+            loadUserProfile(username);
+            if (typeof window.renderMatrixTree === 'function') {
+                window.renderMatrixTree();
+            }
+            loadAdminStats();
+        } else {
+            alert(`Ошибка: ${result.error || 'Не удалось выполнить отказ'}`);
+        }
+    } catch (error) {
+        console.error('Ошибка отказа от покупки:', error);
+    }
+}
+
 // === 3. ИНФО-КАРТОЧКА ПОЛЬЗОВАТЕЛЯ И UPLINE TRACKING ===
 
 function getProfileModalElement() {
@@ -256,7 +283,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 }
             }
             
-            // --- 3 КОШЕЛЬКА СУБЪЕКТА (Администрация / Выплатной / Буфер) ---
+            // --- 3 КОШЕЛЬКА СУБЪЕКТА ---
             const balances = data.profile.balances || {};
             const cleanWithdraw = balances.cleanWithdraw || balances.mitrons || 0;
             const payoutReserve = balances.payoutReserve || 0;
@@ -269,6 +296,9 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             setElementText('balance-payout-reserve', `${payoutReserve} M`);
             setElementText('balance-transit-buffer', `${transitBuffer} M`);
             
+            // --- ДИНАМИЧЕСКАЯ КНОПКА "ОТКАЗАТЬСЯ ОТ ПОКУПКИ" ---
+            renderCancelPurchaseButton(data.username, data.profile.isPaid);
+
             // --- ОБРАТНЫЙ СПИСОК СПОНСОРОВ (UPLINE TRACKING) ---
             const uplineContainer = document.getElementById('profile-upline-chain');
             if (uplineContainer) {
@@ -327,6 +357,35 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
         }
     } catch (error) {
         console.error('Ошибка загрузки профиля:', error);
+    }
+}
+
+// Отрисовка кнопки отказа от покупки в карточке
+function renderCancelPurchaseButton(username, isPaid) {
+    let container = document.getElementById('profile-actions-container');
+    if (!container) {
+        const modal = getProfileModalElement();
+        if (modal) {
+            container = modal.querySelector('.modal-body') || modal.querySelector('.card-body') || modal;
+        }
+    }
+
+    let cancelBtn = document.getElementById('cancel-purchase-btn');
+    if (!cancelBtn && container) {
+        cancelBtn = document.createElement('button');
+        cancelBtn.id = 'cancel-purchase-btn';
+        cancelBtn.style.cssText = 'margin-top: 12px; width: 100%; padding: 8px 12px; background: #e74c3c; border: none; color: #fff; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 13px;';
+        container.appendChild(cancelBtn);
+    }
+
+    if (cancelBtn) {
+        if (isPaid) {
+            cancelBtn.style.display = 'block';
+            cancelBtn.innerText = '🚫 Отказаться от покупки';
+            cancelBtn.onclick = () => cancelPurchase(username);
+        } else {
+            cancelBtn.style.display = 'none';
+        }
     }
 }
 
@@ -450,6 +509,7 @@ async function resetSystem() {
 window.showUserCard = loadUserProfile;
 window.closeUserCard = closeUserProfileCard;
 window.filterLoginsByDate = filterLoginsByDate;
+window.cancelPurchase = cancelPurchase;
 window.focusMatrixOnUser = (login) => {
     if (typeof window.searchMatrixUser === 'function') {
         window.searchMatrixUser(login);
