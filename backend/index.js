@@ -214,16 +214,15 @@ app.get('/api/admin/stats', (req, res) => {
     let incomeWeek = 0;
     let incomeMonth = 0;
 
-    // Расчет временных интервалов по дате оплаты пользователей
-    paidUsers.forEach(u => {
-        const pDate = u.paymentDate ? new Date(u.paymentDate) : now;
+    // Расчет временных интервалов по каждой оплаченной ячейке
+    paidCells.forEach(cell => {
+        const user = shopUsersDB[cell.user];
+        const pDate = (user && user.paymentDate) ? new Date(user.paymentDate) : now;
         const diff = now - pDate;
-        const userCellsCount = (u.matrixPosition && u.matrixPosition.occupiedCells) ? u.matrixPosition.occupiedCells.length : 1;
-        const userSum = userCellsCount * 1000;
         
-        if (diff <= oneDay) incomeToday += userSum;
-        if (diff <= oneWeek) incomeWeek += userSum;
-        if (diff <= oneMonth) incomeMonth += userSum;
+        if (diff <= oneDay) incomeToday += 1000;
+        if (diff <= oneWeek) incomeWeek += 1000;
+        if (diff <= oneMonth) incomeMonth += 1000;
     });
 
     // Уникальные покупатели
