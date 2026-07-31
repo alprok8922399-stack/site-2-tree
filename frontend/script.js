@@ -30,12 +30,12 @@ async function loadAdminStats() {
             setElementText('stat-income-week', `${s.incomeWeek || 0} M`);
             setElementText('stat-income-month', `${s.incomeMonth || 0} M`);
 
-            // Внешние закупки (450 M) и статистика покупателей
+            // Внешние закупки и статистика покупателей
             setElementText('stat-goods-bought-m', `${s.goodsBoughtM || 0} M`);
             setElementText('stat-buyers-count', `${s.buyersCount || 0} чел.`);
             setElementText('stat-refused-count', `${s.refusedCount || 0} чел.`);
 
-            // Выплаты, резервы, Фонд DAO и Чистая прибыль
+            // Выплаты, резервы, Фонд DAO (23 M с 1000 M) и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
             setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
             setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
@@ -167,13 +167,23 @@ async function payCertificate() {
         const result = await response.json();
         
         if (result.success) {
+            // Точный расчёт по регламенту ТЗ (при сумме 1000 M):
+            // Выкуп: 450 M | Резерв Лидеру: 250 M | Реферальные: 70 M | Остаток: 230 M | DAO (10%): 23 M | Чистая прибыль: 207 M
+            const split = result.split || {};
+            const goodsCost = split.adminLogistics || 450;
+            const daoFund = split.daoPool || 23;
+            const netProfit = split.netProfit || 207;
+
             const splitInfo = `
 Активация успешна!
-Списано: ${result.split ? result.split.totalMitrons : 450} Митронов
+Списано: ${split.totalMitrons || 1000} Митронов
 -----------------------------------------
 Распределение:
-💸 Логистика / Товар: ${result.split ? result.split.adminLogistics : 405} Митронов
-🔒 DAO Пул: ${result.split ? result.split.daoPool : 45} Митронов
+💸 Закупка товара (сторонний МП): ${goodsCost} Митронов
+🔒 Резерв Лидеру в Матрицу (25%): 250 Митронов
+🤝 Реферальный резерв (50+10+10): 70 Митронов
+🛡️ Фонд DAO (10% от остатка): ${daoFund} Митронов
+💼 Чистая прибыль Админа: ${netProfit} Митронов
             `;
             alert(splitInfo);
             
@@ -229,7 +239,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                     
                     statusEl.innerText = `Оплачен (${diffDays} дн.)`;
-                    if (diffDays > 30) {
+                    if (diffDays > 31) {
                         statusEl.style.backgroundColor = '#d9534f';
                         statusEl.style.color = '#ffffff';
                     } else {
@@ -247,7 +257,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 }
             }
             
-            // --- 3 КОШЕЛЬКА БАЛАНСА ---
+            // --- 3 КОШЕЛЬКА СУБЪЕКТА (Администрация / Выплатной / Буфер) ---
             const balances = data.profile.balances || {};
             const cleanWithdraw = balances.cleanWithdraw || balances.mitrons || 0;
             const payoutReserve = balances.payoutReserve || 0;
@@ -367,7 +377,7 @@ function renderReferralsSection(username, refData, currentSearch) {
         wrapper.appendChild(searchBox);
     }
 
-    // Список личников (чипсы)
+    // Список личников
     const listDiv = document.createElement('div');
     listDiv.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-height: 150px; overflow-y: auto; padding: 4px;';
 
