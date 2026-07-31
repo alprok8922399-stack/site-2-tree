@@ -32,7 +32,6 @@ async function loadAdminStats() {
 
             // Внешние закупки (450 M) и статистика покупателей
             setElementText('stat-goods-bought-m', `${s.goodsBoughtM || 0} M`);
-            setElementText('stat-goods-total-m', `${s.goodsTotalM || 0} M`);
             setElementText('stat-buyers-count', `${s.buyersCount || 0} чел.`);
             setElementText('stat-refused-count', `${s.refusedCount || 0} чел.`);
 
@@ -170,11 +169,11 @@ async function payCertificate() {
         if (result.success) {
             const splitInfo = `
 Активация успешна!
-Списано: ${result.split.totalMitrons} Митронов
+Списано: ${result.split ? result.split.totalMitrons : 450} Митронов
 -----------------------------------------
 Распределение:
-💸 Логистика / Товар: ${result.split.adminLogistics} Митронов
-🔒 DAO Пул: ${result.split.daoPool} Митронов
+💸 Логистика / Товар: ${result.split ? result.split.adminLogistics : 405} Митронов
+🔒 DAO Пул: ${result.split ? result.split.daoPool : 45} Митронов
             `;
             alert(splitInfo);
             
