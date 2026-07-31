@@ -36,10 +36,11 @@ async function loadAdminStats() {
             setElementText('stat-buyers-count', `${s.buyersCount || 0} чел.`);
             setElementText('stat-refused-count', `${s.refusedCount || 0} чел.`);
 
-            // Выплаты и резервы
+            // Выплаты, резервы, Фонд DAO и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
             setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
             setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
+            setElementText('stat-dao-fund', `${s.daoFund || 0} M`);
             setElementText('stat-net-profit', `${s.netProfit || 0} M`);
 
             // Логины
