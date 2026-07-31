@@ -30,16 +30,17 @@ async function loadAdminStats() {
             setElementText('stat-income-week', `${s.incomeWeek || 0} M`);
             setElementText('stat-income-month', `${s.incomeMonth || 0} M`);
 
-            // Внешние закупки (450 M) и статистика покупателей
+            // Внешние закупки и статистика покупателей
             setElementText('stat-goods-bought-m', `${s.goodsBoughtM || 0} M`);
-            setElementText('stat-goods-total-m', `${s.goodsTotalM || 0} M`);
             setElementText('stat-buyers-count', `${s.buyersCount || 0} чел.`);
+            setElementText('stat-refused-today-count', `${s.refusedTodayCount || s.refusedToday || 0} чел.`);
             setElementText('stat-refused-count', `${s.refusedCount || 0} чел.`);
 
-            // Выплаты и резервы
+            // Выплаты, резервы, Фонд DAO (23 M с 1000 M) и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
             setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
             setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
+            setElementText('stat-dao-fund', `${s.daoFund || 0} M`);
             setElementText('stat-net-profit', `${s.netProfit || 0} M`);
 
             // Логины
@@ -167,13 +168,21 @@ async function payCertificate() {
         const result = await response.json();
         
         if (result.success) {
+            const split = result.split || {};
+            const goodsCost = split.adminLogistics || 450;
+            const daoFund = split.daoPool || 23;
+            const netProfit = split.netProfit || 207;
+
             const splitInfo = `
 Активация успешна!
-Списано: ${result.split.totalMitrons} Митронов
+Списано: ${split.totalMitrons || 1000} Митронов
 -----------------------------------------
 Распределение:
-💸 Логистика / Товар: ${result.split.adminLogistics} Митронов
-🔒 DAO Пул: ${result.split.daoPool} Митронов
+💸 Закупка товара (сторонний МП): ${goodsCost} Митронов
+🔒 Резерв Лидеру в Матрицу (25%): 250 Митронов
+🤝 Реферальный резерв (50+10+10): 70 Митронов
+🛡️ Фонд DAO (10% от остатка): ${daoFund} Митронов
+💼 Чистая прибыль Админа: ${netProfit} Митронов
             `;
             alert(splitInfo);
             
@@ -229,7 +238,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                     
                     statusEl.innerText = `Оплачен (${diffDays} дн.)`;
-                    if (diffDays > 30) {
+                    if (diffDays > 31) {
                         statusEl.style.backgroundColor = '#d9534f';
                         statusEl.style.color = '#ffffff';
                     } else {
@@ -247,9 +256,18 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 }
             }
             
-            const mitronsBalance = data.profile.balances ? data.profile.balances.mitrons : 0;
-            setElementText('balance-mitrons', `${mitronsBalance} Mitrons`);
-            setElementText('balance-usd', `$${convertMitronsToUsd(mitronsBalance)}`);
+            // --- 3 КОШЕЛЬКА СУБЪЕКТА (Администрация / Выплатной / Буфер) ---
+            const balances = data.profile.balances || {};
+            const cleanWithdraw = balances.cleanWithdraw || balances.mitrons || 0;
+            const payoutReserve = balances.payoutReserve || 0;
+            const transitBuffer = balances.transitBuffer || 0;
+
+            setElementText('balance-mitrons', `${cleanWithdraw} M (Вывод) | ${payoutReserve} M (Резерв) | ${transitBuffer} M (Буфер)`);
+            setElementText('balance-usd', `$${convertMitronsToUsd(cleanWithdraw)}`);
+
+            setElementText('balance-clean-withdraw', `${cleanWithdraw} M`);
+            setElementText('balance-payout-reserve', `${payoutReserve} M`);
+            setElementText('balance-transit-buffer', `${transitBuffer} M`);
             
             // --- ОБРАТНЫЙ СПИСОК СПОНСОРОВ (UPLINE TRACKING) ---
             const uplineContainer = document.getElementById('profile-upline-chain');
@@ -358,7 +376,7 @@ function renderReferralsSection(username, refData, currentSearch) {
         wrapper.appendChild(searchBox);
     }
 
-    // Список личников (чипсы)
+    // Список личников
     const listDiv = document.createElement('div');
     listDiv.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-height: 150px; overflow-y: auto; padding: 4px;';
 
