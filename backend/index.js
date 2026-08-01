@@ -194,12 +194,13 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
-// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ ===
+// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО) ===
 app.post('/api/admin/refund-user', (req, res) => {
-    const { username } = req.body || {};
+    const { username, amount, cellsCount } = req.body || {};
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
 
     const cleanUser = username.trim();
+    const countToRefund = Math.max(1, parseInt(cellsCount) || (amount ? Math.round(amount / 1000) : 1));
 
     // 1. Создаем аккаунт Администратора, если его нет
     if (!shopUsersDB[ADMIN_OWNER_LOGIN]) {
@@ -208,27 +209,38 @@ app.post('/api/admin/refund-user', (req, res) => {
         shopUsersDB[ADMIN_OWNER_LOGIN].ownedByAdmin = true;
     }
 
-    // 2. Передаем все занятые отказником ячейки в Матрицах Администратору
-    let transferredCellsCount = 0;
-    Object.keys(treeDB).forEach(cellId => {
-        if (treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()) {
-            treeDB[cellId].user = ADMIN_OWNER_LOGIN;
-            transferredCellsCount++;
-        }
+    // 2. Находим и передаем Администратору точное количество ячеек пользователя
+    let transferredCount = 0;
+    const userCells = Object.keys(treeDB).filter(cellId => 
+        treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
+    );
+
+    // Берем последние купленные ячейки и переводим Администратору
+    const cellsToTransfer = userCells.slice(-countToRefund);
+    cellsToTransfer.forEach(cellId => {
+        treeDB[cellId].user = ADMIN_OWNER_LOGIN;
+        transferredCount++;
     });
 
-    // 3. Обновляем карточку пользователя (отказника)
+    // 3. Обновляем статус карточки пользователя (БАН НЕ СТАВИМ)
     if (shopUsersDB[cleanUser]) {
-        shopUsersDB[cleanUser].isPaid = false;
-        shopUsersDB[cleanUser].isBlocked = true;
-        shopUsersDB[cleanUser].ownedByAdmin = true;
-        shopUsersDB[cleanUser].matrixPosition = { status: 'refunded', currentCellId: null, occupiedCells: [] };
+        const remainingCells = Object.keys(treeDB).filter(cellId => 
+            treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
+        );
+
+        if (remainingCells.length === 0) {
+            shopUsersDB[cleanUser].isPaid = false;
+            shopUsersDB[cleanUser].matrixPosition = { status: 'refunded', currentCellId: null, occupiedCells: [] };
+        } else {
+            shopUsersDB[cleanUser].matrixPosition.occupiedCells = remainingCells;
+            shopUsersDB[cleanUser].matrixPosition.currentCellId = remainingCells[0];
+        }
     }
 
     res.json({
         success: true,
-        message: `Ячейки логина ${cleanUser} (${transferredCellsCount} шт.) успешно переведены Администратору (${ADMIN_OWNER_LOGIN}).`,
-        transferredCellsCount
+        message: `Точечный откат выполнен: ${transferredCount} яч. передано Администратору (${ADMIN_OWNER_LOGIN}).`,
+        transferredCellsCount: transferredCount
     });
 });
 
@@ -394,7 +406,7 @@ app.get('/api/tree', (req, res) => {
 
 // Регистрация с поддержкой мультипокупки (1-5 ячеек) и транзитной обработкой через 3 кошелька
 app.post('/api/shop/register', (req, res) => {
-    const { username, uplineUser, cellsCount = 1, amountMitrons = 1000 } = req.body;
+    const { username, hashId, uplineUser, cellsCount = 1, amountMitrons = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const trimmedUser = username.trim();
@@ -414,6 +426,10 @@ app.post('/api/shop/register', (req, res) => {
 
     if (!shopUsersDB[trimmedUser]) {
         shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
+    }
+    
+    if (hashId) {
+        shopUsersDB[trimmedUser].hashId = hashId;
     }
     
     let chosenSponsor = uplineUser ? uplineUser.trim() : null;
