@@ -79,7 +79,7 @@ async function filterLoginsByDate() {
     }
 }
 
-// === 1. РЕГИСТРАЦИЯ И УПРАВЛЕНИЕ МАТРИЦЕЙ ===
+// === 1. РЕГИСТРАЦИЯ И УПРАВЛЕНИЕ СТРУКТУРОЙ ===
 
 async function registerInMatrix() {
     const usernameInput = document.getElementById('matrix-username');
@@ -104,7 +104,7 @@ async function registerInMatrix() {
         const result = await response.json();
         
         if (result.success) {
-            alert(`Успешно! Место занято в ячейке: ${result.cellId}`);
+            alert(`Успешно! Позиция занята в структуре: ${result.cellId}`);
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
             }
@@ -113,7 +113,7 @@ async function registerInMatrix() {
             alert(`Ошибка: ${result.error}`);
         }
     } catch (error) {
-        console.error('Ошибка регистрации в матрице:', error);
+        console.error('Ошибка регистрации в структуре:', error);
     }
 }
 
@@ -179,7 +179,7 @@ async function payCertificate() {
 -----------------------------------------
 Распределение:
 💸 Закупка товара (сторонний МП): ${goodsCost} Митронов
-🔒 Резерв Лидеру в Матрицу (25%): 250 Митронов
+🔒 Резерв Лидеру в Структуру (25%): 250 Митронов
 🤝 Реферальный резерв (50+10+10): 70 Митронов
 🛡️ Фонд DAO (10% от остатка): ${daoFund} Митронов
 💼 Чистая прибыль Админа: ${netProfit} Митронов
@@ -227,7 +227,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             setElementText('current-profile-user', data.username);
             
             const cellId = data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null;
-            setElementText('profile-cell-id', cellId || 'Нет места');
+            setElementText('profile-cell-id', cellId || 'Нет позиции');
             
             // Расчет дней с момента активации и выбор цвета статус-бара
             const statusEl = document.getElementById('profile-status');
@@ -418,7 +418,7 @@ function closeUserProfileCard() {
 }
 
 async function resetSystem() {
-    if (!confirm('Вы уверены, что хотите полностью очистить систему матриц и балансов?')) return;
+    if (!confirm('Вы уверены, что хотите полностью очистить систему структуры и балансов?')) return;
     
     try {
         const response = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
