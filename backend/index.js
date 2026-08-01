@@ -49,6 +49,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // Инициализация баз данных в памяти
 let shopUsersDB = {};
 let wallets = createInitialWallets();
+let refundRecords = []; // Хранилище отказов
 
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
@@ -223,7 +224,14 @@ app.post('/api/admin/refund-user', (req, res) => {
         transferredCount++;
     });
 
-    // 3. Обновляем статус карточки пользователя (БАН НЕ СТАВИМ)
+    // 3. Фиксируем лог отказа
+    refundRecords.push({
+        username: cleanUser,
+        unitsCount: transferredCount,
+        timestamp: Date.now()
+    });
+
+    // 4. Обновляем статус карточки пользователя (БАН НЕ СТАВИМ)
     if (shopUsersDB[cleanUser]) {
         const remainingCells = Object.keys(treeDB).filter(cellId => 
             treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
@@ -242,60 +250,75 @@ app.post('/api/admin/refund-user', (req, res) => {
         success: true,
         message: `Точечный откат выполнен: ${transferredCount} единиц передано Администратору (${ADMIN_OWNER_LOGIN}).`,
         transferredUnitsCount: transferredCount,
-        transferredCellsCount: transferredCount // Для обратной совместимости
+        transferredCellsCount: transferredCount
     });
 });
 
 // === АНАЛИТИКА КАРТОЧКИ АДМИНИСТРАТОРА ===
 app.get('/api/admin/stats', (req, res) => {
     const users = Object.values(shopUsersDB);
-    const paidUsers = users.filter(u => u.isPaid);
+    const now = Date.now();
+    const oneDayAgo = now - (24 * 60 * 60 * 1000);
+    const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
+    const oneMonthAgo = now - (30 * 24 * 60 * 60 * 1000);
 
-    const paidCells = Object.values(treeDB).filter(cell => {
-        return cell.user && cell.user !== 'SYSTEM_ROOT' && !cell.user.startsWith('LEADER_');
-    });
+    // 1. Все занятые ячейки в Матрице
+    const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null);
+    
+    // 2. Ячейки Покупателей (исключая системные пресеты и не отданные админу)
+    const activeBuyerCells = allOccupiedCells.filter(cell => 
+        cell.user && 
+        cell.user !== 'SYSTEM_ROOT' && 
+        !cell.user.startsWith('LEADER_') && 
+        cell.user !== ADMIN_OWNER_LOGIN
+    );
 
-    const purchasesCount = paidCells.length;
-    const totalIncomeM = purchasesCount * 1000;
+    // 3. Активные ячейки Администратора от отказников
+    const adminRefundCells = allOccupiedCells.filter(cell => cell.user === ADMIN_OWNER_LOGIN);
 
-    const now = new Date();
-    const oneDay = 24 * 60 * 60 * 1000;
-    const oneWeek = 7 * oneDay;
-    const oneMonth = 30 * oneDay;
+    const activeBuyerUnits = activeBuyerCells.length;
+    const totalIncomeM = activeBuyerUnits * 1000;
 
     let incomeToday = 0;
     let incomeWeek = 0;
     let incomeMonth = 0;
 
-    paidCells.forEach(cell => {
+    activeBuyerCells.forEach(cell => {
         const user = shopUsersDB[cell.user];
-        const pDate = (user && user.paymentDate) ? new Date(user.paymentDate) : now;
-        const diff = now - pDate;
+        const pDate = (user && user.paymentDate) ? new Date(user.paymentDate).getTime() : now;
         
-        if (diff <= oneDay) incomeToday += 1000;
-        if (diff <= oneWeek) incomeWeek += 1000;
-        if (diff <= oneMonth) incomeMonth += 1000;
+        if (pDate >= oneDayAgo) incomeToday += 1000;
+        if (pDate >= oneWeekAgo) incomeWeek += 1000;
+        if (pDate >= oneMonthAgo) incomeMonth += 1000;
     });
 
-    const buyersCount = paidUsers.filter(u => u.username !== 'SYSTEM_ROOT' && !u.username.startsWith('LEADER_')).length;
-    const goodsBoughtM = purchasesCount * 450;
+    // Действующие покупатели (у кого осталась хоть 1 купленная ячейка)
+    const activeBuyerUsernames = new Set(activeBuyerCells.map(c => c.user));
+    const buyersCount = activeBuyerUsernames.size;
 
-    const matrixReserve = purchasesCount * 250;
-    const referralsPaid = purchasesCount * 70;
-    const daoFund = purchasesCount * 23;
-    const netProfit = purchasesCount * 207;
+    // Финансы по активным покупкам (по формуле из ТЗ)
+    const goodsBoughtM = activeBuyerUnits * 450;
+    const systemReserveTotal = activeBuyerUnits * 250;
+    const refReserveTotal = activeBuyerUnits * 70;
+    
+    // Базовый остаток = 1000 - 450 - 250 - 70 = 230 M на ячейку
+    const baseRemainder = activeBuyerUnits * 230;
+    const daoFund = Math.round(baseRemainder * 0.10); // 23 M на ячейку
+    const netProfit = baseRemainder - daoFund;         // 207 M на ячейку
 
-    const cashbackPaid = paidUsers.filter(u => u.matrixPosition && u.matrixPosition.status === 'payout_pending').length * 1000;
-    const inReserve = matrixReserve + referralsPaid;
+    // Отказы за сегодня и всего
+    const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
+    const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
+    const todayRefusedUsers = new Set(todayRefunds.map(r => r.username)).size;
 
-    const allLogins = Object.keys(referalsDB);
-    const adminLogins = allLogins.filter(l => l.toUpperCase().includes('ADMIN') || l === 'SYSTEM_ROOT' || (shopUsersDB[l] && shopUsersDB[l].ownedByAdmin));
-    const userLogins = allLogins.length - adminLogins.length;
+    const totalRefusedUnits = refundRecords.reduce((sum, r) => sum + r.unitsCount, 0);
+    const totalRefusedUsers = new Set(refundRecords.map(r => r.username)).size;
 
-    const refusedCount = users.filter(u => {
-        const isSystem = u.username === 'SYSTEM_ROOT' || u.username.startsWith('LEADER_');
-        return !u.isPaid && !isSystem && !u.ownedByAdmin;
-    }).length;
+    const cashbackPaid = paidUsersCount => 0; // Начисляется только по прошествии 31 дня
+
+    // Расчет логинов
+    const adminLoginsCount = 1; // 1 Системный Логин Админа
+    const buyerLoginsCount = activeBuyerUsernames.size;
 
     res.json({
         success: true,
@@ -307,15 +330,16 @@ app.get('/api/admin/stats', (req, res) => {
             goodsBoughtM,
             goodsTotalM: goodsBoughtM,
             buyersCount,
-            refusedCount,
-            cashbackPaid,
-            referralsPaid,
-            inReserve,
+            refusedTodayText: `${todayRefusedUsers} чел. (${todayRefusedUnits} яч.)`,
+            refusedTotalText: `${totalRefusedUsers} чел. (${totalRefusedUnits} яч.)`,
+            cashbackPaid: 0,
+            referralsPaid: refReserveTotal,             // Замороженные реферальные в резерве на 31 день
+            inReserve: systemReserveTotal,              // Замороженный резерв 100% кешбэка на 31 день
             netProfit,
             daoFund,
-            totalLogins: allLogins.length,
-            adminLogins: adminLogins.length,
-            userLogins
+            totalLogins: activeBuyerUnits + adminRefundCells.length, // Всего занятых ячеек в Матрицах (напр. 10)
+            adminLogins: adminLoginsCount,
+            userLogins: buyerLoginsCount
         }
     });
 });
@@ -477,6 +501,7 @@ app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
     activeMatricesList = ['A1'];
     shopUsersDB = {};
+    refundRecords = [];
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
