@@ -17,7 +17,7 @@ function getLevelLetter(index) {
 }
 
 /**
- * Преобразует ID ячейки (например 'AA1' или 'C3') в глобальный численный индекс
+ * Преобразует ID единицы/позиции (например 'AA1' или 'C3') в глобальный численный индекс
  */
 function cellIdToGlobalIndex(cellId) {
     const match = cellId.match(/^([A-Z]+)(\d+)$/);
@@ -63,8 +63,8 @@ function createNewUserCard(username) {
             currentCellId: null,
             occupiedCells: [],
             status: 'inactive', // inactive -> active -> payout_pending -> completed
-            reservedPerCell: 0,  // 250 M с каждой ячейки
-            reservedMatrixM: 0,  // 1000 M при закрытии 4 ячеек
+            reservedPerCell: 0,  // 250 M с каждой единицы
+            reservedMatrixM: 0,  // 1000 M при заполнении 4 позиций
             payoutEligibleDate: null // Дата разблокировки через 31 день
         },
         pendingReferralRewards: [] // Резерв рефералок: [{ fromUser, amount, level, unlockDate, status }]
