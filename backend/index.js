@@ -333,8 +333,9 @@ app.get('/api/admin/stats', (req, res) => {
             refusedTodayText: `${todayRefusedUsers} чел. (${todayRefusedUnits} яч.)`,
             refusedTotalText: `${totalRefusedUsers} чел. (${totalRefusedUnits} яч.)`,
             cashbackPaid: 0,
-            referralsPaid: 0,                           // Выплачено фактически = 0 M (так как холдинг 31 день)
-            inReserve: systemReserveTotal + refReserveTotal, // Полный резерв на выплаты (Кешбэк + Реферальные)
+            referralsPaid: 0,                  // Фактически выплачено реферальных = 0 M (холдинг 31 день)
+            referralsReserve: refReserveTotal, // В резерве на выплаты реферальных
+            inReserve: systemReserveTotal,     // В резерве 100% кешбэка
             netProfit,
             daoFund,
             totalLogins: activeBuyerUnits + adminRefundCells.length, // Всего занятых ячеек в Матрицах
