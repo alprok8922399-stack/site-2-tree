@@ -36,7 +36,7 @@ async function loadAdminStats() {
             setElementText('stat-refused-today-count', `${s.refusedTodayCount || s.refusedToday || 0} чел.`);
             setElementText('stat-refused-count', `${s.refusedCount || 0} чел.`);
 
-            // Выплаты, резервы, Фонд DAO (23 M с 1000 M) и Чистая прибыль
+            // Выплаты, резервы, Фонд DAO и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
             setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
             setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
