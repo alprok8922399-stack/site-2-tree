@@ -195,14 +195,18 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
-// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО С УЧЕТОМ ВСЕХ ЯЧЕЕК ЗАКАЗА) ===
+// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО) ===
 app.post('/api/admin/refund-user', (req, res) => {
     const { username, amount, cellsCount, unitsCount } = req.body || {};
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
 
     const cleanUser = username.trim();
-    const targetCount = unitsCount || cellsCount;
-    const countToRefund = Math.max(1, parseInt(targetCount) || (amount ? Math.round(amount / 1000) : 1));
+    
+    // Рассчитываем точное количество возвращаемых ячеек
+    let countToRefund = 1;
+    if (unitsCount) countToRefund = parseInt(unitsCount);
+    else if (cellsCount) countToRefund = parseInt(cellsCount);
+    else if (amount) countToRefund = Math.max(1, Math.round(parseInt(amount) / 1000));
 
     // 1. Создаем аккаунт Администратора, если его нет
     if (!shopUsersDB[ADMIN_OWNER_LOGIN]) {
@@ -211,14 +215,15 @@ app.post('/api/admin/refund-user', (req, res) => {
         shopUsersDB[ADMIN_OWNER_LOGIN].ownedByAdmin = true;
     }
 
-    // 2. Находим и передаем Администратору точное количество позиций пользователя
-    let transferredCount = 0;
+    // 2. Находим ВСЕ ячейки пользователя в матрице
     const userCells = Object.keys(treeDB).filter(cellId => 
         treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
     );
 
-    // Берем последние купленные единицы и переводим Администратору
+    // Берем ровно столько ячеек, сколько указано в отказе (или все, если запрошено больше)
     const cellsToTransfer = userCells.slice(-countToRefund);
+    let transferredCount = 0;
+
     cellsToTransfer.forEach(cellId => {
         treeDB[cellId].user = ADMIN_OWNER_LOGIN;
         transferredCount++;
@@ -232,7 +237,7 @@ app.post('/api/admin/refund-user', (req, res) => {
         timestamp: Date.now()
     });
 
-    // 4. Обновляем статус карточки пользователя (БАН НЕ СТАВИМ)
+    // 4. Обновляем статус карточки пользователя
     if (shopUsersDB[cleanUser]) {
         const remainingCells = Object.keys(treeDB).filter(cellId => 
             treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
@@ -266,7 +271,7 @@ app.get('/api/admin/stats', (req, res) => {
     // 1. Все занятые ячейки в Матрице
     const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null);
     
-    // 2. Ячейки Покупателей (исключая системные пресеты и переданные админу отказные ячейки)
+    // 2. Активные ячейки Покупателей (строго исключая ROOT, ЛИДЕРОВ и ЯЧЕЙКИ АДМИНА)
     const activeBuyerCells = allOccupiedCells.filter(cell => 
         cell.user && 
         cell.user !== 'SYSTEM_ROOT' && 
@@ -274,9 +279,10 @@ app.get('/api/admin/stats', (req, res) => {
         cell.user !== ADMIN_OWNER_LOGIN
     );
 
-    // 3. Активные ячейки Администратора от отказников
+    // 3. Ячейки Администратора, полученные по отказам
     const adminRefundCells = allOccupiedCells.filter(cell => cell.user === ADMIN_OWNER_LOGIN);
 
+    // Считаем активные финансовые показатели ТОЛЬКО по действующим ячейкам покупателей
     const activeBuyerUnits = activeBuyerCells.length;
     const totalIncomeM = activeBuyerUnits * 1000;
 
@@ -293,11 +299,11 @@ app.get('/api/admin/stats', (req, res) => {
         if (pDate >= oneMonthAgo) incomeMonth += 1000;
     });
 
-    // Действующие покупатели (у кого осталась хоть 1 купленная ячейка)
+    // Действующие покупатели (у кого осталась хотя бы 1 активная ячейка)
     const activeBuyerUsernames = new Set(activeBuyerCells.map(c => c.user));
     const buyersCount = activeBuyerUsernames.size;
 
-    // Финансы по активным покупкам (по формуле из ТЗ)
+    // Финансы по активным покупкам
     const goodsBoughtM = activeBuyerUnits * 450;
     const systemReserveTotal = activeBuyerUnits * 250;
     const refReserveTotal = activeBuyerUnits * 70;
@@ -315,10 +321,6 @@ app.get('/api/admin/stats', (req, res) => {
     const totalRefusedUnits = refundRecords.reduce((sum, r) => sum + r.unitsCount, 0);
     const totalRefusedUsers = new Set(refundRecords.map(r => r.username)).size;
 
-    // Расчет логинов
-    const adminLoginsCount = 1; // 1 Системный Логин Админа
-    const buyerLoginsCount = activeBuyerUsernames.size;
-
     res.json({
         success: true,
         stats: {
@@ -334,13 +336,13 @@ app.get('/api/admin/stats', (req, res) => {
             refusedTodayText: `${todayRefusedUsers} чел. (${todayRefusedUnits} яч.)`,
             refusedTotalText: `${totalRefusedUsers} чел. (${totalRefusedUnits} яч.)`,
             cashbackPaid: 0,
-            referralsPaid: 0,                  // Фактически выплачено реферальных = 0 M (холдинг 31 день)
-            referralsReserve: refReserveTotal, // В резерве на выплаты реферальных
-            inReserve: systemReserveTotal,     // В резерве 100% кешбэка
+            referralsPaid: 0, 
+            referralsReserve: refReserveTotal,
+            inReserve: systemReserveTotal,
             netProfit,
             daoFund,
-            totalLogins: activeBuyerUnits + adminRefundCells.length, // Всего занятых ячеек в Матрицах
-            adminLogins: adminLoginsCount,
+            totalLogins: activeBuyerUnits + adminRefundCells.length,
+            adminLogins: 1,
             userLogins: buyerLoginsCount
         }
     });
