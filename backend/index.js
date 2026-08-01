@@ -314,8 +314,6 @@ app.get('/api/admin/stats', (req, res) => {
     const totalRefusedUnits = refundRecords.reduce((sum, r) => sum + r.unitsCount, 0);
     const totalRefusedUsers = new Set(refundRecords.map(r => r.username)).size;
 
-    const cashbackPaid = paidUsersCount => 0; // Начисляется только по прошествии 31 дня
-
     // Расчет логинов
     const adminLoginsCount = 1; // 1 Системный Логин Админа
     const buyerLoginsCount = activeBuyerUsernames.size;
@@ -330,14 +328,16 @@ app.get('/api/admin/stats', (req, res) => {
             goodsBoughtM,
             goodsTotalM: goodsBoughtM,
             buyersCount,
+            refusedTodayCount: todayRefusedUnits,
+            refusedCount: totalRefusedUnits,
             refusedTodayText: `${todayRefusedUsers} чел. (${todayRefusedUnits} яч.)`,
             refusedTotalText: `${totalRefusedUsers} чел. (${totalRefusedUnits} яч.)`,
             cashbackPaid: 0,
-            referralsPaid: refReserveTotal,             // Замороженные реферальные в резерве на 31 день
-            inReserve: systemReserveTotal,              // Замороженный резерв 100% кешбэка на 31 день
+            referralsPaid: 0,                           // Выплачено фактически = 0 M (так как холдинг 31 день)
+            inReserve: systemReserveTotal + refReserveTotal, // Полный резерв на выплаты (Кешбэк + Реферальные)
             netProfit,
             daoFund,
-            totalLogins: activeBuyerUnits + adminRefundCells.length, // Всего занятых ячеек в Матрицах (напр. 10)
+            totalLogins: activeBuyerUnits + adminRefundCells.length, // Всего занятых ячеек в Матрицах
             adminLogins: adminLoginsCount,
             userLogins: buyerLoginsCount
         }
