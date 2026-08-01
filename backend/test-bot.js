@@ -1,6 +1,6 @@
 /**
- * Скрипт стресс-тестирования матрицы (test-bot.js)
- * Симулирует регистрацию и покупку пакетов N пользователей подряд.
+ * Скрипт стресс-тестирования структуры (test-bot.js)
+ * Симулирует регистрацию и покупку единиц N пользователей подряд.
  */
 
 const http = require('http');
@@ -13,7 +13,8 @@ async function sendRequest(username, uplineUser) {
         const data = JSON.stringify({ 
             username, 
             uplineUser, 
-            cellsCount: 1, 
+            unitsCount: 1,
+            cellsCount: 1, // Сохраняем обратную совместимость
             amountMitrons: 1000 
         });
         
@@ -51,14 +52,14 @@ async function runTest() {
             if (res.error) {
                 console.error(`[${i}/${BATCH_SIZE}] ❌ Ошибка сервера для ${botName}:`, res.error);
             } else {
-                console.log(`[${i}/${BATCH_SIZE}] ✅ ${botName} встал в ячейку: ${res.cellId}`);
+                console.log(`[${i}/${BATCH_SIZE}] ✅ ${botName} встал на позицию: ${res.cellId}`);
             }
         } catch (err) {
             console.error(`[${i}/${BATCH_SIZE}] ❌ Сбой сети для ${botName}:`, err.message);
         }
     }
     
-    console.log('\n🎉 Тест завершен! Проверь визуализацию матрицы в браузере.');
+    console.log('\n🎉 Тест завершен! Проверь визуализацию структуры в браузере.');
 }
 
 runTest();
