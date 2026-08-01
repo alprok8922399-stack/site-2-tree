@@ -195,7 +195,7 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
-// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО) ===
+// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО С УЧЕТОМ ВСЕХ ЯЧЕЕК ЗАКАЗА) ===
 app.post('/api/admin/refund-user', (req, res) => {
     const { username, amount, cellsCount, unitsCount } = req.body || {};
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -228,6 +228,7 @@ app.post('/api/admin/refund-user', (req, res) => {
     refundRecords.push({
         username: cleanUser,
         unitsCount: transferredCount,
+        amount: transferredCount * 1000,
         timestamp: Date.now()
     });
 
@@ -265,7 +266,7 @@ app.get('/api/admin/stats', (req, res) => {
     // 1. Все занятые ячейки в Матрице
     const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null);
     
-    // 2. Ячейки Покупателей (исключая системные пресеты и не отданные админу)
+    // 2. Ячейки Покупателей (исключая системные пресеты и переданные админу отказные ячейки)
     const activeBuyerCells = allOccupiedCells.filter(cell => 
         cell.user && 
         cell.user !== 'SYSTEM_ROOT' && 
