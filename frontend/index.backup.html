@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mitron Matrix & Financial Core System</title>
+    <title>Mitron Structure & Financial Core System</title>
     <style>
         /* === ПРЕМИАЛЬНАЯ ТЁМНАЯ ТЕМА === */
         body {
@@ -129,7 +129,7 @@
         .zoom-panel input[type="range"] { cursor: pointer; accent-color: #2ecc71; width: 150px; }
         .zoom-panel #zoom-value { font-weight: bold; color: #2ecc71; min-width: 45px; text-align: right; }
 
-        /* === ОКНО ПРОСМОТРА МАТРИЦЫ === */
+        /* === ОКНО ПРОСМОТРА СТРУКТУРЫ === */
         #matrix-view-container {
             background: #09090b;
             padding: 15px;
@@ -157,7 +157,7 @@
             align-items: flex-start !important;
         }
 
-        /* === ЦВЕТА ЯЧЕЕК МАТРИЦЫ === */
+        /* === ЦВЕТА ПОЗИЦИЙ СТРУКТУРЫ === */
         .cell-top {
             background: linear-gradient(135deg, #f39c12, #ffd700) !important;
             color: #000000 !important;
@@ -191,7 +191,7 @@
 
 <div class="container">
     <header>
-        <h1>Система Управления Матрицей и Ядро Проекта MITRON</h1>
+        <h1>Система Управления Структурой и Ядро Проекта MITRON</h1>
         <p>Приватный автономный контур. Все расчеты в Митронах (M) / 1000 M = $130</p>
     </header>
 
@@ -243,7 +243,7 @@
             <div class="stat-item" style="border-left-color: #e74c3c;">
                 <span class="title">Отказалось от покупки всего</span>
                 <span class="value" id="stat-refused-count">0 чел.</span>
-                <span class="subtext">(Возврат 100%, ячейка переходит Админу)</span>
+                <span class="subtext">(Возврат 100%, позиция переходит Админу)</span>
             </div>
 
             <div class="stat-item" style="border-left-color: #f1c40f;">
@@ -253,6 +253,11 @@
             <div class="stat-item" style="border-left-color: #f1c40f;">
                 <span class="title">Выплачено реферальных</span>
                 <span class="value" id="stat-referrals-paid">0 M</span>
+            </div>
+            <div class="stat-item" style="border-left-color: #f39c12;">
+                <span class="title">В резерве на выплаты реферальных</span>
+                <span class="value" id="stat-referrals-reserve">0 M</span>
+                <span class="subtext">(Резерв 70M с каждой активации)</span>
             </div>
             <div class="stat-item" style="border-left-color: #e67e22;">
                 <span class="title">В резерве на выплаты (всего)</span>
@@ -294,7 +299,7 @@
         
         <div class="profile-info">
             <p>Текущий профиль: <strong id="current-profile-user">—</strong></p>
-            <p>Позиция в матрице: <span id="profile-cell-id">—</span></p>
+            <p>Позиция в структуре: <span id="profile-cell-id">—</span></p>
             <p>Статус оплаты: <span id="profile-status">—</span></p>
             
             <div id="profile-upline-chain"></div>
@@ -302,7 +307,7 @@
     </div>
 
     <div class="card">
-        <h2>2. Глобальная структура бинарной матрицы</h2>
+        <h2>2. Глобальная структура бинарного дерева</h2>
         
         <div class="zoom-panel">
             <label for="matrix-zoom-slider">Масштаб:</label>
@@ -331,4 +336,4 @@
 <script src="matrix.js?v=13"></script>
 <script src="table.js?v=13"></script>
 </body>
-                </html>
+    </html>
