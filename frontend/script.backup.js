@@ -33,12 +33,13 @@ async function loadAdminStats() {
             // Внешние закупки и статистика покупателей
             setElementText('stat-goods-bought-m', `${s.goodsBoughtM || 0} M`);
             setElementText('stat-buyers-count', `${s.buyersCount || 0} чел.`);
-            setElementText('stat-refused-today-count', `${s.refusedTodayCount || s.refusedToday || 0} чел.`);
-            setElementText('stat-refused-count', `${s.refusedCount || 0} чел.`);
+            setElementText('stat-refused-today-count', `${s.refusedTodayCount || s.refusedTodayText || s.refusedToday || 0}`);
+            setElementText('stat-refused-count', `${s.refusedCount || s.refusedTotalText || 0}`);
 
             // Выплаты, резервы, Фонд DAO и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
             setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
+            setElementText('stat-referrals-reserve', `${s.referralsReserve || 0} M`); // Добавлено отображение Резерва Реферальных (70M)
             setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
             setElementText('stat-dao-fund', `${s.daoFund || 0} M`);
             setElementText('stat-net-profit', `${s.netProfit || 0} M`);
@@ -79,7 +80,7 @@ async function filterLoginsByDate() {
     }
 }
 
-// === 1. РЕГИСТРАЦИЯ И УПРАВЛЕНИЕ МАТРИЦЕЙ ===
+// === 1. РЕГИСТРАЦИЯ И УПРАВЛЕНИЕ СТРУКТУРОЙ ===
 
 async function registerInMatrix() {
     const usernameInput = document.getElementById('matrix-username');
@@ -104,7 +105,7 @@ async function registerInMatrix() {
         const result = await response.json();
         
         if (result.success) {
-            alert(`Успешно! Место занято в ячейке: ${result.cellId}`);
+            alert(`Успешно! Позиция занята в структуре: ${result.cellId}`);
             if (typeof window.renderMatrixTree === 'function') {
                 window.renderMatrixTree();
             }
@@ -113,7 +114,7 @@ async function registerInMatrix() {
             alert(`Ошибка: ${result.error}`);
         }
     } catch (error) {
-        console.error('Ошибка регистрации в матрице:', error);
+        console.error('Ошибка регистрации в структуре:', error);
     }
 }
 
@@ -179,7 +180,7 @@ async function payCertificate() {
 -----------------------------------------
 Распределение:
 💸 Закупка товара (сторонний МП): ${goodsCost} Митронов
-🔒 Резерв Лидеру в Матрицу (25%): 250 Митронов
+🔒 Резерв 100% кешбэка: 250 Митронов
 🤝 Реферальный резерв (50+10+10): 70 Митронов
 🛡️ Фонд DAO (10% от остатка): ${daoFund} Митронов
 💼 Чистая прибыль Админа: ${netProfit} Митронов
@@ -227,7 +228,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             setElementText('current-profile-user', data.username);
             
             const cellId = data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null;
-            setElementText('profile-cell-id', cellId || 'Нет места');
+            setElementText('profile-cell-id', cellId || 'Нет позиции');
             
             // Расчет дней с момента активации и выбор цвета статус-бара
             const statusEl = document.getElementById('profile-status');
@@ -418,7 +419,7 @@ function closeUserProfileCard() {
 }
 
 async function resetSystem() {
-    if (!confirm('Вы уверены, что хотите полностью очистить систему матриц и балансов?')) return;
+    if (!confirm('Вы уверены, что хотите полностью очистить систему структуры и балансов?')) return;
     
     try {
         const response = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
