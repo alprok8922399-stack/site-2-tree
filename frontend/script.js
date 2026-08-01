@@ -33,12 +33,13 @@ async function loadAdminStats() {
             // Внешние закупки и статистика покупателей
             setElementText('stat-goods-bought-m', `${s.goodsBoughtM || 0} M`);
             setElementText('stat-buyers-count', `${s.buyersCount || 0} чел.`);
-            setElementText('stat-refused-today-count', `${s.refusedTodayCount || s.refusedToday || 0} чел.`);
-            setElementText('stat-refused-count', `${s.refusedCount || 0} чел.`);
+            setElementText('stat-refused-today-count', `${s.refusedTodayCount || s.refusedTodayText || s.refusedToday || 0}`);
+            setElementText('stat-refused-count', `${s.refusedCount || s.refusedTotalText || 0}`);
 
             // Выплаты, резервы, Фонд DAO и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
             setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
+            setElementText('stat-referrals-reserve', `${s.referralsReserve || 0} M`); // Добавлено отображение Резерва Реферальных (70M)
             setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
             setElementText('stat-dao-fund', `${s.daoFund || 0} M`);
             setElementText('stat-net-profit', `${s.netProfit || 0} M`);
@@ -179,7 +180,7 @@ async function payCertificate() {
 -----------------------------------------
 Распределение:
 💸 Закупка товара (сторонний МП): ${goodsCost} Митронов
-🔒 Резерв Лидеру в Структуру (25%): 250 Митронов
+🔒 Резерв 100% кешбэка: 250 Митронов
 🤝 Реферальный резерв (50+10+10): 70 Митронов
 🛡️ Фонд DAO (10% от остатка): ${daoFund} Митронов
 💼 Чистая прибыль Админа: ${netProfit} Митронов
