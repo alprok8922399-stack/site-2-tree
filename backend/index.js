@@ -1,5 +1,5 @@
 /**
- * Ядро сервера (Сайт 2 — Матрицы и Таблица)
+ * Ядро сервера (Сайт 2 — Структура и Таблица)
  * Проект: MITRON
  */
 
@@ -10,7 +10,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Системный логин Администратора для приема отказных ячеек
+// Системный логин Администратора для приема отказных единиц
 const ADMIN_OWNER_LOGIN = 'ADMIN_REFUND_OWNER';
 
 // Импортируем утилиты из модуля статики
@@ -59,7 +59,7 @@ let referalsDB = {
 
 let lastRegisteredBot = null;
 
-// Стартовое состояние активных матриц
+// Стартовое состояние активных структурных узлов
 function createInitialTree() {
     return {
         'A1': { id: 'A1', level: 'A', user: 'SYSTEM_ROOT' },
@@ -73,7 +73,7 @@ function createInitialTree() {
 }
 
 let treeDB = createInitialTree();
-let activeMatricesList = ['A1']; // Список верхушек активных матриц
+let activeMatricesList = ['A1']; // Список верхушек активных структурных уровней
 
 /**
  * Расчет 31-дневного реферального резерва в Таблице (50, 10, 10 M)
@@ -108,7 +108,7 @@ function processTableReferrals(username) {
 }
 
 /**
- * Алгоритм поиска свободной ячейки и деления матриц
+ * Алгоритм поиска свободной позиции и деления уровней структуры
  */
 function findNextEmptyCell(tree) {
     const orderABC = ['C1', 'C2', 'C3', 'C4'];
@@ -145,7 +145,7 @@ function findNextEmptyCell(tree) {
     }
 }
 
-// Проверка и вызов деления при заполнении 4 нижних ячеек
+// Проверка и вызов деления при заполнении 4 нижних позиций
 function checkAndSplitMatrix(cellId) {
     const gIdx = cellIdToGlobalIndex(cellId);
     const parentGIdx = Math.floor((gIdx - 1) / 2);
@@ -172,7 +172,7 @@ function checkAndSplitMatrix(cellId) {
     const c3 = getCellByGIdx(c3G);
     const c4 = getCellByGIdx(c4G);
 
-    // Заполнение 4 нижних ячеек
+    // Заполнение 4 нижних мест
     if (c1 && c1.user && c2 && c2.user && c3 && c3.user && c4 && c4.user) {
         const topCell = getCellByGIdx(topGIdx);
         const b1Cell = getCellByGIdx(b1G);
@@ -196,11 +196,12 @@ function checkAndSplitMatrix(cellId) {
 
 // === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО) ===
 app.post('/api/admin/refund-user', (req, res) => {
-    const { username, amount, cellsCount } = req.body || {};
+    const { username, amount, cellsCount, unitsCount } = req.body || {};
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
 
     const cleanUser = username.trim();
-    const countToRefund = Math.max(1, parseInt(cellsCount) || (amount ? Math.round(amount / 1000) : 1));
+    const targetCount = unitsCount || cellsCount;
+    const countToRefund = Math.max(1, parseInt(targetCount) || (amount ? Math.round(amount / 1000) : 1));
 
     // 1. Создаем аккаунт Администратора, если его нет
     if (!shopUsersDB[ADMIN_OWNER_LOGIN]) {
@@ -209,13 +210,13 @@ app.post('/api/admin/refund-user', (req, res) => {
         shopUsersDB[ADMIN_OWNER_LOGIN].ownedByAdmin = true;
     }
 
-    // 2. Находим и передаем Администратору точное количество ячеек пользователя
+    // 2. Находим и передаем Администратору точное количество позиций пользователя
     let transferredCount = 0;
     const userCells = Object.keys(treeDB).filter(cellId => 
         treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
     );
 
-    // Берем последние купленные ячейки и переводим Администратору
+    // Берем последние купленные единицы и переводим Администратору
     const cellsToTransfer = userCells.slice(-countToRefund);
     cellsToTransfer.forEach(cellId => {
         treeDB[cellId].user = ADMIN_OWNER_LOGIN;
@@ -239,8 +240,9 @@ app.post('/api/admin/refund-user', (req, res) => {
 
     res.json({
         success: true,
-        message: `Точечный откат выполнен: ${transferredCount} яч. передано Администратору (${ADMIN_OWNER_LOGIN}).`,
-        transferredCellsCount: transferredCount
+        message: `Точечный откат выполнен: ${transferredCount} единиц передано Администратору (${ADMIN_OWNER_LOGIN}).`,
+        transferredUnitsCount: transferredCount,
+        transferredCellsCount: transferredCount // Для обратной совместимости
     });
 });
 
@@ -404,13 +406,14 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-// Регистрация с поддержкой мультипокупки (1-5 ячеек) и транзитной обработкой через 3 кошелька
+// Регистрация с поддержкой мультипокупки (1-5 единиц) и транзитной обработкой через 3 кошелька
 app.post('/api/shop/register', (req, res) => {
-    const { username, hashId, uplineUser, cellsCount = 1, amountMitrons = 1000 } = req.body;
+    const { username, hashId, uplineUser, unitsCount, cellsCount = 1, amountMitrons = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const trimmedUser = username.trim();
-    const count = Math.min(Math.max(parseInt(cellsCount) || 1, 1), 5);
+    const countValue = unitsCount || cellsCount;
+    const count = Math.min(Math.max(parseInt(countValue) || 1, 1), 5);
     const totalAmount = count * 1000;
 
     // --- ТРАНЗИТНАЯ ЛОГИКА 3-Х КОШЕЛЬКОВ ---
