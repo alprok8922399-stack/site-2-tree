@@ -262,27 +262,27 @@ app.post('/api/admin/refund-user', (req, res) => {
 
 // === АНАЛИТИКА КАРТОЧКИ АДМИНИСТРАТОРА ===
 app.get('/api/admin/stats', (req, res) => {
-    const users = Object.values(shopUsersDB);
     const now = Date.now();
     const oneDayAgo = now - (24 * 60 * 60 * 1000);
     const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = now - (30 * 24 * 60 * 60 * 1000);
 
     // 1. Все занятые ячейки в Матрице
-    const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null);
+    const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null && cell.user !== '');
     
-    // 2. Активные ячейки Покупателей (строго исключая ROOT, ЛИДЕРОВ и ЯЧЕЙКИ АДМИНА)
-    const activeBuyerCells = allOccupiedCells.filter(cell => 
-        cell.user && 
-        cell.user !== 'SYSTEM_ROOT' && 
-        !cell.user.startsWith('LEADER_') && 
-        cell.user !== ADMIN_OWNER_LOGIN
-    );
+    // Исключаем только строго системных пользователей
+    const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
+
+    // 2. Активные ячейки Покупателей (любые пользовательские логины)
+    const activeBuyerCells = allOccupiedCells.filter(cell => {
+        if (!cell.user) return false;
+        return !systemLogins.includes(cell.user.trim());
+    });
 
     // 3. Ячейки Администратора, полученные по отказам
     const adminRefundCells = allOccupiedCells.filter(cell => cell.user === ADMIN_OWNER_LOGIN);
 
-    // Считаем активные финансовые показатели ТОЛЬКО по действующим ячейкам покупателей
+    // Считаем активные финансовые показатели
     const activeBuyerUnits = activeBuyerCells.length;
     const totalIncomeM = activeBuyerUnits * 1000;
 
@@ -298,6 +298,13 @@ app.get('/api/admin/stats', (req, res) => {
         if (pDate >= oneWeekAgo) incomeWeek += 1000;
         if (pDate >= oneMonthAgo) incomeMonth += 1000;
     });
+
+    // Если даты платежей не были сохранены, считаем всю текущую сумму за активные периоды
+    if (activeBuyerUnits > 0 && incomeToday === 0) {
+        incomeToday = totalIncomeM;
+        incomeWeek = totalIncomeM;
+        incomeMonth = totalIncomeM;
+    }
 
     // Действующие покупатели (у кого осталась хотя бы 1 активная ячейка)
     const activeBuyerUsernames = new Set(activeBuyerCells.map(c => c.user));
@@ -343,7 +350,7 @@ app.get('/api/admin/stats', (req, res) => {
             daoFund,
             totalLogins: activeBuyerUnits + adminRefundCells.length,
             adminLogins: 1,
-            userLogins: buyerLoginsCount
+            userLogins: buyersCount
         }
     });
 });
