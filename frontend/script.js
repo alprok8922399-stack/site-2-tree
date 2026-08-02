@@ -95,20 +95,32 @@ function closeLeadersModal() {
 }
 
 async function renderLeadersList() {
-    const listContainer = document.getElementById('modal-leaders-list');
-    if (!listContainer) return;
+    // Безопасный поиск контейнера списка лидеров (проверяем несколько возможных ID)
+    const listContainer = document.getElementById('modal-leaders-list') || 
+                          document.getElementById('leaders-list-container') ||
+                          document.getElementById('leaders-list');
 
-    listContainer.innerHTML = '<div style="color:#aaa; font-size:12px;">Загрузка списка лидеров...</div>';
+    if (!listContainer) {
+        console.warn('Контейнер для списка лидеров не найден в DOM HTML');
+        return;
+    }
+
+    listContainer.innerHTML = '<div style="color:#aaa; font-size:12px; padding:10px;">Загрузка списка лидеров...</div>';
 
     try {
         const response = await fetch(`${API_URL}/api/admin/leaders`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
 
         if (data.success && Array.isArray(data.leaders)) {
             setElementText('stat-leaders-count', `${data.leaders.length} чел.`);
 
             if (data.leaders.length === 0) {
-                listContainer.innerHTML = '<div style="color:#777; font-size:12px;">Лидеров пока нет (нужно 10+ активных личников)</div>';
+                listContainer.innerHTML = '<div style="color:#777; font-size:12px; padding:10px;">Лидеров пока нет (нужно 10+ активных личников)</div>';
                 return;
             }
 
@@ -135,11 +147,11 @@ async function renderLeadersList() {
                 listContainer.appendChild(item);
             });
         } else {
-            listContainer.innerHTML = '<div style="color:#e74c3c; font-size:12px;">Ошибка загрузки лидеров</div>';
+            listContainer.innerHTML = `<div style="color:#e74c3c; font-size:12px; padding:10px;">Ошибка: ${data.error || 'Не удалось получить лидеров'}</div>`;
         }
     } catch (error) {
         console.error('Ошибка загрузки списка лидеров:', error);
-        listContainer.innerHTML = '<div style="color:#e74c3c; font-size:12px;">Ошибка подключения к серверу</div>';
+        listContainer.innerHTML = '<div style="color:#e74c3c; font-size:12px; padding:10px;">Ошибка подключения к серверу</div>';
     }
 }
 
