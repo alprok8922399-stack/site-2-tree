@@ -577,9 +577,9 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-// Регистрация с поддержкой мультипокупки (1-5 единиц) и транзитной обработкой через 3 кошелька
+// Регистрация с поддержкой мультипокупки (1-5 единиц) и явным указанием спонсора
 app.post('/api/shop/register', (req, res) => {
-    const { username, hashId, uplineUser, unitsCount, cellsCount = 1, amountMitrons = 1000 } = req.body;
+    const { username, hashId, uplineUser, sponsor, unitsCount, cellsCount = 1, amountMitrons = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const trimmedUser = username.trim();
@@ -605,11 +605,9 @@ app.post('/api/shop/register', (req, res) => {
         shopUsersDB[trimmedUser].hashId = hashId;
     }
     
-    let chosenSponsor = uplineUser ? uplineUser.trim() : null;
-    if (!chosenSponsor) {
-        const availableSponsors = Object.keys(referalsDB);
-        chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
-    }
+    // Ручное указание спонсора (берем uplineUser или sponsor)
+    let rawSponsor = uplineUser || sponsor;
+    let chosenSponsor = rawSponsor ? rawSponsor.trim() : 'SYSTEM_ROOT';
 
     if (!referalsDB[trimmedUser]) {
         referalsDB[trimmedUser] = chosenSponsor;
