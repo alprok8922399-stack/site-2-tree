@@ -1,5 +1,10 @@
 const API_URL = window.location.origin;
 
+// URL Сайта 1 (Маркетплейса) для кросс-серверных запросов симуляции
+const SITE1_API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://localhost:3000' 
+    : 'https://site-1-registrar.onrender.com';
+
 // === ГЛОБАЛЬНЫЙ КУРС ВАЛЮТЫ ===
 const MITRON_RATE_USD = 130 / 1000; 
 
@@ -54,17 +59,28 @@ async function loadAdminStats() {
     }
 }
 
-// === СИМУЛЯТОР ПРОХОЖДЕНИЯ 31 ДНЯ ДЛЯ ВСЕЙ КАРТОЧКИ АДМИНА ===
+// === СИМУЛЯТОР ПРОХОЖДЕНИЯ 31 ДНЯ ДЛЯ ВСЕХ СИСТЕМ (САЙТ 2 + САЙТ 1) ===
 async function simulate31Days() {
     try {
+        // 1. Симуляция на Сайте 2 (Дерево, балансы, статус 31 дня)
         const response = await fetch(`${API_URL}/api/admin/simulate-31-days`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
         const data = await response.json();
 
+        // 2. Симуляция на Сайте 1 (Маркетплейс - заказы и таймштампы покупок)
+        try {
+            await fetch(`${SITE1_API_URL}/api/admin/simulate-31-days`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+        } catch (e1) {
+            console.warn('Внимание: не удалось отправить запрос симуляции на Сайт 1 (Маркетплейс):', e1);
+        }
+
         if (data.success) {
-            alert(data.message);
+            alert(data.message || 'Симуляция 31 дня успешно выполнена для всей системы!');
             
             // Пересчитываем статистику Админа
             loadAdminStats();
