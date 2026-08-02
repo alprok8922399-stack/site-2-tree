@@ -7,6 +7,14 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
+// Импорт модуля Лидерской квалификации и Бонусов
+const {
+    getQualifiedLeaders,
+    calculateLeaderBranchBonuses,
+    toggleLeaderPayoutFreeze,
+    removeLeaderStatus
+} = require('./leaders');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -387,7 +395,14 @@ app.get('/api/admin/stats', (req, res) => {
     
     const baseRemainder = activeBuyerUnits * 230;
     const daoFund = Math.round(baseRemainder * 0.10); 
-    const netProfit = baseRemainder - daoFund;         
+
+    // Расчет Лидерских бонусов (10 M с каждого новичка ветки)
+    const qualifiedLeaders = getQualifiedLeaders(referalsDB, shopUsersDB);
+    const leaderBonuses = calculateLeaderBranchBonuses(referalsDB, shopUsersDB);
+    
+    // Лидерские бонусы выплачиваются из Чистой Прибыли Админа
+    const totalLeaderPayout = leaderBonuses.totalLeaderBonusPaid;
+    const netProfit = Math.max(0, baseRemainder - daoFund - totalLeaderPayout);
 
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
     const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
@@ -418,8 +433,61 @@ app.get('/api/admin/stats', (req, res) => {
             daoFund,
             totalLogins: activeBuyerUnits + adminRefundCells.length,
             adminLogins: 1,
-            userLogins: buyersCount
+            userLogins: buyersCount,
+            // Данные по лидерскому модулю
+            qualifiedLeadersCount: qualifiedLeaders.length,
+            leaderBonusPaid: totalLeaderPayout,
+            leaderBonusReserve: leaderBonuses.totalLeaderBonusReserve
         }
+    });
+});
+
+// === ЭНДПОИНТЫ УПРАВЛЕНИЯ ЛИДЕРАМИ ===
+
+// Получение списка всех Лидеров с деталями
+app.get('/api/admin/qualified-leaders', (req, res) => {
+    const qualifiedLeaders = getQualifiedLeaders(referalsDB, shopUsersDB);
+    const leaderBonuses = calculateLeaderBranchBonuses(referalsDB, shopUsersDB);
+
+    const detailedLeaders = qualifiedLeaders.map(leader => {
+        const bonusInfo = leaderBonuses.leaderRewardsMap[leader.username] || { paid: 0, reserve: 0, totalCount: 0 };
+        return {
+            username: leader.username,
+            activeDirectCount: leader.activeDirectCount,
+            payoutPaidM: bonusInfo.paid,
+            payoutReserveM: bonusInfo.reserve,
+            totalBranchMembers: bonusInfo.totalCount,
+            isPayoutFrozen: leader.isPayoutFrozen,
+            isExcludedFromLeaders: leader.isExcludedFromLeaders
+        };
+    });
+
+    res.json({ success: true, leaders: detailedLeaders });
+});
+
+// Заморозить / разморозить лидерские выплаты пользователю
+app.post('/api/admin/toggle-leader-freeze', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+
+    const status = toggleLeaderPayoutFreeze(username.trim());
+    res.json({
+        success: true,
+        isPayoutFrozen: status.isPayoutFrozen,
+        message: status.isPayoutFrozen ? `Лидерские выплаты для ${username} заморожены` : `Лидерские выплаты для ${username} возобновлены`
+    });
+});
+
+// Удалить пользователя ИЗ ЛИДЕРОВ (он остается обычным участником системы)
+app.post('/api/admin/remove-leader-status', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+
+    const status = removeLeaderStatus(username.trim());
+    res.json({
+        success: true,
+        isExcludedFromLeaders: status.isExcludedFromLeaders,
+        message: `Пользователь ${username} удален из списка Лидеров`
     });
 });
 
