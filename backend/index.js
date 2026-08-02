@@ -50,6 +50,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 let shopUsersDB = {};
 let wallets = createInitialWallets();
 let refundRecords = []; // Хранилище отказов
+let closedMatricesCount = 0; // Счётчик всех фактически закрывшихся матриц (делений)
 
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
@@ -180,6 +181,7 @@ function checkAndSplitMatrix(cellId) {
         const b2Cell = getCellByGIdx(b2G);
 
         if (topCell && topCell.user) {
+            closedMatricesCount++; // Увеличиваем общий счётчик закрывшихся матриц
             if (shopUsersDB[topCell.user]) {
                 shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
                 shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
@@ -331,22 +333,11 @@ app.get('/api/admin/stats', (req, res) => {
     let incomeWeek = 0;
     let incomeMonth = 0;
 
-    let cashbackPaidTotal = 0; // Выплаченный кешбэк (только за завершенные матрицы)
     let referralsPaidTotal = 0; // Размороженные реферальные
     let referralsReserveTotal = 0; // Текущий реферальный резерв
 
-    // Расчет матричных выплат кешбэка 100% (только для профилей со статусом payout_pending / payout_ready)
-    Object.keys(shopUsersDB).forEach(username => {
-        const user = shopUsersDB[username];
-        if (user && user.matrixPosition) {
-            const mStatus = user.matrixPosition.status;
-            const pEligibleDate = user.matrixPosition.payoutEligibleDate ? new Date(user.matrixPosition.payoutEligibleDate).getTime() : 0;
-            
-            if (mStatus === 'payout_ready' || (mStatus === 'payout_pending' && now >= pEligibleDate)) {
-                cashbackPaidTotal += (user.matrixPosition.reservedMatrixM || 1000);
-            }
-        }
-    });
+    // Выплаченный кешбэк считается ТОЧНО по количеству фактически поделившихся/закрывшихся матриц (каждая по 1000 M)
+    const cashbackPaidTotal = closedMatricesCount * 1000;
 
     activeBuyerCells.forEach(cell => {
         const user = shopUsersDB[cell.user];
@@ -580,6 +571,7 @@ app.post('/api/reset', (req, res) => {
     activeMatricesList = ['A1'];
     shopUsersDB = {};
     refundRecords = [];
+    closedMatricesCount = 0;
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
