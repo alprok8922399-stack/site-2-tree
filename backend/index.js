@@ -465,6 +465,20 @@ app.get('/api/admin/qualified-leaders', (req, res) => {
     res.json({ success: true, leaders: detailedLeaders });
 });
 
+// Совместимый маршрут для простой загрузки списка лидеров (для модального окна)
+app.get('/api/leaders/list', (req, res) => {
+    const qualifiedLeaders = getQualifiedLeaders(referalsDB, shopUsersDB);
+    res.json({
+        success: true,
+        totalLeaders: qualifiedLeaders.length,
+        leaders: qualifiedLeaders.map(l => ({
+            username: l.username,
+            activeReferralsCount: l.activeDirectCount,
+            isFrozen: l.isPayoutFrozen
+        }))
+    });
+});
+
 // Заморозить / разморозить лидерские выплаты пользователю
 app.post('/api/admin/toggle-leader-freeze', (req, res) => {
     const { username } = req.body;
