@@ -5,6 +5,7 @@
 
 /**
  * Получить список всех активных прямо приглашенных у пользователя (1-я линия)
+ * Учитываем только реально действующие профили (без отказников и без заблокированных)
  */
 function getActiveDirectReferrals(leaderUsername, referalsDB, shopUsersDB) {
     if (!leaderUsername || !referalsDB) return [];
@@ -18,7 +19,6 @@ function getActiveDirectReferrals(leaderUsername, referalsDB, shopUsersDB) {
         const profile = shopUsersDB[user];
         if (!profile) return false;
 
-        // Отсекаем отказников, неактивных и заблокированных
         const isPaid = profile.isPaid;
         const isNotRefunded = profile.matrixPosition && profile.matrixPosition.status !== 'refunded';
         const isNotBlocked = !profile.isBlocked;
@@ -28,21 +28,21 @@ function getActiveDirectReferrals(leaderUsername, referalsDB, shopUsersDB) {
 }
 
 /**
- * Подсчет и получение списка всех лидеров, выполнивших квалификацию (>= 10 активных личников)
+ * Подсчет и получение подробного списка всех квалифицированных Лидеров (10+ активных личников)
  */
 function getQualifiedLeaders(referalsDB, shopUsersDB) {
     const qualifiedLeaders = [];
     const allUsers = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
 
     allUsers.forEach(username => {
-        // Системные и служебные логины не участвуют в лидерской квалификации
         if (['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER'].includes(username)) return;
 
         const activeReferrals = getActiveDirectReferrals(username, referalsDB, shopUsersDB);
         if (activeReferrals.length >= 10) {
             qualifiedLeaders.push({
-                username,
-                activeDirectCount: activeReferrals.length
+                username: username,
+                activeDirectCount: activeReferrals.length,
+                referralsList: activeReferrals
             });
         }
     });
@@ -51,7 +51,7 @@ function getQualifiedLeaders(referalsDB, shopUsersDB) {
 }
 
 /**
- * Поиск первого квалифицированного Лидера вверх по реферальной цепочке
+ * Поиск первого квалифицированного Лидера вверх по реферальной цепочке ветки
  */
 function findBranchLeader(username, referalsDB, shopUsersDB) {
     let current = referalsDB[username];
@@ -64,30 +64,30 @@ function findBranchLeader(username, referalsDB, shopUsersDB) {
 
         const activeReferrals = getActiveDirectReferrals(current, referalsDB, shopUsersDB);
         if (activeReferrals.length >= 10) {
-            return current; // Нашли ближайшего Лидера ветки!
+            return current;
         }
 
         current = referalsDB[current];
     }
 
-    return null; // В ветке выше нет квалифицированного лидера
+    return null;
 }
 
 /**
- * Расчет накопленных/выплаченных лидерских бонусов (10 M) по прошествии 31 дня
+ * Расчет лидерских бонусов (10 M) с новичков ветки по прошествии 31 дня.
+ * Начисления происходят из чистой прибыли Админа!
  */
 function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
     const now = Date.now();
     let totalLeaderBonusPaid = 0;
     let totalLeaderBonusReserve = 0;
-    const leaderRewardsMap = {}; // { leaderLogin: { paid: 0, reserve: 0, count: 0 } }
+    const leaderRewardsMap = {};
 
     Object.keys(shopUsersDB).forEach(newUser => {
         const profile = shopUsersDB[newUser];
         if (!profile || !profile.isPaid) return;
         if (profile.matrixPosition && profile.matrixPosition.status === 'refunded') return;
 
-        // Ищем Лидера ветки для этого новичка
         const leader = findBranchLeader(newUser, referalsDB, shopUsersDB);
         if (!leader) return;
 
@@ -100,6 +100,7 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
 
         leaderRewardsMap[leader].totalCount++;
 
+        // С каждого новичка ветки лидеру полагается 10 M после 31 дня
         if (daysPassed >= 31) {
             leaderRewardsMap[leader].paid += 10;
             totalLeaderBonusPaid += 10;
