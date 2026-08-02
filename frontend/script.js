@@ -39,7 +39,7 @@ async function loadAdminStats() {
             // Выплаты, резервы, Фонд DAO и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
             setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
-            setElementText('stat-referrals-reserve', `${s.referralsReserve || 0} M`); // Добавлено отображение Резерва Реферальных (70M)
+            setElementText('stat-referrals-reserve', `${s.referralsReserve || 0} M`);
             setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
             setElementText('stat-dao-fund', `${s.daoFund || 0} M`);
             setElementText('stat-net-profit', `${s.netProfit || 0} M`);
@@ -51,6 +51,39 @@ async function loadAdminStats() {
         }
     } catch (error) {
         console.error('Ошибка загрузки статистики администратора:', error);
+    }
+}
+
+// === СИМУЛЯТОР ПРОХОЖДЕНИЯ 31 ДНЯ ДЛЯ ВСЕЙ КАРТОЧКИ АДМИНА ===
+async function simulate31Days() {
+    try {
+        const response = await fetch(`${API_URL}/api/admin/simulate-31-days`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert(data.message);
+            
+            // Пересчитываем статистику Админа
+            loadAdminStats();
+
+            // Если открыта карточка пользователя — обновляем её
+            const currentProfileUser = document.getElementById('current-profile-user')?.innerText;
+            if (currentProfileUser && currentProfileUser !== '—') {
+                loadUserProfile(currentProfileUser);
+            }
+
+            if (typeof window.renderMatrixTree === 'function') {
+                window.renderMatrixTree();
+            }
+        } else {
+            alert(`Ошибка симуляции: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Ошибка выполнения симуляции 31 дня:', error);
+        alert('Не удалось выполнить симуляцию 31 дня');
     }
 }
 
@@ -451,6 +484,7 @@ async function resetSystem() {
 window.showUserCard = loadUserProfile;
 window.closeUserCard = closeUserProfileCard;
 window.filterLoginsByDate = filterLoginsByDate;
+window.simulate31Days = simulate31Days;
 window.focusMatrixOnUser = (login) => {
     if (typeof window.searchMatrixUser === 'function') {
         window.searchMatrixUser(login);
@@ -472,6 +506,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Привязка кнопки тестов 31 дня, если она есть на странице
+    const sim31Btn = document.getElementById('simulate-31days-btn');
+    if (sim31Btn) {
+        sim31Btn.addEventListener('click', simulate31Days);
+    }
+
     // === УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ЗАКРЫТИЯ КАРТОЧКИ ПО КЛИКУ ВНЕ ЕЁ ===
     document.addEventListener('click', (e) => {
         const modal = getProfileModalElement();
@@ -486,9 +526,11 @@ document.addEventListener('DOMContentLoaded', () => {
                            modal.children[0];
 
         const isTrigger = e.target.closest('#search-profile-btn') || 
+                          e.target.closest('#simulate-31days-btn') ||
                           e.target.closest('.dropdown-btn') || 
                           e.target.closest('.user-cell-card') ||
                           e.target.closest('[onclick*="showUserCard"]') ||
+                          e.target.closest('[onclick*="simulate31Days"]') ||
                           e.target.closest('[onclick*="viewUserCardTrigger"]');
 
         if (isTrigger) return;
