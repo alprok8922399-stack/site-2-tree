@@ -207,18 +207,18 @@ function checkAndSplitMatrix(cellId) {
 // ================= API =================
 
 // === ПОЛНАЯ СИМУЛЯЦИЯ ПРОХОЖДЕНИЯ 31 ДНЯ ДЛЯ ВСЕЙ КАРТОЧКИ АДМИНА ===
-app.post('/api/admin/simulate-31-days', (req, res) => {
+app.post('/api/admin/simulate-31-days', async (req, res) => {
     const pastTimestamp = Date.now() - (32 * 24 * 60 * 60 * 1000);
     const pastIsoDate = new Date(pastTimestamp).toISOString();
 
     let updatedProfiles = 0;
 
-    // 1. Размораживаем все закрывшиеся матрицы
+    // 1. Размораживаем все закрывшиеся матрицы на Сайте 2
     closedMatrixPayouts.forEach(payout => {
         payout.unlockDate = pastIsoDate;
     });
 
-    // 2. Размораживаем карточки пользователей
+    // 2. Размораживаем карточки пользователей на Сайте 2
     Object.keys(shopUsersDB).forEach(username => {
         const profile = shopUsersDB[username];
         if (profile) {
@@ -243,9 +243,19 @@ app.post('/api/admin/simulate-31-days', (req, res) => {
         }
     });
 
+    // 3. Вызываем симуляцию 31 дня на бэкенде Сайта 1 (Backend-to-Backend)
+    try {
+        await fetch('https://site-1-registrar.onrender.com/api/admin/simulate-31-days', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+    } catch (err) {
+        console.error('Ошибка симуляции на Сайте 1:', err);
+    }
+
     res.json({
         success: true,
-        message: `Полный 31-дневный цикл пройден! Кешбэк, реферальные и матричные резервы полностью разморожены для ${updatedProfiles} профилей.`,
+        message: `Полный 31-дневный цикл пройден! Кешбэк, реферальные и заказы разморожены для ${updatedProfiles} профилей.`,
         simulatedDate: pastIsoDate
     });
 });
