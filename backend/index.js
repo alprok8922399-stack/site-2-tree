@@ -195,6 +195,47 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
+// === ПОЛНАЯ СИМУЛЯЦИЯ ПРОХОЖДЕНИЯ 31 ДНЯ ДЛЯ ВСЕЙ КАРТОЧКИ АДМИНА ===
+app.post('/api/admin/simulate-31-days', (req, res) => {
+    const pastTimestamp = Date.now() - (32 * 24 * 60 * 60 * 1000);
+    const pastIsoDate = new Date(pastTimestamp).toISOString();
+
+    let updatedProfiles = 0;
+
+    Object.keys(shopUsersDB).forEach(username => {
+        const profile = shopUsersDB[username];
+        if (profile) {
+            // 1. Состариваем дату покупки (размораживает кешбэк)
+            profile.paymentDate = pastIsoDate;
+            
+            // 2. Состариваем матричные выплаты
+            if (profile.matrixPosition) {
+                profile.matrixPosition.payoutEligibleDate = pastIsoDate;
+                if (profile.matrixPosition.status === 'payout_pending') {
+                    profile.matrixPosition.status = 'payout_ready';
+                }
+            }
+
+            // 3. Состариваем реферальные резервы (переводим из reserved в ready/paid)
+            if (profile.pendingReferralRewards && Array.isArray(profile.pendingReferralRewards)) {
+                profile.pendingReferralRewards.forEach(reward => {
+                    reward.unlockDate = pastIsoDate;
+                    if (reward.status === 'reserved') {
+                        reward.status = 'ready';
+                    }
+                });
+            }
+            updatedProfiles++;
+        }
+    });
+
+    res.json({
+        success: true,
+        message: `Полный 31-дневный цикл пройден! Кешбэк, реферальные и матричные резервы полностью разморожены для ${updatedProfiles} профилей.`,
+        simulatedDate: pastIsoDate
+    });
+});
+
 // === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО) ===
 app.post('/api/admin/refund-user', (req, res) => {
     const { username, amount, cellsCount, unitsCount } = req.body || {};
@@ -290,6 +331,10 @@ app.get('/api/admin/stats', (req, res) => {
     let incomeWeek = 0;
     let incomeMonth = 0;
 
+    let cashbackPaidTotal = 0; // Накопитель размороженного кешбэка
+    let referralsPaidTotal = 0; // Накопитель размороженных реферальных
+    let referralsReserveTotal = 0; // Текущий реферальный резерв
+
     activeBuyerCells.forEach(cell => {
         const user = shopUsersDB[cell.user];
         const pDate = (user && user.paymentDate) ? new Date(user.paymentDate).getTime() : now;
@@ -297,6 +342,15 @@ app.get('/api/admin/stats', (req, res) => {
         if (pDate >= oneDayAgo) incomeToday += 1000;
         if (pDate >= oneWeekAgo) incomeWeek += 1000;
         if (pDate >= oneMonthAgo) incomeMonth += 1000;
+
+        // Если с момента покупки прошло 31+ дней (или отмотали симулятором), считаем кешбэк 100% (1000 M)
+        const daysPassed = Math.floor((now - pDate) / (1000 * 60 * 60 * 24));
+        if (daysPassed >= 31) {
+            cashbackPaidTotal += 1000;
+            referralsPaidTotal += 70; // 50+10+10 M переходят в выплаченные
+        } else {
+            referralsReserveTotal += 70; // Остается в резерве
+        }
     });
 
     // Если даты платежей не были сохранены, считаем всю текущую сумму за активные периоды
@@ -312,8 +366,16 @@ app.get('/api/admin/stats', (req, res) => {
 
     // Финансы по активным покупкам
     const goodsBoughtM = activeBuyerUnits * 450;
-    const systemReserveTotal = activeBuyerUnits * 250;
-    const refReserveTotal = activeBuyerUnits * 70;
+    
+    // В резерве кешбэка остаются только те 250M, чей 31 день еще не истек
+    const pendingBuyerUnits = activeBuyerCells.filter(cell => {
+        const user = shopUsersDB[cell.user];
+        const pDate = (user && user.paymentDate) ? new Date(user.paymentDate).getTime() : now;
+        const daysPassed = Math.floor((now - pDate) / (1000 * 60 * 60 * 24));
+        return daysPassed < 31;
+    }).length;
+
+    const systemReserveTotal = pendingBuyerUnits * 250;
     
     // Базовый остаток = 1000 - 450 - 250 - 70 = 230 M на ячейку
     const baseRemainder = activeBuyerUnits * 230;
@@ -342,9 +404,9 @@ app.get('/api/admin/stats', (req, res) => {
             refusedCount: totalRefusedUnits,
             refusedTodayText: `${todayRefusedUsers} чел. (${todayRefusedUnits} яч.)`,
             refusedTotalText: `${totalRefusedUsers} чел. (${totalRefusedUnits} яч.)`,
-            cashbackPaid: 0,
-            referralsPaid: 0, 
-            referralsReserve: refReserveTotal,
+            cashbackPaid: cashbackPaidTotal,
+            referralsPaid: referralsPaidTotal, 
+            referralsReserve: referralsReserveTotal,
             inReserve: systemReserveTotal,
             netProfit,
             daoFund,
@@ -526,8 +588,8 @@ app.post('/api/reset', (req, res) => {
 app.get('/api/user-details/:username', (req, res) => {
     const usernameParam = req.params.username.trim();
     const canonicalName = Object.keys(referalsDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                         || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                         || usernameParam;
+                          || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
+                          || usernameParam;
     
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
