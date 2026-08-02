@@ -3,6 +3,22 @@
  * Проект: MITRON (Сайт 2)
  */
 
+// База заблокированных/замороженных именно в качестве Лидеров
+const excludedLeadersDB = {}; // { username: { isExcludedFromLeaders: true, isPayoutFrozen: false } }
+
+/**
+ * Получить/инициализировать лидерский статус пользователя
+ */
+function getLeaderStatus(username) {
+    if (!excludedLeadersDB[username]) {
+        excludedLeadersDB[username] = {
+            isExcludedFromLeaders: false,
+            isPayoutFrozen: false
+        };
+    }
+    return excludedLeadersDB[username];
+}
+
 /**
  * Получить список всех активных прямо приглашенных у пользователя (1-я линия)
  * Учитываем только реально действующие профили (без отказников и без заблокированных)
@@ -37,12 +53,18 @@ function getQualifiedLeaders(referalsDB, shopUsersDB) {
     allUsers.forEach(username => {
         if (['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER'].includes(username)) return;
 
+        const leaderStatus = getLeaderStatus(username);
+        // Если исключен из Лидеров — пропускаем
+        if (leaderStatus.isExcludedFromLeaders) return;
+
         const activeReferrals = getActiveDirectReferrals(username, referalsDB, shopUsersDB);
         if (activeReferrals.length >= 10) {
             qualifiedLeaders.push({
                 username: username,
                 activeDirectCount: activeReferrals.length,
-                referralsList: activeReferrals
+                referralsList: activeReferrals,
+                isPayoutFrozen: leaderStatus.isPayoutFrozen,
+                isExcludedFromLeaders: leaderStatus.isExcludedFromLeaders
             });
         }
     });
@@ -62,9 +84,14 @@ function findBranchLeader(username, referalsDB, shopUsersDB) {
 
         if (['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER'].includes(current)) break;
 
-        const activeReferrals = getActiveDirectReferrals(current, referalsDB, shopUsersDB);
-        if (activeReferrals.length >= 10) {
-            return current;
+        const leaderStatus = getLeaderStatus(current);
+        
+        // Лидер подходит только если он не исключен из Лидеров
+        if (!leaderStatus.isExcludedFromLeaders) {
+            const activeReferrals = getActiveDirectReferrals(current, referalsDB, shopUsersDB);
+            if (activeReferrals.length >= 10) {
+                return current;
+            }
         }
 
         current = referalsDB[current];
@@ -91,8 +118,15 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
         const leader = findBranchLeader(newUser, referalsDB, shopUsersDB);
         if (!leader) return;
 
+        const leaderStatus = getLeaderStatus(leader);
+
         if (!leaderRewardsMap[leader]) {
-            leaderRewardsMap[leader] = { paid: 0, reserve: 0, totalCount: 0 };
+            leaderRewardsMap[leader] = { 
+                paid: 0, 
+                reserve: 0, 
+                totalCount: 0,
+                isPayoutFrozen: leaderStatus.isPayoutFrozen 
+            };
         }
 
         const regDate = profile.paymentDate ? new Date(profile.paymentDate).getTime() : now;
@@ -100,8 +134,8 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
 
         leaderRewardsMap[leader].totalCount++;
 
-        // С каждого новичка ветки лидеру полагается 10 M после 31 дня
-        if (daysPassed >= 31) {
+        // Если выплата заморожена, деньги падают в резерв, а не в выплачено
+        if (daysPassed >= 31 && !leaderStatus.isPayoutFrozen) {
             leaderRewardsMap[leader].paid += 10;
             totalLeaderBonusPaid += 10;
         } else {
@@ -117,9 +151,27 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
     };
 }
 
+/**
+ * Управление лидерским статусом (Заморозка выплат / Удаление из лидеров)
+ */
+function toggleLeaderPayoutFreeze(username) {
+    const status = getLeaderStatus(username);
+    status.isPayoutFrozen = !status.isPayoutFrozen;
+    return status;
+}
+
+function removeLeaderStatus(username) {
+    const status = getLeaderStatus(username);
+    status.isExcludedFromLeaders = true;
+    return status;
+}
+
 module.exports = {
     getActiveDirectReferrals,
     getQualifiedLeaders,
     findBranchLeader,
-    calculateLeaderBranchBonuses
+    calculateLeaderBranchBonuses,
+    toggleLeaderPayoutFreeze,
+    removeLeaderStatus,
+    getLeaderStatus
 };
