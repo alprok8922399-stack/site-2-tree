@@ -50,7 +50,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 let shopUsersDB = {};
 let wallets = createInitialWallets();
 let refundRecords = []; // Хранилище отказов
-let closedMatricesCount = 0; // Счётчик всех фактически закрывшихся матриц (делений)
+let closedMatrixPayouts = []; // Реестр всех выплат по закрывшимся матрицам (с датами заморозки)
 
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
@@ -181,10 +181,19 @@ function checkAndSplitMatrix(cellId) {
         const b2Cell = getCellByGIdx(b2G);
 
         if (topCell && topCell.user) {
-            closedMatricesCount++; // Увеличиваем общий счётчик закрывшихся матриц
+            const unlockDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+            
+            // Записываем матричную выплату в реестр со статусом заморозки на 31 день
+            closedMatrixPayouts.push({
+                user: topCell.user,
+                amount: 1000,
+                unlockDate: unlockDate,
+                timestamp: Date.now()
+            });
+
             if (shopUsersDB[topCell.user]) {
                 shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
-                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = unlockDate;
                 shopUsersDB[topCell.user].matrixPosition.reservedMatrixM = 1000;
             }
         }
@@ -204,13 +213,17 @@ app.post('/api/admin/simulate-31-days', (req, res) => {
 
     let updatedProfiles = 0;
 
+    // 1. Размораживаем все закрывшиеся матрицы
+    closedMatrixPayouts.forEach(payout => {
+        payout.unlockDate = pastIsoDate;
+    });
+
+    // 2. Размораживаем карточки пользователей
     Object.keys(shopUsersDB).forEach(username => {
         const profile = shopUsersDB[username];
         if (profile) {
-            // 1. Состариваем дату покупки
             profile.paymentDate = pastIsoDate;
             
-            // 2. Состариваем матричные выплаты
             if (profile.matrixPosition) {
                 profile.matrixPosition.payoutEligibleDate = pastIsoDate;
                 if (profile.matrixPosition.status === 'payout_pending') {
@@ -218,7 +231,6 @@ app.post('/api/admin/simulate-31-days', (req, res) => {
                 }
             }
 
-            // 3. Состариваем реферальные резервы (переводим из reserved в ready)
             if (profile.pendingReferralRewards && Array.isArray(profile.pendingReferralRewards)) {
                 profile.pendingReferralRewards.forEach(reward => {
                     reward.unlockDate = pastIsoDate;
@@ -245,25 +257,21 @@ app.post('/api/admin/refund-user', (req, res) => {
 
     const cleanUser = username.trim();
     
-    // Рассчитываем точное количество возвращаемых ячеек
     let countToRefund = 1;
     if (unitsCount) countToRefund = parseInt(unitsCount);
     else if (cellsCount) countToRefund = parseInt(cellsCount);
     else if (amount) countToRefund = Math.max(1, Math.round(parseInt(amount) / 1000));
 
-    // 1. Создаем аккаунт Администратора, если его нет
     if (!shopUsersDB[ADMIN_OWNER_LOGIN]) {
         shopUsersDB[ADMIN_OWNER_LOGIN] = createNewUserCard(ADMIN_OWNER_LOGIN);
         shopUsersDB[ADMIN_OWNER_LOGIN].isPaid = true;
         shopUsersDB[ADMIN_OWNER_LOGIN].ownedByAdmin = true;
     }
 
-    // 2. Находим ВСЕ ячейки пользователя в матрице
     const userCells = Object.keys(treeDB).filter(cellId => 
         treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
     );
 
-    // Берем ровно столько ячеек, сколько указано в отказе (или все, если запрошено больше)
     const cellsToTransfer = userCells.slice(-countToRefund);
     let transferredCount = 0;
 
@@ -272,7 +280,6 @@ app.post('/api/admin/refund-user', (req, res) => {
         transferredCount++;
     });
 
-    // 3. Фиксируем лог отказа
     refundRecords.push({
         username: cleanUser,
         unitsCount: transferredCount,
@@ -280,7 +287,6 @@ app.post('/api/admin/refund-user', (req, res) => {
         timestamp: Date.now()
     });
 
-    // 4. Обновляем статус карточки пользователя
     if (shopUsersDB[cleanUser]) {
         const remainingCells = Object.keys(treeDB).filter(cellId => 
             treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
@@ -310,22 +316,16 @@ app.get('/api/admin/stats', (req, res) => {
     const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = now - (30 * 24 * 60 * 60 * 1000);
 
-    // 1. Все занятые ячейки в Матрице
     const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null && cell.user !== '');
-    
-    // Исключаем системных пользователей
     const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
 
-    // 2. Активные ячейки Покупателей
     const activeBuyerCells = allOccupiedCells.filter(cell => {
         if (!cell.user) return false;
         return !systemLogins.includes(cell.user.trim());
     });
 
-    // 3. Ячейки Администратора по отказам
     const adminRefundCells = allOccupiedCells.filter(cell => cell.user === ADMIN_OWNER_LOGIN);
 
-    // Считаем активные финансовые показатели
     const activeBuyerUnits = activeBuyerCells.length;
     const totalIncomeM = activeBuyerUnits * 1000;
 
@@ -333,11 +333,21 @@ app.get('/api/admin/stats', (req, res) => {
     let incomeWeek = 0;
     let incomeMonth = 0;
 
-    let referralsPaidTotal = 0; // Размороженные реферальные
-    let referralsReserveTotal = 0; // Текущий реферальный резерв
+    let referralsPaidTotal = 0; 
+    let referralsReserveTotal = 0; 
 
-    // Выплаченный кешбэк считается ТОЧНО по количеству фактически поделившихся/закрывшихся матриц (каждая по 1000 M)
-    const cashbackPaidTotal = closedMatricesCount * 1000;
+    // Вычисляем кешбэк (матричные выплаты) строго по пройденным 31 дню!
+    let cashbackPaidTotal = 0;
+    let cashbackReserveTotal = 0;
+
+    closedMatrixPayouts.forEach(payout => {
+        const unlockTime = new Date(payout.unlockDate).getTime();
+        if (now >= unlockTime) {
+            cashbackPaidTotal += payout.amount;
+        } else {
+            cashbackReserveTotal += payout.amount;
+        }
+    });
 
     activeBuyerCells.forEach(cell => {
         const user = shopUsersDB[cell.user];
@@ -349,9 +359,9 @@ app.get('/api/admin/stats', (req, res) => {
 
         const daysPassed = Math.floor((now - pDate) / (1000 * 60 * 60 * 24));
         if (daysPassed >= 31) {
-            referralsPaidTotal += 70; // 50+10+10 M переходят в выплаченные
+            referralsPaidTotal += 70;
         } else {
-            referralsReserveTotal += 70; // Остается в резерве
+            referralsReserveTotal += 70;
         }
     });
 
@@ -363,17 +373,7 @@ app.get('/api/admin/stats', (req, res) => {
 
     const activeBuyerUsernames = new Set(activeBuyerCells.map(c => c.user));
     const buyersCount = activeBuyerUsernames.size;
-
     const goodsBoughtM = activeBuyerUnits * 450;
-    
-    const pendingBuyerUnits = activeBuyerCells.filter(cell => {
-        const user = shopUsersDB[cell.user];
-        const pDate = (user && user.paymentDate) ? new Date(user.paymentDate).getTime() : now;
-        const daysPassed = Math.floor((now - pDate) / (1000 * 60 * 60 * 24));
-        return daysPassed < 31;
-    }).length;
-
-    const systemReserveTotal = pendingBuyerUnits * 250;
     
     const baseRemainder = activeBuyerUnits * 230;
     const daoFund = Math.round(baseRemainder * 0.10); 
@@ -403,7 +403,7 @@ app.get('/api/admin/stats', (req, res) => {
             cashbackPaid: cashbackPaidTotal,
             referralsPaid: referralsPaidTotal, 
             referralsReserve: referralsReserveTotal,
-            inReserve: systemReserveTotal,
+            inReserve: cashbackReserveTotal, // Матричный кешбэк до разморозки отображается в резерве
             netProfit,
             daoFund,
             totalLogins: activeBuyerUnits + adminRefundCells.length,
@@ -509,7 +509,6 @@ app.post('/api/shop/register', (req, res) => {
     const count = Math.min(Math.max(parseInt(countValue) || 1, 1), 5);
     const totalAmount = count * 1000;
 
-    // --- ТРАНЗИТНАЯ ЛОГИКА 3-Х КОШЕЛЬКОВ ---
     wallets.bufferWallet.balanceMitrons += totalAmount;
 
     const reserveForPayouts = count * (250 + 70);
@@ -571,7 +570,7 @@ app.post('/api/reset', (req, res) => {
     activeMatricesList = ['A1'];
     shopUsersDB = {};
     refundRecords = [];
-    closedMatricesCount = 0;
+    closedMatrixPayouts = [];
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
