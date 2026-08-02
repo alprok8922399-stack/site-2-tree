@@ -205,7 +205,7 @@ app.post('/api/admin/simulate-31-days', (req, res) => {
     Object.keys(shopUsersDB).forEach(username => {
         const profile = shopUsersDB[username];
         if (profile) {
-            // 1. Состариваем дату покупки (размораживает кешбэк)
+            // 1. Состариваем дату покупки
             profile.paymentDate = pastIsoDate;
             
             // 2. Состариваем матричные выплаты
@@ -216,7 +216,7 @@ app.post('/api/admin/simulate-31-days', (req, res) => {
                 }
             }
 
-            // 3. Состариваем реферальные резервы (переводим из reserved в ready/paid)
+            // 3. Состариваем реферальные резервы (переводим из reserved в ready)
             if (profile.pendingReferralRewards && Array.isArray(profile.pendingReferralRewards)) {
                 profile.pendingReferralRewards.forEach(reward => {
                     reward.unlockDate = pastIsoDate;
@@ -311,16 +311,16 @@ app.get('/api/admin/stats', (req, res) => {
     // 1. Все занятые ячейки в Матрице
     const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null && cell.user !== '');
     
-    // Исключаем только строго системных пользователей
+    // Исключаем системных пользователей
     const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
 
-    // 2. Активные ячейки Покупателей (любые пользовательские логины)
+    // 2. Активные ячейки Покупателей
     const activeBuyerCells = allOccupiedCells.filter(cell => {
         if (!cell.user) return false;
         return !systemLogins.includes(cell.user.trim());
     });
 
-    // 3. Ячейки Администратора, полученные по отказам
+    // 3. Ячейки Администратора по отказам
     const adminRefundCells = allOccupiedCells.filter(cell => cell.user === ADMIN_OWNER_LOGIN);
 
     // Считаем активные финансовые показатели
@@ -331,9 +331,22 @@ app.get('/api/admin/stats', (req, res) => {
     let incomeWeek = 0;
     let incomeMonth = 0;
 
-    let cashbackPaidTotal = 0; // Накопитель размороженного кешбэка
-    let referralsPaidTotal = 0; // Накопитель размороженных реферальных
+    let cashbackPaidTotal = 0; // Выплаченный кешбэк (только за завершенные матрицы)
+    let referralsPaidTotal = 0; // Размороженные реферальные
     let referralsReserveTotal = 0; // Текущий реферальный резерв
+
+    // Расчет матричных выплат кешбэка 100% (только для профилей со статусом payout_pending / payout_ready)
+    Object.keys(shopUsersDB).forEach(username => {
+        const user = shopUsersDB[username];
+        if (user && user.matrixPosition) {
+            const mStatus = user.matrixPosition.status;
+            const pEligibleDate = user.matrixPosition.payoutEligibleDate ? new Date(user.matrixPosition.payoutEligibleDate).getTime() : 0;
+            
+            if (mStatus === 'payout_ready' || (mStatus === 'payout_pending' && now >= pEligibleDate)) {
+                cashbackPaidTotal += (user.matrixPosition.reservedMatrixM || 1000);
+            }
+        }
+    });
 
     activeBuyerCells.forEach(cell => {
         const user = shopUsersDB[cell.user];
@@ -343,31 +356,25 @@ app.get('/api/admin/stats', (req, res) => {
         if (pDate >= oneWeekAgo) incomeWeek += 1000;
         if (pDate >= oneMonthAgo) incomeMonth += 1000;
 
-        // Если с момента покупки прошло 31+ дней (или отмотали симулятором), считаем кешбэк 100% (1000 M)
         const daysPassed = Math.floor((now - pDate) / (1000 * 60 * 60 * 24));
         if (daysPassed >= 31) {
-            cashbackPaidTotal += 1000;
             referralsPaidTotal += 70; // 50+10+10 M переходят в выплаченные
         } else {
             referralsReserveTotal += 70; // Остается в резерве
         }
     });
 
-    // Если даты платежей не были сохранены, считаем всю текущую сумму за активные периоды
     if (activeBuyerUnits > 0 && incomeToday === 0) {
         incomeToday = totalIncomeM;
         incomeWeek = totalIncomeM;
         incomeMonth = totalIncomeM;
     }
 
-    // Действующие покупатели (у кого осталась хотя бы 1 активная ячейка)
     const activeBuyerUsernames = new Set(activeBuyerCells.map(c => c.user));
     const buyersCount = activeBuyerUsernames.size;
 
-    // Финансы по активным покупкам
     const goodsBoughtM = activeBuyerUnits * 450;
     
-    // В резерве кешбэка остаются только те 250M, чей 31 день еще не истек
     const pendingBuyerUnits = activeBuyerCells.filter(cell => {
         const user = shopUsersDB[cell.user];
         const pDate = (user && user.paymentDate) ? new Date(user.paymentDate).getTime() : now;
@@ -377,12 +384,10 @@ app.get('/api/admin/stats', (req, res) => {
 
     const systemReserveTotal = pendingBuyerUnits * 250;
     
-    // Базовый остаток = 1000 - 450 - 250 - 70 = 230 M на ячейку
     const baseRemainder = activeBuyerUnits * 230;
-    const daoFund = Math.round(baseRemainder * 0.10); // 23 M на ячейку
-    const netProfit = baseRemainder - daoFund;         // 207 M на ячейку
+    const daoFund = Math.round(baseRemainder * 0.10); 
+    const netProfit = baseRemainder - daoFund;         
 
-    // Отказы за сегодня и всего
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
     const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
     const todayRefusedUsers = new Set(todayRefunds.map(r => r.username)).size;
