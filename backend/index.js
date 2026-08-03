@@ -9,6 +9,7 @@ const path = require('path');
 
 // Импорт модуля Лидерской квалификации и Бонусов
 const {
+    router: leadersRouter,
     getQualifiedLeaders,
     calculateLeaderBranchBonuses,
     toggleLeaderPayoutFreeze,
@@ -67,6 +68,13 @@ let referalsDB = {
     'LEADER_2': 'SYSTEM_ROOT'
 };
 
+// Передаем базы данных в Express locals для доступа из роутера leaders.js
+app.locals.shopUsersDB = shopUsersDB;
+app.locals.referalsDB = referalsDB;
+
+// Подключаем маршруты лидеров
+app.use(leadersRouter);
+
 let lastRegisteredBot = null;
 
 // Стартовое состояние активных структурных узлов
@@ -86,12 +94,12 @@ let treeDB = createInitialTree();
 let activeMatricesList = ['A1']; // Список верхушек активных структурных уровней
 
 /**
- * Расчет 31-дневного реферального резерва в Таблице (50, 10, 10 M)
+ * Расчет 33-дневного реферального резерва в Таблице (50, 10, 10 M)
  */
 function processTableReferrals(username) {
     let current = referalsDB[username];
     const referralRates = [50, 10, 10]; // 1-й лидер: 50M, 2-й: 10M, 3-й: 10M
-    const unlockDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+    const unlockDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
 
     for (let i = 0; i < referralRates.length; i++) {
         if (!current) break;
@@ -104,7 +112,7 @@ function processTableReferrals(username) {
             shopUsersDB[current].pendingReferralRewards = [];
         }
 
-        // Записываем резерв со сроком выдержки 31 день
+        // Записываем резерв со сроком выдержки 33 дня
         shopUsersDB[current].pendingReferralRewards.push({
             fromUser: username,
             amount: referralRates[i],
@@ -189,9 +197,9 @@ function checkAndSplitMatrix(cellId) {
         const b2Cell = getCellByGIdx(b2G);
 
         if (topCell && topCell.user) {
-            const unlockDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+            const unlockDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
             
-            // Записываем матричную выплату в реестр со статусом заморозки на 31 день
+            // Записываем матричную выплату в реестр со статусом заморозки на 33 дня
             closedMatrixPayouts.push({
                 user: topCell.user,
                 amount: 1000,
@@ -214,9 +222,10 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
-// === ПОЛНАЯ СИМУЛЯЦИЯ ПРОХОЖДЕНИЯ 31 ДНЯ ДЛЯ ВСЕЙ КАРТОЧКИ АДМИНА ===
+// === ПОЛНАЯ СИМУЛЯЦИЯ ПРОХОЖДЕНИЯ 33 ДНЕЙ ДЛЯ ВСЕЙ КАРТОЧКИ АДМИНА ===
 app.post('/api/admin/simulate-31-days', async (req, res) => {
-    const pastTimestamp = Date.now() - (32 * 24 * 60 * 60 * 1000);
+    // Вычисляем 34 дня назад, чтобы гарантированно пройти 33-дневный гарантийный срок
+    const pastTimestamp = Date.now() - (34 * 24 * 60 * 60 * 1000);
     const pastIsoDate = new Date(pastTimestamp).toISOString();
 
     let updatedProfiles = 0;
@@ -251,7 +260,7 @@ app.post('/api/admin/simulate-31-days', async (req, res) => {
         }
     });
 
-    // 3. Вызываем симуляцию 31 дня на бэкенде Сайта 1 (Backend-to-Backend)
+    // 3. Вызываем симуляцию 33 дней на бэкенде Сайта 1 (Backend-to-Backend)
     try {
         await fetch('https://site-1-registrar.onrender.com/api/admin/simulate-31-days', {
             method: 'POST',
@@ -263,7 +272,7 @@ app.post('/api/admin/simulate-31-days', async (req, res) => {
 
     res.json({
         success: true,
-        message: `Полный 31-дневный цикл пройден! Кешбэк, реферальные и заказы разморожены для ${updatedProfiles} профилей.`,
+        message: `Полный 33-дневный цикл пройден! Кешбэк, реферальные и заказы разморожены для ${updatedProfiles} профилей.`,
         simulatedDate: pastIsoDate
     });
 });
@@ -354,7 +363,7 @@ app.get('/api/admin/stats', (req, res) => {
     let referralsPaidTotal = 0; 
     let referralsReserveTotal = 0; 
 
-    // Вычисляем кешбэк (матричные выплаты) строго по пройденным 31 дню!
+    // Вычисляем кешбэк (матричные выплаты) строго по пройденным 33 дню!
     let cashbackPaidTotal = 0;
     let cashbackReserveTotal = 0;
 
@@ -376,7 +385,7 @@ app.get('/api/admin/stats', (req, res) => {
         if (pDate >= oneMonthAgo) incomeMonth += 1000;
 
         const daysPassed = Math.floor((now - pDate) / (1000 * 60 * 60 * 24));
-        if (daysPassed >= 31) {
+        if (daysPassed >= 33) {
             referralsPaidTotal += 70;
         } else {
             referralsReserveTotal += 70;
@@ -667,6 +676,8 @@ app.post('/api/reset', (req, res) => {
         'LEADER_1': 'SYSTEM_ROOT',
         'LEADER_2': 'SYSTEM_ROOT'
     };
+    app.locals.shopUsersDB = shopUsersDB;
+    app.locals.referalsDB = referalsDB;
     lastRegisteredBot = null;
     res.json({ success: true });
 });
