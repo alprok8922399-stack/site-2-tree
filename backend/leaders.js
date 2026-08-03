@@ -3,6 +3,9 @@
  * Проект: MITRON (Сайт 2)
  */
 
+const express = require('express');
+const router = express.Router();
+
 // База заблокированных/замороженных именно в качестве Лидеров
 const excludedLeadersDB = {}; // { username: { isExcludedFromLeaders: true, isPayoutFrozen: false } }
 
@@ -46,7 +49,7 @@ function getActiveDirectReferrals(leaderUsername, referalsDB, shopUsersDB) {
 /**
  * Подсчет и получение подробного списка всех квалифицированных Лидеров (10+ активных личников)
  */
-function getQualifiedLeaders(referalsDB, shopUsersDB) {
+function getQualifiedLeaders(referalsDB = {}, shopUsersDB = {}) {
     const qualifiedLeaders = [];
     const allUsers = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
 
@@ -75,7 +78,7 @@ function getQualifiedLeaders(referalsDB, shopUsersDB) {
 /**
  * Поиск первого квалифицированного Лидера вверх по реферальной цепочке ветки
  */
-function findBranchLeader(username, referalsDB, shopUsersDB) {
+function findBranchLeader(username, referalsDB = {}, shopUsersDB = {}) {
     let current = referalsDB[username];
     let visited = new Set();
 
@@ -101,10 +104,10 @@ function findBranchLeader(username, referalsDB, shopUsersDB) {
 }
 
 /**
- * Расчет лидерских бонусов (10 M) с новичков ветки по прошествии 31 дня.
+ * Расчет лидерских бонусов (10 M) с новичков ветки по прошествии 33 дней.
  * Начисления происходят из чистой прибыли Админа!
  */
-function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
+function calculateLeaderBranchBonuses(referalsDB = {}, shopUsersDB = {}) {
     const now = Date.now();
     let totalLeaderBonusPaid = 0;
     let totalLeaderBonusReserve = 0;
@@ -134,8 +137,8 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
 
         leaderRewardsMap[leader].totalCount++;
 
-        // Если выплата заморожена, деньги падают в резерв, а не в выплачено
-        if (daysPassed >= 31 && !leaderStatus.isPayoutFrozen) {
+        // Ровно 33 дня отказного периода
+        if (daysPassed >= 33 && !leaderStatus.isPayoutFrozen) {
             leaderRewardsMap[leader].paid += 10;
             totalLeaderBonusPaid += 10;
         } else {
@@ -166,7 +169,44 @@ function removeLeaderStatus(username) {
     return status;
 }
 
+// -------------------------------------------------------------
+// ЭНДПОИНТЫ ДЛЯ СВЯЗИ С АДМИНКОЙ И ВНЕШНИМ ИНТЕРФЕЙСОМ (САЙТ 2)
+// -------------------------------------------------------------
+
+// Получить список лидеров
+router.get('/api/admin/leaders', (req, res) => {
+    const referalsDB = req.app.locals.referalsDB || {};
+    const shopUsersDB = req.app.locals.shopUsersDB || {};
+    
+    const leaders = getQualifiedLeaders(referalsDB, shopUsersDB);
+    res.json({
+        success: true,
+        count: leaders.length,
+        leaders: leaders
+    });
+});
+
+// Заморозить / Разморозить выплату
+router.post('/api/admin/leaders/freeze', (req, res) => {
+    const { login } = req.body;
+    if (!login) return res.status(400).json({ success: false, message: "Логин не указан" });
+
+    const status = toggleLeaderPayoutFreeze(login);
+    res.json({ success: true, frozen: status.isPayoutFrozen, message: `Статус заморозки для ${login} изменен.` });
+});
+
+// Удалить ИЗ ЛИДЕРОВ (сохраняя обычный аккаунт)
+router.post('/api/admin/leaders/remove', (req, res) => {
+    const { login } = req.body;
+    if (!login) return res.status(400).json({ success: false, message: "Логин не указан" });
+
+    removeLeaderStatus(login);
+    res.json({ success: true, message: `Пользователь ${login} исключен из Лидеров. Аккаунт в системе сохранен.` });
+});
+
+// Экспорт как функции, так и роутера Express
 module.exports = {
+    router,
     getActiveDirectReferrals,
     getQualifiedLeaders,
     findBranchLeader,
