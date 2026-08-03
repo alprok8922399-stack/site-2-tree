@@ -54,8 +54,6 @@ function getQualifiedLeaders(referalsDB = {}, shopUsersDB = {}) {
     const allUsers = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
 
     allUsers.forEach(username => {
-        if (['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER'].includes(username)) return;
-
         const leaderStatus = getLeaderStatus(username);
         // Если исключен из Лидеров — пропускаем
         if (leaderStatus.isExcludedFromLeaders) return;
@@ -84,8 +82,6 @@ function findBranchLeader(username, referalsDB = {}, shopUsersDB = {}) {
 
     while (current && !visited.has(current)) {
         visited.add(current);
-
-        if (['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER'].includes(current)) break;
 
         const leaderStatus = getLeaderStatus(current);
         
