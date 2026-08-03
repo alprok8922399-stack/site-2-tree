@@ -45,7 +45,7 @@ function mitronsToUsd(mitrons) {
 }
 
 /**
- * Создание расширенной базовой карточки пользователя (поддержка 31-дневных резервов)
+ * Создание расширенной базовой карточки пользователя (поддержка 33-дневных резервов)
  */
 function createNewUserCard(username) {
     return {
@@ -65,7 +65,7 @@ function createNewUserCard(username) {
             status: 'inactive', // inactive -> active -> payout_pending -> completed
             reservedPerCell: 0,  // 250 M с каждой единицы
             reservedMatrixM: 0,  // 1000 M при заполнении 4 позиций
-            payoutEligibleDate: null // Дата разблокировки через 31 день
+            payoutEligibleDate: null // Дата разблокировки через 33 дня
         },
         pendingReferralRewards: [] // Резерв рефералок: [{ fromUser, amount, level, unlockDate, status }]
     };
