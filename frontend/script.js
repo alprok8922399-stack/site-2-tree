@@ -12,6 +12,17 @@ function convertMitronsToUsd(mitrons) {
     return (mitrons * MITRON_RATE_USD).toFixed(2);
 }
 
+// Вспомогательная функция для защиты от XSS (экранирование)
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // Вспомогательная функция для безопасного обновления текста в DOM
 function setElementText(id, text) {
     const el = document.getElementById(id);
@@ -95,7 +106,6 @@ function closeLeadersModal() {
 }
 
 async function renderLeadersList() {
-    // Безопасный поиск контейнера списка лидеров (проверяем несколько возможных ID)
     const listContainer = document.getElementById('modal-leaders-list') || 
                           document.getElementById('leaders-list-container') ||
                           document.getElementById('leaders-list');
@@ -109,7 +119,6 @@ async function renderLeadersList() {
 
     try {
         const response = await fetch(`${API_URL}/api/admin/leaders`);
-        
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -132,22 +141,23 @@ async function renderLeadersList() {
                 const isFrozen = leader.isPayoutFrozen;
                 const freezeBtnText = isFrozen ? '❄️ Разморозить' : '🧊 Заморозить';
                 const freezeBtnBg = isFrozen ? '#27ae60' : '#e67e22';
+                const safeUsername = escapeHtml(leader.username);
 
                 item.innerHTML = `
                     <div>
-                        <strong style="color:#f39c12; cursor:pointer;" onclick="loadUserProfile('${leader.username}')">${leader.username}</strong>
+                        <strong style="color:#f39c12; cursor:pointer;" onclick="loadUserProfile('${safeUsername}')">${safeUsername}</strong>
                         <span style="color:#888; font-size:11px; margin-left:8px;">(Личников: ${leader.activeDirectCount || 10})</span>
                         ${isFrozen ? '<span style="color:#e74c3c; font-size:11px; margin-left:6px;">[Заморожен]</span>' : ''}
                     </div>
                     <div style="display:flex; gap:6px;">
-                        <button onclick="toggleLeaderFreeze('${leader.username}')" style="background:${freezeBtnBg}; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;">${freezeBtnText}</button>
-                        <button onclick="removeLeader('${leader.username}')" style="background:#c0392b; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;">❌ Исключить</button>
+                        <button onclick="toggleLeaderFreeze('${safeUsername}')" style="background:${freezeBtnBg}; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;">${freezeBtnText}</button>
+                        <button onclick="removeLeader('${safeUsername}')" style="background:#c0392b; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;">❌ Исключить</button>
                     </div>
                 `;
                 listContainer.appendChild(item);
             });
         } else {
-            listContainer.innerHTML = `<div style="color:#e74c3c; font-size:12px; padding:10px;">Ошибка: ${data.error || 'Не удалось получить лидеров'}</div>`;
+            listContainer.innerHTML = `<div style="color:#e74c3c; font-size:12px; padding:10px;">Ошибка: ${escapeHtml(data.error) || 'Не удалось получить лидеров'}</div>`;
         }
     } catch (error) {
         console.error('Ошибка загрузки списка лидеров:', error);
@@ -287,7 +297,7 @@ async function filterLoginsByDate() {
 
         if (data.success) {
             if (resultEl) {
-                resultEl.innerText = `Найдено: ${data.count} логинов (${data.logins.join(', ') || 'нет'})`;
+                resultEl.innerText = `Найдено: ${data.count} логинов (${(data.logins || []).join(', ') || 'нет'})`;
             }
         } else {
             alert(`Ошибка поиска: ${data.error}`);
@@ -387,9 +397,9 @@ async function payCertificate() {
         
         if (result.success) {
             const split = result.split || {};
-            const goodsCost = split.adminLogistics || 450;
-            const daoFund = split.daoPool || 23;
-            const netProfit = split.netProfit || 207;
+            const goodsCost = split.adminLogistics ?? 450;
+            const daoFund = split.daoPool ?? 23;
+            const netProfit = split.netProfit ?? 207;
 
             const splitInfo = `
 Активация успешна!
@@ -496,7 +506,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                     const chainRes = await fetch(`${API_URL}/api/get-referral-chain?login=${encodeURIComponent(username)}`);
                     const chainData = await chainRes.json();
                     
-                    if (chainData.success && chainData.chain && chainData.chain.length > 0) {
+                    if (chainData.success && Array.isArray(chainData.chain) && chainData.chain.length > 0) {
                         const wrapper = document.createElement('div');
                         wrapper.style.cssText = 'margin-top: 12px; font-size: 14px; background: #1a1a20; padding: 10px; border-radius: 6px; border: 1px solid #33333e;';
                         
@@ -510,8 +520,9 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                         
                         chainData.chain.forEach((uplineLogin, idx) => {
                             const node = document.createElement('span');
+                            const safeLogin = escapeHtml(uplineLogin);
                             if (idx === chainData.chain.length - 1) {
-                                node.innerHTML = `<strong style="color:#2ecc71; background: #223828; padding: 2px 6px; border-radius: 4px;">${uplineLogin}</strong>`;
+                                node.innerHTML = `<strong style="color:#2ecc71; background: #223828; padding: 2px 6px; border-radius: 4px;">${safeLogin}</strong>`;
                             } else {
                                 node.innerText = uplineLogin;
                                 node.style.cursor = 'pointer';
@@ -567,8 +578,8 @@ function renderReferralsSection(username, refData, currentSearch) {
     wrapper.style.cssText = 'margin-top: 12px; font-size: 14px; background: #1a1a20; padding: 10px; border-radius: 6px; border: 1px solid #33333e;';
 
     const header = document.createElement('div');
-    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; color: #a0a0ab; font-size: 13px;';
-    header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount}</strong></span>`;
+    header.style.cssText = 'display: flex; justify-space-between; align-items: center; margin-bottom: 8px; font-weight: bold; color: #a0a0ab; font-size: 13px;';
+    header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount || 0}</strong></span>`;
     wrapper.appendChild(header);
 
     // Строка поиска по личникам
@@ -584,7 +595,7 @@ function renderReferralsSection(username, refData, currentSearch) {
         
         let timeout = null;
         input.oninput = (e) => {
-            clearTimeout(timeout);
+            if (timeout) clearTimeout(timeout);
             timeout = setTimeout(() => {
                 loadUserProfile(username, e.target.value, 1);
             }, 300);
@@ -620,7 +631,7 @@ function renderReferralsSection(username, refData, currentSearch) {
         const moreBtn = document.createElement('button');
         moreBtn.innerText = 'Показать ещё...';
         moreBtn.style.cssText = 'margin-top: 8px; width: 100%; padding: 6px; background: #2a2a36; border: 1px solid #444; color: #3498db; border-radius: 4px; cursor: pointer; font-size: 12px;';
-        moreBtn.onclick = () => loadUserProfile(username, currentSearch, refData.currentPage + 1);
+        moreBtn.onclick = () => loadUserProfile(username, currentSearch, (refData.currentPage || 1) + 1);
         wrapper.appendChild(moreBtn);
     }
 
