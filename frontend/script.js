@@ -237,10 +237,10 @@ async function removeLeader(username) {
     }
 }
 
-// === СИМУЛЯТОР ПРОХОЖДЕНИЯ 31 ДНЯ ДЛЯ ВСЕХ СИСТЕМ (САЙТ 2 + САЙТ 1) ===
+// === СИМУЛЯТОР ПРОХОЖДЕНИЯ 33 ДНЕЙ ДЛЯ ВСЕХ СИСТЕМ (САЙТ 2 + САЙТ 1) ===
 async function simulate31Days() {
     try {
-        // 1. Симуляция на Сайте 2 (Дерево, балансы, статус 31 дня)
+        // 1. Симуляция на Сайте 2 (Дерево, балансы, статус 33 дней)
         const response = await fetch(`${API_URL}/api/admin/simulate-31-days`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -258,7 +258,7 @@ async function simulate31Days() {
         }
 
         if (data.success) {
-            alert(data.message || 'Симуляция 31 дня успешно выполнена для всей системы!');
+            alert(data.message || 'Симуляция 33 дней успешно выполнена для всей системы!');
             
             // Пересчитываем статистику Админа
             loadAdminStats();
@@ -276,8 +276,8 @@ async function simulate31Days() {
             alert(`Ошибка симуляции: ${data.error}`);
         }
     } catch (error) {
-        console.error('Ошибка выполнения симуляции 31 дня:', error);
-        alert('Не удалось выполнить симуляцию 31 дня');
+        console.error('Ошибка выполнения симуляции 33 дней:', error);
+        alert('Не удалось выполнить симуляцию 33 дней');
     }
 }
 
@@ -457,7 +457,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             const cellId = data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null;
             setElementText('profile-cell-id', cellId || 'Нет позиции');
             
-            // Расчет дней с момента активации и выбор цвета статус-бара
+            // Расчет дней с момента активации и выбор цвета статус-бара (Порог: 33 дня)
             const statusEl = document.getElementById('profile-status');
             if (statusEl) {
                 if (data.profile.isPaid) {
@@ -466,11 +466,11 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                     
                     statusEl.innerText = `Оплачен (${diffDays} дн.)`;
-                    if (diffDays > 31) {
-                        statusEl.style.backgroundColor = '#d9534f';
+                    if (diffDays > 33) {
+                        statusEl.style.backgroundColor = '#d9534f'; // Просрочен (> 33 дней)
                         statusEl.style.color = '#ffffff';
                     } else {
-                        statusEl.style.backgroundColor = '#5cb85c';
+                        statusEl.style.backgroundColor = '#5cb85c'; // Активен (<= 33 дней)
                         statusEl.style.color = '#ffffff';
                     }
                     statusEl.style.padding = '3px 8px';
@@ -578,7 +578,7 @@ function renderReferralsSection(username, refData, currentSearch) {
     wrapper.style.cssText = 'margin-top: 12px; font-size: 14px; background: #1a1a20; padding: 10px; border-radius: 6px; border: 1px solid #33333e;';
 
     const header = document.createElement('div');
-    header.style.cssText = 'display: flex; justify-space-between; align-items: center; margin-bottom: 8px; font-weight: bold; color: #a0a0ab; font-size: 13px;';
+    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; color: #a0a0ab; font-size: 13px;';
     header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount || 0}</strong></span>`;
     wrapper.appendChild(header);
 
@@ -709,7 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Привязка кнопки тестов 31 дня, если она есть на странице
+    // Привязка кнопки тестов 31/33 дня, если она есть на странице
     const sim31Btn = document.getElementById('simulate-31days-btn');
     if (sim31Btn) {
         sim31Btn.addEventListener('click', simulate31Days);
