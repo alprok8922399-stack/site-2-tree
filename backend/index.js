@@ -261,7 +261,7 @@ async function handleSimulate33Days(req, res) {
 
     // 3. Вызываем симуляцию 33 дней на бэкенде Сайта 1 (Backend-to-Backend)
     try {
-        await fetch('https://site-1-registrar.onrender.com/api/admin/simulate-31-days', {
+        await fetch('https://site-1-registrar.onrender.com/api/admin/simulate-33-days', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -349,7 +349,7 @@ app.get('/api/admin/stats', (req, res) => {
     const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null && cell.user !== '');
     
     // Административные сервисные логины
-    const systemLogins = [ADMIN_OWNER_LOGIN];
+    const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
 
     const activeBuyerCells = allOccupiedCells.filter(cell => {
         if (!cell.user) return false;
