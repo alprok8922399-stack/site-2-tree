@@ -222,9 +222,8 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
-// === ПОЛНАЯ СИМУЛЯЦИЯ ПРОХОЖДЕНИЯ 33 ДНЕЙ ДЛЯ ВСЕЙ КАРТОЧКИ АДМИНА ===
-app.post('/api/admin/simulate-31-days', async (req, res) => {
-    // Вычисляем 34 дня назад, чтобы гарантированно пройти 33-дневный гарантийный срок
+// Общая логика симуляции 33 дней
+async function handleSimulate33Days(req, res) {
     const pastTimestamp = Date.now() - (34 * 24 * 60 * 60 * 1000);
     const pastIsoDate = new Date(pastTimestamp).toISOString();
 
@@ -275,7 +274,11 @@ app.post('/api/admin/simulate-31-days', async (req, res) => {
         message: `Полный 33-дневный цикл пройден! Кешбэк, реферальные и заказы разморожены для ${updatedProfiles} профилей.`,
         simulatedDate: pastIsoDate
     });
-});
+}
+
+// === ПОЛНАЯ СИМУЛЯЦИЯ ПРОХОЖДЕНИЯ 33 ДНЕЙ ДЛЯ ВСЕЙ КАРТОЧКИ АДМИНА ===
+app.post('/api/admin/simulate-33-days', handleSimulate33Days);
+app.post('/api/admin/simulate-31-days', handleSimulate33Days); // Обратная совместимость
 
 // === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО) ===
 app.post('/api/admin/refund-user', (req, res) => {
