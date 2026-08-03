@@ -347,7 +347,9 @@ app.get('/api/admin/stats', (req, res) => {
     const oneMonthAgo = now - (30 * 24 * 60 * 60 * 1000);
 
     const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null && cell.user !== '');
-    const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
+    
+    // Административные сервисные логины
+    const systemLogins = [ADMIN_OWNER_LOGIN];
 
     const activeBuyerCells = allOccupiedCells.filter(cell => {
         if (!cell.user) return false;
@@ -635,8 +637,11 @@ app.post('/api/shop/register', (req, res) => {
     let rawSponsor = uplineUser || sponsor;
     let chosenSponsor = rawSponsor ? rawSponsor.trim() : 'SYSTEM_ROOT';
 
+    // Поиск совпадения без учета регистра
+    const canonicalSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === chosenSponsor.toLowerCase()) || chosenSponsor;
+
     if (!referalsDB[trimmedUser]) {
-        referalsDB[trimmedUser] = chosenSponsor;
+        referalsDB[trimmedUser] = canonicalSponsor;
     }
     
     lastRegisteredBot = trimmedUser; 
