@@ -1,3 +1,12 @@
+/**
+ * =========================================================
+ * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
+ * Файловый путь: site-2-tree/frontend/script.js
+ * Назначение: Основной клиентский скрипт управления структурой, 
+ * аналитикой, модальными окнами и профилями.
+ * =========================================================
+ */
+
 const API_URL = window.location.origin;
 
 // === ГЛОБАЛЬНЫЙ КУРС ВАЛЮТЫ ===
@@ -39,8 +48,12 @@ async function loadAdminStats() {
             // Выплаты, резервы, Фонд DAO и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
             setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
-            setElementText('stat-referrals-reserve', `${s.referralsReserve || 0} M`); // Добавлено отображение Резерва Реферальных (70M)
+            setElementText('stat-referrals-reserve', `${s.referralsReserve || 0} M`);
             setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
+            
+            // Количество лидеров
+            setElementText('stat-leaders-count', `${s.leadersCount || 0} чел.`);
+
             setElementText('stat-dao-fund', `${s.daoFund || 0} M`);
             setElementText('stat-net-profit', `${s.netProfit || 0} M`);
 
@@ -77,6 +90,135 @@ async function filterLoginsByDate() {
         }
     } catch (error) {
         console.error('Ошибка поиска логинов за период:', error);
+    }
+}
+
+async function simulate33Days() {
+    if (!confirm('Вы действительно хотите симулировать прохождение 33 дней для разморозки всех заблокированных средств?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/admin/simulate-33days`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(data.message || 'Разморозка за 33 дня успешно выполнена!');
+            loadAdminStats();
+            if (typeof window.renderMatrixTree === 'function') {
+                window.renderMatrixTree();
+            }
+        } else {
+            alert(`Ошибка симуляции: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Ошибка разморозки 33 дней:', error);
+    }
+}
+
+// === 0.1 МОДУЛЬ УПРАВЛЕНИЯ ЛИДЕРАМИ ===
+
+async function showLeadersModal() {
+    const modal = document.getElementById('leadersModal');
+    const container = document.getElementById('leadersListContainer');
+    if (!modal || !container) return;
+
+    modal.style.display = 'flex';
+    container.innerHTML = '<p style="text-align: center; color: #a0a0ab;">Загрузка списка лидеров...</p>';
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/leaders`);
+        const data = await response.json();
+
+        if (data.success && data.leaders) {
+            if (data.leaders.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #71717a;">Нет активных лидеров с 10+ личниками</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            data.leaders.forEach(leader => {
+                const item = document.createElement('div');
+                item.className = 'leader-item';
+
+                const isFrozen = leader.isLeaderFrozen;
+                const freezeBtnText = isFrozen ? '▶️ Разморозить выплаты' : '❄️ Заморозить выплату';
+                const freezeBtnClass = isFrozen ? 'btn-warning' : 'btn-danger';
+
+                item.innerHTML = `
+                    <div>
+                        <strong style="color: #2ecc71; font-size: 16px;">${leader.username}</strong>
+                        <div style="font-size: 12px; color: #a0a0ab; margin-top: 4px;">
+                            Личников: <strong style="color: #fff;">${leader.activeDirectCount || 0}</strong> | 
+                            Статус: <span style="color: ${isFrozen ? '#e74c3c' : '#2ecc71'};">${isFrozen ? 'Заморожен' : 'Активен'}</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="${freezeBtnClass}" style="padding: 6px 12px; font-size: 12px;" onclick="toggleLeaderFreeze('${leader.username}', ${!isFrozen})">
+                            ${freezeBtnText}
+                        </button>
+                        <button class="btn-danger" style="padding: 6px 12px; font-size: 12px; background: #900C3F;" onclick="excludeLeader('${leader.username}')">
+                            ❌ Исключить
+                        </button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        } else {
+            container.innerHTML = `<p style="text-align: center; color: #e74c3c;">Ошибка: ${data.error || 'Не удалось загрузить данные'}</p>`;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки лидеров:', error);
+        container.innerHTML = '<p style="text-align: center; color: #e74c3c;">Сбой сети при загрузке лидеров</p>';
+    }
+}
+
+function closeLeadersModal() {
+    const modal = document.getElementById('leadersModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function toggleLeaderFreeze(username, freezeState) {
+    const actionText = freezeState ? 'заморозить' : 'разморозить';
+    if (!confirm(`Вы действительно хотите ${actionText} лидерские выплаты для ${username}?`)) return;
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/leaders/freeze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, freeze: freezeState })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert(data.message || 'Статус заморозки изменен!');
+            showLeadersModal();
+        } else {
+            alert(`Ошибка: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Ошибка изменения заморозки лидера:', error);
+    }
+}
+
+async function excludeLeader(username) {
+    if (!confirm(`Вы действительно хотите ИСКЛЮЧИТЬ ${username} из состава лидеров? Начисления по ветке прекратятся!`)) return;
+
+    try {
+        const response = await fetch(`${API_URL}/api/admin/leaders/exclude`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert(data.message || 'Пользователь исключен из лидеров!');
+            showLeadersModal();
+            loadAdminStats();
+        } else {
+            alert(`Ошибка: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Ошибка исключения лидера:', error);
     }
 }
 
@@ -230,7 +372,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             const cellId = data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null;
             setElementText('profile-cell-id', cellId || 'Нет позиции');
             
-            // Расчет дней с момента активации и выбор цвета статус-бара
+            // Расчет дней с момента активации и выбор цвета статус-бара (порог 33 дня)
             const statusEl = document.getElementById('profile-status');
             if (statusEl) {
                 if (data.profile.isPaid) {
@@ -239,7 +381,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                     
                     statusEl.innerText = `Оплачен (${diffDays} дн.)`;
-                    if (diffDays > 31) {
+                    if (diffDays > 33) {
                         statusEl.style.backgroundColor = '#d9534f';
                         statusEl.style.color = '#ffffff';
                     } else {
@@ -451,6 +593,12 @@ async function resetSystem() {
 window.showUserCard = loadUserProfile;
 window.closeUserCard = closeUserProfileCard;
 window.filterLoginsByDate = filterLoginsByDate;
+window.simulate33Days = simulate33Days;
+window.showLeadersModal = showLeadersModal;
+window.closeLeadersModal = closeLeadersModal;
+window.toggleLeaderFreeze = toggleLeaderFreeze;
+window.excludeLeader = excludeLeader;
+
 window.focusMatrixOnUser = (login) => {
     if (typeof window.searchMatrixUser === 'function') {
         window.searchMatrixUser(login);
@@ -489,7 +637,8 @@ document.addEventListener('DOMContentLoaded', () => {
                           e.target.closest('.dropdown-btn') || 
                           e.target.closest('.user-cell-card') ||
                           e.target.closest('[onclick*="showUserCard"]') ||
-                          e.target.closest('[onclick*="viewUserCardTrigger"]');
+                          e.target.closest('[onclick*="viewUserCardTrigger"]') ||
+                          e.target.closest('#leadersModal');
 
         if (isTrigger) return;
 
