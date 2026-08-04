@@ -1,14 +1,7 @@
 /**
- * =========================================================
- * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
- * Файловый путь: site-2-tree/backend/leaders.js
- * Назначение: Модуль Лидерской квалификации и Бонусов с Ветки (10 M)
- * Срок разморозки бонусов: 33 дня
- * =========================================================
+ * Модуль Лидерской квалификации и Бонусов с Ветки (10 M)
+ * Проект: MITRON (Сайт 2)
  */
-
-const express = require('express');
-const router = express.Router();
 
 // База заблокированных/замороженных именно в качестве Лидеров
 const excludedLeadersDB = {}; // { username: { isExcludedFromLeaders: true, isPayoutFrozen: false } }
@@ -17,22 +10,20 @@ const excludedLeadersDB = {}; // { username: { isExcludedFromLeaders: true, isPa
  * Получить/инициализировать лидерский статус пользователя
  */
 function getLeaderStatus(username) {
-    if (!username) return { isExcludedFromLeaders: true, isPayoutFrozen: false };
-    const cleanUser = username.trim().toLowerCase();
-    if (!excludedLeadersDB[cleanUser]) {
-        excludedLeadersDB[cleanUser] = {
+    if (!excludedLeadersDB[username]) {
+        excludedLeadersDB[username] = {
             isExcludedFromLeaders: false,
             isPayoutFrozen: false
         };
     }
-    return excludedLeadersDB[cleanUser];
+    return excludedLeadersDB[username];
 }
 
 /**
  * Получить список всех активных прямо приглашенных у пользователя (1-я линия)
  * Учитываем только реально действующие профили (без отказников и без заблокированных)
  */
-function getActiveDirectReferrals(leaderUsername, referalsDB = {}, shopUsersDB = {}) {
+function getActiveDirectReferrals(leaderUsername, referalsDB, shopUsersDB) {
     if (!leaderUsername || !referalsDB) return [];
 
     const leaderClean = leaderUsername.trim().toLowerCase();
@@ -41,7 +32,7 @@ function getActiveDirectReferrals(leaderUsername, referalsDB = {}, shopUsersDB =
         const sponsor = referalsDB[user];
         if (!sponsor || sponsor.trim().toLowerCase() !== leaderClean) return false;
 
-        const profile = shopUsersDB[user] || shopUsersDB[user.toLowerCase()];
+        const profile = shopUsersDB[user];
         if (!profile) return false;
 
         const isPaid = profile.isPaid;
@@ -55,11 +46,13 @@ function getActiveDirectReferrals(leaderUsername, referalsDB = {}, shopUsersDB =
 /**
  * Подсчет и получение подробного списка всех квалифицированных Лидеров (10+ активных личников)
  */
-function getQualifiedLeaders(referalsDB = {}, shopUsersDB = {}) {
+function getQualifiedLeaders(referalsDB, shopUsersDB) {
     const qualifiedLeaders = [];
     const allUsers = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
 
     allUsers.forEach(username => {
+        if (['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER'].includes(username)) return;
+
         const leaderStatus = getLeaderStatus(username);
         // Если исключен из Лидеров — пропускаем
         if (leaderStatus.isExcludedFromLeaders) return;
@@ -82,13 +75,14 @@ function getQualifiedLeaders(referalsDB = {}, shopUsersDB = {}) {
 /**
  * Поиск первого квалифицированного Лидера вверх по реферальной цепочке ветки
  */
-function findBranchLeader(username, referalsDB = {}, shopUsersDB = {}) {
-    if (!username) return null;
-    let current = referalsDB[username] || referalsDB[username.toLowerCase()];
+function findBranchLeader(username, referalsDB, shopUsersDB) {
+    let current = referalsDB[username];
     let visited = new Set();
 
-    while (current && !visited.has(current.toLowerCase())) {
-        visited.add(current.toLowerCase());
+    while (current && !visited.has(current)) {
+        visited.add(current);
+
+        if (['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER'].includes(current)) break;
 
         const leaderStatus = getLeaderStatus(current);
         
@@ -100,17 +94,17 @@ function findBranchLeader(username, referalsDB = {}, shopUsersDB = {}) {
             }
         }
 
-        current = referalsDB[current] || referalsDB[current.toLowerCase()];
+        current = referalsDB[current];
     }
 
     return null;
 }
 
 /**
- * Расчет лидерских бонусов (10 M) с новичков ветки по прошествии 33 дней.
+ * Расчет лидерских бонусов (10 M) с новичков ветки по прошествии 31 дня.
  * Начисления происходят из чистой прибыли Админа!
  */
-function calculateLeaderBranchBonuses(referalsDB = {}, shopUsersDB = {}) {
+function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
     const now = Date.now();
     let totalLeaderBonusPaid = 0;
     let totalLeaderBonusReserve = 0;
@@ -140,8 +134,8 @@ function calculateLeaderBranchBonuses(referalsDB = {}, shopUsersDB = {}) {
 
         leaderRewardsMap[leader].totalCount++;
 
-        // Ровно 33 дня отказного периода
-        if (daysPassed >= 33 && !leaderStatus.isPayoutFrozen) {
+        // Если выплата заморожена, деньги падают в резерв, а не в выплачено
+        if (daysPassed >= 31 && !leaderStatus.isPayoutFrozen) {
             leaderRewardsMap[leader].paid += 10;
             totalLeaderBonusPaid += 10;
         } else {
@@ -172,44 +166,7 @@ function removeLeaderStatus(username) {
     return status;
 }
 
-// -------------------------------------------------------------
-// ЭНДПОИНТЫ ДЛЯ СВЯЗИ С АДМИНКОЙ И ВНЕШНИМ ИНТЕРФЕЙСОМ (САЙТ 2)
-// -------------------------------------------------------------
-
-// Получить список лидеров
-router.get('/api/admin/leaders', (req, res) => {
-    const referalsDB = req.app.locals.referalsDB || {};
-    const shopUsersDB = req.app.locals.shopUsersDB || {};
-    
-    const leaders = getQualifiedLeaders(referalsDB, shopUsersDB);
-    res.json({
-        success: true,
-        count: leaders.length,
-        leaders: leaders
-    });
-});
-
-// Заморозить / Разморозить выплату
-router.post('/api/admin/leaders/freeze', (req, res) => {
-    const { login } = req.body;
-    if (!login) return res.status(400).json({ success: false, message: "Логин не указан" });
-
-    const status = toggleLeaderPayoutFreeze(login);
-    res.json({ success: true, frozen: status.isPayoutFrozen, message: `Статус заморозки для ${login} изменен.` });
-});
-
-// Удалить ИЗ ЛИДЕРОВ (сохраняя обычный аккаунт)
-router.post('/api/admin/leaders/remove', (req, res) => {
-    const { login } = req.body;
-    if (!login) return res.status(400).json({ success: false, message: "Логин не указан" });
-
-    removeLeaderStatus(login);
-    res.json({ success: true, message: `Пользователь ${login} исключен из Лидеров. Аккаунт в системе сохранен.` });
-});
-
-// Экспорт как функции, так и роутера Express
 module.exports = {
-    router,
     getActiveDirectReferrals,
     getQualifiedLeaders,
     findBranchLeader,
