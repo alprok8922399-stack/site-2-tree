@@ -1,6 +1,9 @@
 /**
- * Модуль хелперов и статики (Сайт 2)
- * Проект: MITRON
+ * =========================================================
+ * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
+ * Файловый путь: site-2-tree/backend/static.js
+ * Назначение: Модуль хелперов и статики
+ * =========================================================
  */
 
 /**
@@ -45,7 +48,7 @@ function mitronsToUsd(mitrons) {
 }
 
 /**
- * Создание расширенной базовой карточки пользователя (поддержка 31-дневных резервов)
+ * Создание расширенной базовой карточки пользователя (поддержка 33-дневных резервов)
  */
 function createNewUserCard(username) {
     return {
@@ -65,7 +68,7 @@ function createNewUserCard(username) {
             status: 'inactive', // inactive -> active -> payout_pending -> completed
             reservedPerCell: 0,  // 250 M с каждой единицы
             reservedMatrixM: 0,  // 1000 M при заполнении 4 позиций
-            payoutEligibleDate: null // Дата разблокировки через 31 день
+            payoutEligibleDate: null // Дата разблокировки через 33 дня
         },
         pendingReferralRewards: [] // Резерв рефералок: [{ fromUser, amount, level, unlockDate, status }]
     };
@@ -84,7 +87,7 @@ function createInitialWallets() {
         },
         payoutReserveWallet: {
             id: 'payout_reserve',
-            name: 'Выплатной Кошелек (250 M Резерв + 70 M Рефералка + DAO)',
+            name: 'Выплатной Кошелек (250 M Резерв + 70 M Рефералка + DAO + Выкуп)',
             balanceMitrons: 0,
             hasFullAccess: true
         },
