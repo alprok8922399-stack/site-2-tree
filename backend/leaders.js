@@ -1,6 +1,10 @@
 /**
- * Модуль Лидерской квалификации и Бонусов с Ветки (10 M)
- * Проект: MITRON (Сайт 2)
+ * =========================================================
+ * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
+ * Файловый путь: site-2-tree/backend/leaders.js
+ * Назначение: Модуль Лидерской квалификации и Бонусов с Ветки (10 M)
+ * Срок разморозки бонусов: 33 дня
+ * =========================================================
  */
 
 const express = require('express');
@@ -13,20 +17,22 @@ const excludedLeadersDB = {}; // { username: { isExcludedFromLeaders: true, isPa
  * Получить/инициализировать лидерский статус пользователя
  */
 function getLeaderStatus(username) {
-    if (!excludedLeadersDB[username]) {
-        excludedLeadersDB[username] = {
+    if (!username) return { isExcludedFromLeaders: true, isPayoutFrozen: false };
+    const cleanUser = username.trim().toLowerCase();
+    if (!excludedLeadersDB[cleanUser]) {
+        excludedLeadersDB[cleanUser] = {
             isExcludedFromLeaders: false,
             isPayoutFrozen: false
         };
     }
-    return excludedLeadersDB[username];
+    return excludedLeadersDB[cleanUser];
 }
 
 /**
  * Получить список всех активных прямо приглашенных у пользователя (1-я линия)
  * Учитываем только реально действующие профили (без отказников и без заблокированных)
  */
-function getActiveDirectReferrals(leaderUsername, referalsDB, shopUsersDB) {
+function getActiveDirectReferrals(leaderUsername, referalsDB = {}, shopUsersDB = {}) {
     if (!leaderUsername || !referalsDB) return [];
 
     const leaderClean = leaderUsername.trim().toLowerCase();
@@ -35,7 +41,7 @@ function getActiveDirectReferrals(leaderUsername, referalsDB, shopUsersDB) {
         const sponsor = referalsDB[user];
         if (!sponsor || sponsor.trim().toLowerCase() !== leaderClean) return false;
 
-        const profile = shopUsersDB[user];
+        const profile = shopUsersDB[user] || shopUsersDB[user.toLowerCase()];
         if (!profile) return false;
 
         const isPaid = profile.isPaid;
@@ -77,11 +83,12 @@ function getQualifiedLeaders(referalsDB = {}, shopUsersDB = {}) {
  * Поиск первого квалифицированного Лидера вверх по реферальной цепочке ветки
  */
 function findBranchLeader(username, referalsDB = {}, shopUsersDB = {}) {
-    let current = referalsDB[username];
+    if (!username) return null;
+    let current = referalsDB[username] || referalsDB[username.toLowerCase()];
     let visited = new Set();
 
-    while (current && !visited.has(current)) {
-        visited.add(current);
+    while (current && !visited.has(current.toLowerCase())) {
+        visited.add(current.toLowerCase());
 
         const leaderStatus = getLeaderStatus(current);
         
@@ -93,7 +100,7 @@ function findBranchLeader(username, referalsDB = {}, shopUsersDB = {}) {
             }
         }
 
-        current = referalsDB[current];
+        current = referalsDB[current] || referalsDB[current.toLowerCase()];
     }
 
     return null;
