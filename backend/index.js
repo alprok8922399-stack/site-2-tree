@@ -1,6 +1,7 @@
 /**
  * Ядро сервера (Сайт 2 — Структура и Таблица)
  * Проект: MITRON
+ * Срок действия таймера отказников/кешбэка: 33 дня
  */
 
 const express = require('express');
@@ -126,9 +127,9 @@ function processTableReferrals(username) {
 }
 
 /**
- * Вспомогательная функция: поиск всех глобальных индексов поддерева для заданного узла
+ * Поиск всех глобальных индексов поддерева для заданного узла (до 20 уровней глубины)
  */
-function getSubtreeIndices(rootGIdx, maxDepth = 12) {
+function getSubtreeIndices(rootGIdx, maxDepth = 20) {
     let queue = [rootGIdx];
     let result = [];
     let depth = 0;
@@ -901,20 +902,21 @@ app.post('/api/admin/delete-user', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
     
-    delete shopUsersDB[username];
-    delete referalsDB[username];
+    const cleanUser = username.trim();
+    
+    delete shopUsersDB[cleanUser];
+    delete referalsDB[cleanUser];
     
     Object.keys(treeDB).forEach(cellId => {
-        if (treeDB[cellId].user === username) {
+        if (treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()) {
             treeDB[cellId].user = null;
         }
     });
-    
-    res.json({ success: true });
+
+    res.json({ success: true, message: `Пользователь ${cleanUser} успешно удален из системы.` });
 });
 
-app.get('/api/sys-wallets', (req, res) => {
-    res.json({ success: true, wallets });
+// Запуск сервера
+app.listen(PORT, () => {
+    console.log(`Сервер Сайта 2 запущен на порту ${PORT}`);
 });
-
-app.listen(PORT, () => console.log(`Backend server running on port ${PORT}`));
