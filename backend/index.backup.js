@@ -1,6 +1,9 @@
 /**
- * Ядро сервера (Сайт 2 — Структура и Таблица)
- * Проект: MITRON
+ * =========================================================
+ * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
+ * Файловый путь: site-2-tree/backend/index.js
+ * Назначение: Ядро сервера (Структура, Таблица и Лидерские бонусы)
+ * =========================================================
  */
 
 const express = require('express');
@@ -51,6 +54,12 @@ let shopUsersDB = {};
 let wallets = createInitialWallets();
 let refundRecords = []; // Хранилище отказов
 
+// Хранилище выплат разморозки (для статистики)
+let simulatedPayouts = {
+    cashbackPaid: 0,
+    referralsPaid: 0
+};
+
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
     'SYSTEM_ROOT': null,
@@ -77,12 +86,28 @@ let treeDB = createInitialTree();
 let activeMatricesList = ['A1']; // Список верхушек активных структурных уровней
 
 /**
- * Расчет 31-дневного реферального резерва в Таблице (50, 10, 10 M)
+ * Проверка наличия Лидера ветки в реферальной цепи вышестоящих
+ */
+function checkBranchLeaderExists(username) {
+    let current = referalsDB[username];
+    let visited = new Set();
+    while (current && !visited.has(current)) {
+        visited.add(current);
+        if (current.toUpperCase().includes('LEADER') || current === 'SYSTEM_ROOT') {
+            return true;
+        }
+        current = referalsDB[current];
+    }
+    return false;
+}
+
+/**
+ * Расчет 33-дневного реферального резерва в Таблице (50, 10, 10 M)
  */
 function processTableReferrals(username) {
     let current = referalsDB[username];
     const referralRates = [50, 10, 10]; // 1-й лидер: 50M, 2-й: 10M, 3-й: 10M
-    const unlockDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+    const unlockDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
 
     for (let i = 0; i < referralRates.length; i++) {
         if (!current) break;
@@ -95,13 +120,13 @@ function processTableReferrals(username) {
             shopUsersDB[current].pendingReferralRewards = [];
         }
 
-        // Записываем резерв со сроком выдержки 31 день
+        // Записываем резерв со сроком выдержки 33 дня
         shopUsersDB[current].pendingReferralRewards.push({
             fromUser: username,
             amount: referralRates[i],
             level: i + 1,
             unlockDate: unlockDate,
-            status: 'reserved' // reserved -> ready -> paid
+            status: 'reserved'
         });
 
         current = referalsDB[current];
@@ -182,7 +207,7 @@ function checkAndSplitMatrix(cellId) {
         if (topCell && topCell.user) {
             if (shopUsersDB[topCell.user]) {
                 shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
-                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
                 shopUsersDB[topCell.user].matrixPosition.reservedMatrixM = 1000;
             }
         }
@@ -195,14 +220,54 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
-// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО) ===
+// === СИМУЛЯЦИЯ РАЗМОРОЗКИ 33 ДНЕЙ ===
+app.post('/api/admin/simulate-33days', (req, res) => {
+    let unlockedReferrals = 0;
+    let unlockedCashback = 0;
+
+    // 1. Размораживаем реферальные резервы в карточках пользователей
+    Object.values(shopUsersDB).forEach(user => {
+        if (user.pendingReferralRewards && Array.isArray(user.pendingReferralRewards)) {
+            user.pendingReferralRewards.forEach(reward => {
+                if (reward.status === 'reserved') {
+                    reward.status = 'unlocked';
+                    unlockedReferrals += (reward.amount || 0);
+                }
+            });
+        }
+
+        // 2. Размораживаем матричные выплаты (кэшбэк)
+        if (user.matrixPosition && user.matrixPosition.reservedMatrixM) {
+            unlockedCashback += user.matrixPosition.reservedMatrixM;
+            user.matrixPosition.status = 'payout_completed';
+            user.matrixPosition.reservedMatrixM = 0;
+        }
+    });
+
+    // 3. Рассчитываем полный реферальный резерв со всех покупок (70M за ячейку), если реферальная цепь была не полной
+    const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
+    const activeBuyerCells = Object.values(treeDB).filter(cell => cell.user && !systemLogins.includes(cell.user.trim()));
+    const totalRefReserve = activeBuyerCells.length * 70;
+    const totalCashbackReserve = activeBuyerCells.length * 250;
+
+    simulatedPayouts.referralsPaid = Math.max(unlockedReferrals, totalRefReserve);
+    simulatedPayouts.cashbackPaid = Math.max(unlockedCashback, totalCashbackReserve);
+
+    res.json({
+        success: true,
+        message: 'Симуляция 33 дней успешно выполнена! Все средства разморожены.',
+        cashbackPaid: simulatedPayouts.cashbackPaid,
+        referralsPaid: simulatedPayouts.referralsPaid
+    });
+});
+
+// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ ===
 app.post('/api/admin/refund-user', (req, res) => {
     const { username, amount, cellsCount, unitsCount } = req.body || {};
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
 
     const cleanUser = username.trim();
     
-    // Рассчитываем точное количество возвращаемых ячеек
     let countToRefund = 1;
     if (unitsCount) countToRefund = parseInt(unitsCount);
     else if (cellsCount) countToRefund = parseInt(cellsCount);
@@ -220,7 +285,6 @@ app.post('/api/admin/refund-user', (req, res) => {
         treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
     );
 
-    // Берем ровно столько ячеек, сколько указано в отказе (или все, если запрошено больше)
     const cellsToTransfer = userCells.slice(-countToRefund);
     let transferredCount = 0;
 
@@ -267,22 +331,16 @@ app.get('/api/admin/stats', (req, res) => {
     const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = now - (30 * 24 * 60 * 60 * 1000);
 
-    // 1. Все занятые ячейки в Матрице
     const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null && cell.user !== '');
-    
-    // Исключаем только строго системных пользователей
     const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
 
-    // 2. Активные ячейки Покупателей (любые пользовательские логины)
     const activeBuyerCells = allOccupiedCells.filter(cell => {
         if (!cell.user) return false;
         return !systemLogins.includes(cell.user.trim());
     });
 
-    // 3. Ячейки Администратора, полученные по отказам
     const adminRefundCells = allOccupiedCells.filter(cell => cell.user === ADMIN_OWNER_LOGIN);
 
-    // Считаем активные финансовые показатели
     const activeBuyerUnits = activeBuyerCells.length;
     const totalIncomeM = activeBuyerUnits * 1000;
 
@@ -299,28 +357,23 @@ app.get('/api/admin/stats', (req, res) => {
         if (pDate >= oneMonthAgo) incomeMonth += 1000;
     });
 
-    // Если даты платежей не были сохранены, считаем всю текущую сумму за активные периоды
     if (activeBuyerUnits > 0 && incomeToday === 0) {
         incomeToday = totalIncomeM;
         incomeWeek = totalIncomeM;
         incomeMonth = totalIncomeM;
     }
 
-    // Действующие покупатели (у кого осталась хотя бы 1 активная ячейка)
     const activeBuyerUsernames = new Set(activeBuyerCells.map(c => c.user));
     const buyersCount = activeBuyerUsernames.size;
 
-    // Финансы по активным покупкам
     const goodsBoughtM = activeBuyerUnits * 450;
-    const systemReserveTotal = activeBuyerUnits * 250;
-    const refReserveTotal = activeBuyerUnits * 70;
+    const systemReserveTotal = Math.max(0, (activeBuyerUnits * 250) - simulatedPayouts.cashbackPaid);
+    const refReserveTotal = Math.max(0, (activeBuyerUnits * 70) - simulatedPayouts.referralsPaid);
     
-    // Базовый остаток = 1000 - 450 - 250 - 70 = 230 M на ячейку
     const baseRemainder = activeBuyerUnits * 230;
     const daoFund = Math.round(baseRemainder * 0.10); // 23 M на ячейку
     const netProfit = baseRemainder - daoFund;         // 207 M на ячейку
 
-    // Отказы за сегодня и всего
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
     const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
     const todayRefusedUsers = new Set(todayRefunds.map(r => r.username)).size;
@@ -342,8 +395,8 @@ app.get('/api/admin/stats', (req, res) => {
             refusedCount: totalRefusedUnits,
             refusedTodayText: `${todayRefusedUsers} чел. (${todayRefusedUnits} яч.)`,
             refusedTotalText: `${totalRefusedUsers} чел. (${totalRefusedUnits} яч.)`,
-            cashbackPaid: 0,
-            referralsPaid: 0, 
+            cashbackPaid: simulatedPayouts.cashbackPaid,
+            referralsPaid: simulatedPayouts.referralsPaid, 
             referralsReserve: refReserveTotal,
             inReserve: systemReserveTotal,
             netProfit,
@@ -441,7 +494,7 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-// Регистрация с поддержкой мультипокупки (1-5 единиц) и транзитной обработкой через 3 кошелька
+// Регистрация с поддержкой мультипокупки и проверкой Лидера ветки
 app.post('/api/shop/register', (req, res) => {
     const { username, hashId, uplineUser, unitsCount, cellsCount = 1, amountMitrons = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -499,12 +552,15 @@ app.post('/api/shop/register', (req, res) => {
     shopUsersDB[trimmedUser].matrixPosition.status = 'active';
     shopUsersDB[trimmedUser].matrixPosition.reservedPerCell = 250;
     
+    const hasBranchLeader = checkBranchLeaderExists(trimmedUser);
+
     res.json({ 
         success: true, 
         shopUserStatus: shopUsersDB[trimmedUser], 
         cellId: occupiedCells[0],
         occupiedCells,
-        walletsState: wallets
+        walletsState: wallets,
+        hasBranchLeader: hasBranchLeader
     });
 });
 
@@ -513,6 +569,7 @@ app.post('/api/reset', (req, res) => {
     activeMatricesList = ['A1'];
     shopUsersDB = {};
     refundRecords = [];
+    simulatedPayouts = { cashbackPaid: 0, referralsPaid: 0 };
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
