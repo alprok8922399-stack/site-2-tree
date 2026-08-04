@@ -54,6 +54,12 @@ let shopUsersDB = {};
 let wallets = createInitialWallets();
 let refundRecords = []; // Хранилище отказов
 
+// Хранилище выплат разморозки (для статистики)
+let simulatedPayouts = {
+    cashbackPaid: 0,
+    referralsPaid: 0
+};
+
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
     'SYSTEM_ROOT': null,
@@ -96,12 +102,12 @@ function checkBranchLeaderExists(username) {
 }
 
 /**
- * Расчет 31-дневного реферального резерва в Таблице (50, 10, 10 M)
+ * Расчет 33-дневного реферального резерва в Таблице (50, 10, 10 M)
  */
 function processTableReferrals(username) {
     let current = referalsDB[username];
     const referralRates = [50, 10, 10]; // 1-й лидер: 50M, 2-й: 10M, 3-й: 10M
-    const unlockDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+    const unlockDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
 
     for (let i = 0; i < referralRates.length; i++) {
         if (!current) break;
@@ -114,7 +120,7 @@ function processTableReferrals(username) {
             shopUsersDB[current].pendingReferralRewards = [];
         }
 
-        // Записываем резерв со сроком выдержки 31 день
+        // Записываем резерв со сроком выдержки 33 дня
         shopUsersDB[current].pendingReferralRewards.push({
             fromUser: username,
             amount: referralRates[i],
@@ -201,7 +207,7 @@ function checkAndSplitMatrix(cellId) {
         if (topCell && topCell.user) {
             if (shopUsersDB[topCell.user]) {
                 shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
-                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
                 shopUsersDB[topCell.user].matrixPosition.reservedMatrixM = 1000;
             }
         }
@@ -213,6 +219,47 @@ function checkAndSplitMatrix(cellId) {
 }
 
 // ================= API =================
+
+// === СИМУЛЯЦИЯ РАЗМОРОЗКИ 33 ДНЕЙ ===
+app.post('/api/admin/simulate-33days', (req, res) => {
+    let unlockedReferrals = 0;
+    let unlockedCashback = 0;
+
+    // 1. Размораживаем реферальные резервы в карточках пользователей
+    Object.values(shopUsersDB).forEach(user => {
+        if (user.pendingReferralRewards && Array.isArray(user.pendingReferralRewards)) {
+            user.pendingReferralRewards.forEach(reward => {
+                if (reward.status === 'reserved') {
+                    reward.status = 'unlocked';
+                    unlockedReferrals += (reward.amount || 0);
+                }
+            });
+        }
+
+        // 2. Размораживаем матричные выплаты (кэшбэк)
+        if (user.matrixPosition && user.matrixPosition.reservedMatrixM) {
+            unlockedCashback += user.matrixPosition.reservedMatrixM;
+            user.matrixPosition.status = 'payout_completed';
+            user.matrixPosition.reservedMatrixM = 0;
+        }
+    });
+
+    // 3. Рассчитываем полный реферальный резерв со всех покупок (70M за ячейку), если реферальная цепь была не полной
+    const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
+    const activeBuyerCells = Object.values(treeDB).filter(cell => cell.user && !systemLogins.includes(cell.user.trim()));
+    const totalRefReserve = activeBuyerCells.length * 70;
+    const totalCashbackReserve = activeBuyerCells.length * 250;
+
+    simulatedPayouts.referralsPaid = Math.max(unlockedReferrals, totalRefReserve);
+    simulatedPayouts.cashbackPaid = Math.max(unlockedCashback, totalCashbackReserve);
+
+    res.json({
+        success: true,
+        message: 'Симуляция 33 дней успешно выполнена! Все средства разморожены.',
+        cashbackPaid: simulatedPayouts.cashbackPaid,
+        referralsPaid: simulatedPayouts.referralsPaid
+    });
+});
 
 // === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ ===
 app.post('/api/admin/refund-user', (req, res) => {
@@ -320,8 +367,8 @@ app.get('/api/admin/stats', (req, res) => {
     const buyersCount = activeBuyerUsernames.size;
 
     const goodsBoughtM = activeBuyerUnits * 450;
-    const systemReserveTotal = activeBuyerUnits * 250;
-    const refReserveTotal = activeBuyerUnits * 70;
+    const systemReserveTotal = Math.max(0, (activeBuyerUnits * 250) - simulatedPayouts.cashbackPaid);
+    const refReserveTotal = Math.max(0, (activeBuyerUnits * 70) - simulatedPayouts.referralsPaid);
     
     const baseRemainder = activeBuyerUnits * 230;
     const daoFund = Math.round(baseRemainder * 0.10); // 23 M на ячейку
@@ -348,8 +395,8 @@ app.get('/api/admin/stats', (req, res) => {
             refusedCount: totalRefusedUnits,
             refusedTodayText: `${todayRefusedUsers} чел. (${todayRefusedUnits} яч.)`,
             refusedTotalText: `${totalRefusedUsers} чел. (${totalRefusedUnits} яч.)`,
-            cashbackPaid: 0,
-            referralsPaid: 0, 
+            cashbackPaid: simulatedPayouts.cashbackPaid,
+            referralsPaid: simulatedPayouts.referralsPaid, 
             referralsReserve: refReserveTotal,
             inReserve: systemReserveTotal,
             netProfit,
@@ -522,6 +569,7 @@ app.post('/api/reset', (req, res) => {
     activeMatricesList = ['A1'];
     shopUsersDB = {};
     refundRecords = [];
+    simulatedPayouts = { cashbackPaid: 0, referralsPaid: 0 };
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
