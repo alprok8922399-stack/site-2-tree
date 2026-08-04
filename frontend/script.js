@@ -1,26 +1,10 @@
 const API_URL = window.location.origin;
 
-// URL Сайта 1 (Маркетплейса) для кросс-серверных запросов симуляции
-const SITE1_API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-    ? 'http://localhost:3000' 
-    : 'https://site-1-registrar.onrender.com';
-
 // === ГЛОБАЛЬНЫЙ КУРС ВАЛЮТЫ ===
 const MITRON_RATE_USD = 130 / 1000; 
 
 function convertMitronsToUsd(mitrons) {
     return (mitrons * MITRON_RATE_USD).toFixed(2);
-}
-
-// Вспомогательная функция для защиты от XSS (экранирование)
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
 }
 
 // Вспомогательная функция для безопасного обновления текста в DOM
@@ -55,7 +39,7 @@ async function loadAdminStats() {
             // Выплаты, резервы, Фонд DAO и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
             setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
-            setElementText('stat-referrals-reserve', `${s.referralsReserve || 0} M`);
+            setElementText('stat-referrals-reserve', `${s.referralsReserve || 0} M`); // Добавлено отображение Резерва Реферальных (70M)
             setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
             setElementText('stat-dao-fund', `${s.daoFund || 0} M`);
             setElementText('stat-net-profit', `${s.netProfit || 0} M`);
@@ -65,219 +49,8 @@ async function loadAdminStats() {
             setElementText('stat-admin-logins', s.adminLogins || 0);
             setElementText('stat-user-logins', s.userLogins || 0);
         }
-        
-        // Автоматически обновляем количество квалифицированных Лидеров (10+ личников)
-        loadLeadersCount();
     } catch (error) {
         console.error('Ошибка загрузки статистики администратора:', error);
-    }
-}
-
-// === МОДУЛЬ УПРАВЛЕНИЯ ЛИДЕРАМИ (10+ ЛИЧНО-ПРИГЛАШЕННЫХ) ===
-
-async function loadLeadersCount() {
-    try {
-        const response = await fetch(`${API_URL}/api/admin/leaders`);
-        if (!response.ok) return;
-        const data = await response.json();
-        if (data.success && Array.isArray(data.leaders)) {
-            setElementText('stat-leaders-count', `${data.leaders.length} чел.`);
-        }
-    } catch (error) {
-        console.error('Ошибка загрузки количества лидеров:', error);
-    }
-}
-
-async function openLeadersModal() {
-    const modal = document.getElementById('leaders-modal');
-    if (modal) {
-        modal.style.display = 'block';
-        modal.classList.add('active');
-        await renderLeadersList();
-    }
-}
-
-function closeLeadersModal() {
-    const modal = document.getElementById('leaders-modal');
-    if (modal) {
-        modal.style.display = 'none';
-        modal.classList.remove('active');
-    }
-}
-
-async function renderLeadersList() {
-    const listContainer = document.getElementById('modal-leaders-list') || 
-                          document.getElementById('leaders-list-container') ||
-                          document.getElementById('leaders-list');
-
-    if (!listContainer) {
-        console.warn('Контейнер для списка лидеров не найден в DOM HTML');
-        return;
-    }
-
-    listContainer.innerHTML = '<div style="color:#aaa; font-size:12px; padding:10px;">Загрузка списка лидеров...</div>';
-
-    try {
-        const response = await fetch(`${API_URL}/api/admin/leaders`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-
-        if (data.success && Array.isArray(data.leaders)) {
-            setElementText('stat-leaders-count', `${data.leaders.length} чел.`);
-
-            if (data.leaders.length === 0) {
-                listContainer.innerHTML = '<div style="color:#777; font-size:12px; padding:10px;">Лидеров пока нет (нужно 10+ активных личников)</div>';
-                return;
-            }
-
-            listContainer.innerHTML = '';
-            data.leaders.forEach(leader => {
-                const item = document.createElement('div');
-                item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#1e1e26; padding:8px 10px; margin-bottom:6px; border-radius:4px; border:1px solid #333; font-size:13px;';
-
-                const isFrozen = leader.isPayoutFrozen;
-                const freezeBtnText = isFrozen ? '❄️ Разморозить' : '🧊 Заморозить';
-                const freezeBtnBg = isFrozen ? '#27ae60' : '#e67e22';
-                const safeUsername = escapeHtml(leader.username);
-
-                item.innerHTML = `
-                    <div>
-                        <strong style="color:#f39c12; cursor:pointer;" onclick="loadUserProfile('${safeUsername}')">${safeUsername}</strong>
-                        <span style="color:#888; font-size:11px; margin-left:8px;">(Личников: ${leader.activeDirectCount || 10})</span>
-                        ${isFrozen ? '<span style="color:#e74c3c; font-size:11px; margin-left:6px;">[Заморожен]</span>' : ''}
-                    </div>
-                    <div style="display:flex; gap:6px;">
-                        <button onclick="toggleLeaderFreeze('${safeUsername}')" style="background:${freezeBtnBg}; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;">${freezeBtnText}</button>
-                        <button onclick="removeLeader('${safeUsername}')" style="background:#c0392b; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;">❌ Исключить</button>
-                    </div>
-                `;
-                listContainer.appendChild(item);
-            });
-        } else {
-            listContainer.innerHTML = `<div style="color:#e74c3c; font-size:12px; padding:10px;">Ошибка: ${escapeHtml(data.error) || 'Не удалось получить лидеров'}</div>`;
-        }
-    } catch (error) {
-        console.error('Ошибка загрузки списка лидеров:', error);
-        listContainer.innerHTML = '<div style="color:#e74c3c; font-size:12px; padding:10px;">Ошибка подключения к серверу</div>';
-    }
-}
-
-async function addLeaderFromModal() {
-    const input = document.getElementById('new-leader-username');
-    if (!input) return;
-    const username = input.value.trim();
-
-    if (!username) {
-        alert('Введите логин пользователя');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_URL}/api/admin/leaders/add`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username })
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            input.value = '';
-            await renderLeadersList();
-            loadAdminStats();
-        } else {
-            alert(`Ошибка: ${data.error || 'Не удалось добавить лидера'}`);
-        }
-    } catch (error) {
-        console.error('Ошибка добавления лидера:', error);
-        alert('Ошибка при добавлении лидера');
-    }
-}
-
-async function toggleLeaderFreeze(username) {
-    try {
-        const response = await fetch(`${API_URL}/api/admin/leaders/freeze`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username })
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            await renderLeadersList();
-        } else {
-            alert(`Ошибка: ${data.error}`);
-        }
-    } catch (error) {
-        console.error('Ошибка заморозки выплат лидера:', error);
-    }
-}
-
-async function removeLeader(username) {
-    if (!confirm(`Вы уверены, что хотите исключить пользователя ${username} из Лидеров?`)) return;
-
-    try {
-        const response = await fetch(`${API_URL}/api/admin/leaders/remove`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username })
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            await renderLeadersList();
-            loadAdminStats();
-        } else {
-            alert(`Ошибка: ${data.error}`);
-        }
-    } catch (error) {
-        console.error('Ошибка удаления лидера:', error);
-    }
-}
-
-// === СИМУЛЯТОР ПРОХОЖДЕНИЯ 33 ДНЕЙ ДЛЯ ВСЕХ СИСТЕМ (САЙТ 2 + САЙТ 1) ===
-async function simulate31Days() {
-    try {
-        // 1. Симуляция на Сайте 2 (Дерево, балансы, статус 33 дней)
-        const response = await fetch(`${API_URL}/api/admin/simulate-31-days`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await response.json();
-
-        // 2. Симуляция на Сайте 1 (Маркетплейс - заказы и таймштампы покупок)
-        try {
-            await fetch(`${SITE1_API_URL}/api/admin/simulate-31-days`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-        } catch (e1) {
-            console.warn('Внимание: не удалось отправить запрос симуляции на Сайт 1 (Маркетплейс):', e1);
-        }
-
-        if (data.success) {
-            alert(data.message || 'Симуляция 33 дней успешно выполнена для всей системы!');
-            
-            // Пересчитываем статистику Админа
-            loadAdminStats();
-
-            // Если открыта карточка пользователя — обновляем её
-            const currentProfileUser = document.getElementById('current-profile-user')?.innerText;
-            if (currentProfileUser && currentProfileUser !== '—') {
-                loadUserProfile(currentProfileUser);
-            }
-
-            if (typeof window.renderMatrixTree === 'function') {
-                window.renderMatrixTree();
-            }
-        } else {
-            alert(`Ошибка симуляции: ${data.error}`);
-        }
-    } catch (error) {
-        console.error('Ошибка выполнения симуляции 33 дней:', error);
-        alert('Не удалось выполнить симуляцию 33 дней');
     }
 }
 
@@ -297,7 +70,7 @@ async function filterLoginsByDate() {
 
         if (data.success) {
             if (resultEl) {
-                resultEl.innerText = `Найдено: ${data.count} логинов (${(data.logins || []).join(', ') || 'нет'})`;
+                resultEl.innerText = `Найдено: ${data.count} логинов (${data.logins.join(', ') || 'нет'})`;
             }
         } else {
             alert(`Ошибка поиска: ${data.error}`);
@@ -397,9 +170,9 @@ async function payCertificate() {
         
         if (result.success) {
             const split = result.split || {};
-            const goodsCost = split.adminLogistics ?? 450;
-            const daoFund = split.daoPool ?? 23;
-            const netProfit = split.netProfit ?? 207;
+            const goodsCost = split.adminLogistics || 450;
+            const daoFund = split.daoPool || 23;
+            const netProfit = split.netProfit || 207;
 
             const splitInfo = `
 Активация успешна!
@@ -457,7 +230,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             const cellId = data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null;
             setElementText('profile-cell-id', cellId || 'Нет позиции');
             
-            // Расчет дней с момента активации и выбор цвета статус-бара (Порог: 33 дня)
+            // Расчет дней с момента активации и выбор цвета статус-бара
             const statusEl = document.getElementById('profile-status');
             if (statusEl) {
                 if (data.profile.isPaid) {
@@ -466,11 +239,11 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                     
                     statusEl.innerText = `Оплачен (${diffDays} дн.)`;
-                    if (diffDays > 33) {
-                        statusEl.style.backgroundColor = '#d9534f'; // Просрочен (> 33 дней)
+                    if (diffDays > 31) {
+                        statusEl.style.backgroundColor = '#d9534f';
                         statusEl.style.color = '#ffffff';
                     } else {
-                        statusEl.style.backgroundColor = '#5cb85c'; // Активен (<= 33 дней)
+                        statusEl.style.backgroundColor = '#5cb85c';
                         statusEl.style.color = '#ffffff';
                     }
                     statusEl.style.padding = '3px 8px';
@@ -506,7 +279,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                     const chainRes = await fetch(`${API_URL}/api/get-referral-chain?login=${encodeURIComponent(username)}`);
                     const chainData = await chainRes.json();
                     
-                    if (chainData.success && Array.isArray(chainData.chain) && chainData.chain.length > 0) {
+                    if (chainData.success && chainData.chain && chainData.chain.length > 0) {
                         const wrapper = document.createElement('div');
                         wrapper.style.cssText = 'margin-top: 12px; font-size: 14px; background: #1a1a20; padding: 10px; border-radius: 6px; border: 1px solid #33333e;';
                         
@@ -520,9 +293,8 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                         
                         chainData.chain.forEach((uplineLogin, idx) => {
                             const node = document.createElement('span');
-                            const safeLogin = escapeHtml(uplineLogin);
                             if (idx === chainData.chain.length - 1) {
-                                node.innerHTML = `<strong style="color:#2ecc71; background: #223828; padding: 2px 6px; border-radius: 4px;">${safeLogin}</strong>`;
+                                node.innerHTML = `<strong style="color:#2ecc71; background: #223828; padding: 2px 6px; border-radius: 4px;">${uplineLogin}</strong>`;
                             } else {
                                 node.innerText = uplineLogin;
                                 node.style.cursor = 'pointer';
@@ -579,7 +351,7 @@ function renderReferralsSection(username, refData, currentSearch) {
 
     const header = document.createElement('div');
     header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; color: #a0a0ab; font-size: 13px;';
-    header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount || 0}</strong></span>`;
+    header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount}</strong></span>`;
     wrapper.appendChild(header);
 
     // Строка поиска по личникам
@@ -595,7 +367,7 @@ function renderReferralsSection(username, refData, currentSearch) {
         
         let timeout = null;
         input.oninput = (e) => {
-            if (timeout) clearTimeout(timeout);
+            clearTimeout(timeout);
             timeout = setTimeout(() => {
                 loadUserProfile(username, e.target.value, 1);
             }, 300);
@@ -631,7 +403,7 @@ function renderReferralsSection(username, refData, currentSearch) {
         const moreBtn = document.createElement('button');
         moreBtn.innerText = 'Показать ещё...';
         moreBtn.style.cssText = 'margin-top: 8px; width: 100%; padding: 6px; background: #2a2a36; border: 1px solid #444; color: #3498db; border-radius: 4px; cursor: pointer; font-size: 12px;';
-        moreBtn.onclick = () => loadUserProfile(username, currentSearch, (refData.currentPage || 1) + 1);
+        moreBtn.onclick = () => loadUserProfile(username, currentSearch, refData.currentPage + 1);
         wrapper.appendChild(moreBtn);
     }
 
@@ -679,15 +451,6 @@ async function resetSystem() {
 window.showUserCard = loadUserProfile;
 window.closeUserCard = closeUserProfileCard;
 window.filterLoginsByDate = filterLoginsByDate;
-window.simulate31Days = simulate31Days;
-
-// Мост связи для работы модального окна Лидеров
-window.openLeadersModal = openLeadersModal;
-window.closeLeadersModal = closeLeadersModal;
-window.addLeaderFromModal = addLeaderFromModal;
-window.toggleLeaderFreeze = toggleLeaderFreeze;
-window.removeLeader = removeLeader;
-
 window.focusMatrixOnUser = (login) => {
     if (typeof window.searchMatrixUser === 'function') {
         window.searchMatrixUser(login);
@@ -709,47 +472,33 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Привязка кнопки тестов 31/33 дня, если она есть на странице
-    const sim31Btn = document.getElementById('simulate-31days-btn');
-    if (sim31Btn) {
-        sim31Btn.addEventListener('click', simulate31Days);
-    }
-
     // === УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ЗАКРЫТИЯ КАРТОЧКИ ПО КЛИКУ ВНЕ ЕЁ ===
     document.addEventListener('click', (e) => {
         const modal = getProfileModalElement();
-        if (modal) {
-            const computedStyle = window.getComputedStyle(modal);
-            if (computedStyle.display !== 'none' && computedStyle.visibility !== 'hidden') {
-                const contentBox = modal.querySelector('.modal-content') || 
-                                   modal.querySelector('.card-body') || 
-                                   modal.querySelector('.user-card-content') || 
-                                   modal.children[0];
+        if (!modal) return;
 
-                const isTrigger = e.target.closest('#search-profile-btn') || 
-                                  e.target.closest('#simulate-31days-btn') ||
-                                  e.target.closest('.dropdown-btn') || 
-                                  e.target.closest('.user-cell-card') ||
-                                  e.target.closest('[onclick*="showUserCard"]') ||
-                                  e.target.closest('[onclick*="simulate31Days"]') ||
-                                  e.target.closest('[onclick*="viewUserCardTrigger"]');
+        const computedStyle = window.getComputedStyle(modal);
+        if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') return;
 
-                if (!isTrigger) {
-                    if (contentBox) {
-                        if (!contentBox.contains(e.target)) {
-                            closeUserProfileCard();
-                        }
-                    } else if (modal === e.target) {
-                        closeUserProfileCard();
-                    }
-                }
+        const contentBox = modal.querySelector('.modal-content') || 
+                           modal.querySelector('.card-body') || 
+                           modal.querySelector('.user-card-content') || 
+                           modal.children[0];
+
+        const isTrigger = e.target.closest('#search-profile-btn') || 
+                          e.target.closest('.dropdown-btn') || 
+                          e.target.closest('.user-cell-card') ||
+                          e.target.closest('[onclick*="showUserCard"]') ||
+                          e.target.closest('[onclick*="viewUserCardTrigger"]');
+
+        if (isTrigger) return;
+
+        if (contentBox) {
+            if (!contentBox.contains(e.target)) {
+                closeUserProfileCard();
             }
-        }
-
-        // Закрытие модального окна Лидеров при клике по затемненному фону
-        const leadersModal = document.getElementById('leaders-modal');
-        if (leadersModal && e.target === leadersModal) {
-            closeLeadersModal();
+        } else if (modal === e.target) {
+            closeUserProfileCard();
         }
     });
 });
