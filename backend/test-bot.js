@@ -1,12 +1,23 @@
 /**
- * Скрипт стресс-тестирования структуры (test-bot.js)
- * Симулирует регистрацию и покупку единиц N пользователей подряд с умным распределением рефералов.
+ * =========================================================
+ * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
+ * Файловый путь: site-2-tree/backend/test-bot.js
+ * Назначение: Скрипт стресс-тестирования структуры
+ * Симулирует регистрацию и покупку единиц N пользователей подряд 
+ * с умным распределением рефералов (до 15 личников на спонсора).
+ * =========================================================
  */
 
 const http = require('http');
+const https = require('https');
 
 const BATCH_SIZE = 50; // Количество ботов для генерации
-const API_URL = 'http://localhost:5000/api/shop/register';
+
+// Используем порт из переменных окружения или дефолтный 5000
+const PORT = process.env.PORT || 5000;
+const API_URL = process.env.SITE2_URL 
+    ? `${process.env.SITE2_URL}/api/shop/register` 
+    : `http://localhost:${PORT}/api/shop/register`;
 
 // Карта для отслеживания количества личников у каждого пользователя
 const sponsorCounts = {
@@ -45,23 +56,33 @@ async function sendRequest(username, uplineUser) {
             cellsCount: 1,
             amountMitrons: 1000 
         });
-        
-        const req = http.request(API_URL, {
+
+        const targetUrl = new URL(API_URL);
+        const transport = targetUrl.protocol === 'https:' ? https : http;
+
+        const req = transport.request(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(data)
-            }
+            },
+            timeout: 15000 // 15 секунд таймаут
         }, (res) => {
             let body = '';
             res.on('data', chunk => body += chunk);
             res.on('end', () => {
                 try {
-                    resolve(JSON.parse(body));
+                    const json = JSON.parse(body);
+                    resolve(json);
                 } catch (e) {
-                    reject(new Error(`Ошибка парсинга ответа: ${body}`));
+                    resolve({ error: `Сервер вернул некорректный ответ (не JSON): ${body.substring(0, 50)}...` });
                 }
             });
+        });
+
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Превышено время ожидания ответа (Таймаут)'));
         });
 
         req.on('error', reject);
@@ -71,7 +92,8 @@ async function sendRequest(username, uplineUser) {
 }
 
 async function runTest() {
-    console.log(`🚀 Начинаем умный стресс-тест: создание ${BATCH_SIZE} пользователей...\n`);
+    console.log(`🚀 Начинаем умный стресс-тест: создание ${BATCH_SIZE} пользователей...`);
+    console.log(`🎯 Целевой URL: ${API_URL}\n`);
     
     for (let i = 1; i <= BATCH_SIZE; i++) {
         const botName = `AutoBot_${Math.floor(1000 + Math.random() * 9000)}_${Math.floor(1000 + Math.random() * 9000)}`;
@@ -87,11 +109,14 @@ async function runTest() {
                 // Добавляем нового бота как потенциального спонсора
                 sponsorCounts[botName] = 0;
 
-                console.log(`[${i}/${BATCH_SIZE}] ✅ ${botName} встал на позицию: ${res.cellId} (Спонсор: ${chosenSponsor})`);
+                console.log(`[${i}/${BATCH_SIZE}] ✅ ${botName} встал на позицию: ${res.cellId || 'OK'} (Спонсор: ${chosenSponsor})`);
             }
         } catch (err) {
             console.error(`[${i}/${BATCH_SIZE}] ❌ Сбой сети для ${botName}:`, err.message);
         }
+
+        // Пауза 100 мс между запросами
+        await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     console.log('\n🎉 Тест завершен! Проверь визуализацию структуры в браузере.');
