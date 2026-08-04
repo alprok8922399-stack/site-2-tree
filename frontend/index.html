@@ -114,8 +114,6 @@
         .btn-admin:hover { background-color: #71368a; }
         .btn-warning { background-color: #f39c12; color: #000; }
         .btn-warning:hover { background-color: #d68910; }
-        .btn-leader { background-color: #9b59b6; }
-        .btn-leader:hover { background-color: #8e44ad; }
 
         /* === БЛОК УПРАВЛЕНИЯ ЗУМОМ === */
         .zoom-panel {
@@ -185,60 +183,6 @@
 
         .profile-info p { margin: 8px 0; font-size: 16px; }
 
-        /* === МОДАЛЬНОЕ ОКНО ЛИДЕРОВ === */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.75);
-            z-index: 9999;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background: #17171c;
-            border: 1px solid #9b59b6;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 500px;
-            padding: 20px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.8);
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #232329;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-        }
-        .modal-header h3 { margin: 0; color: #9b59b6; }
-        .close-modal {
-            background: none;
-            border: none;
-            color: #a0a0ab;
-            font-size: 20px;
-            cursor: pointer;
-            padding: 0;
-        }
-        .leaders-list {
-            max-height: 250px;
-            overflow-y: auto;
-            margin-top: 15px;
-            border: 1px solid #2d2d35;
-            border-radius: 6px;
-            padding: 10px;
-            background: #09090b;
-        }
-        .leader-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 10px;
-            border-bottom: 1px solid #202026;
-        }
-        .leader-item:last-child { border-bottom: none; }
-
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
             .search-date-panel { flex-direction: column; align-items: stretch; }
@@ -263,7 +207,7 @@
             <span style="color: #a0a0ab;">по</span>
             <input type="date" id="admin-date-to">
             <button onclick="filterLoginsByDate()">Найти</button>
-            <button id="simulate-31days-btn" class="btn-warning" onclick="simulate31Days()">⏩ Разморозить 33 дня</button>
+            <button id="simulate-31days-btn" class="btn-warning" onclick="simulate31Days()">⏩ Разморозить 31 день</button>
             <div id="logins-date-result" style="margin-left: 10px; font-weight: bold; color: #2ecc71;"></div>
         </div>
 
@@ -319,7 +263,7 @@
                 <span class="subtext">(Резерв 70M с каждой активации)</span>
             </div>
             <div class="stat-item" style="border-left-color: #e67e22;">
-                <span class="title">В резерве на выплаты (кешбэк 100%)</span>
+                <span class="title">В резерве на выплаты (всего)</span>
                 <span class="value" id="stat-in-reserve">0 M</span>
             </div>
             <div class="stat-item" style="border-left-color: #9b59b6;">
@@ -331,12 +275,6 @@
                 <span class="title">Чистая прибыль</span>
                 <span class="value" id="stat-net-profit">0 M</span>
                 <span class="subtext">(Приход минус расходы 450M, резерв и DAO)</span>
-            </div>
-
-            <div class="stat-item" style="border-left-color: #9b59b6;">
-                <span class="title">Лидеры</span>
-                <span class="value" id="stat-leaders-count">0 чел.</span>
-                <span class="subtext">(Назначенные лидерами логины)</span>
             </div>
 
             <div class="stat-item" style="border-left-color: #9b59b6;">
@@ -360,7 +298,6 @@
             <input type="text" id="search-username-input" placeholder="Введите логин для поиска..." style="flex: 1; min-width: 200px;">
             <button id="search-profile-btn">Найти</button>
             <button class="btn-admin" onclick="showAdminLoginsList()">👑 Логины Администратора</button>
-            <button class="btn-leader" onclick="openLeadersModal()">👑 Управление Лидерами</button>
         </div>
         
         <div class="profile-info">
@@ -398,27 +335,8 @@
     </div>
 </div>
 
-<div id="leaders-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>👑 Управление Лидерами</h3>
-            <button class="close-modal" onclick="closeLeadersModal()">&times;</button>
-        </div>
-        <div class="form-group">
-            <label for="new-leader-input">Добавить логин лидера:</label>
-            <div style="display: flex; gap: 10px;">
-                <input type="text" id="new-leader-input" placeholder="Введите логин пользователя...">
-                <button onclick="addLeaderFromModal()">Добавить</button>
-            </div>
-        </div>
-        <label>Список Лидеров:</label>
-        <div id="modal-leaders-list" class="leaders-list">
-            </div>
-    </div>
-</div>
-
 <script src="script.js?v=14"></script>
 <script src="matrix.js?v=14"></script>
 <script src="table.js?v=14"></script>
 </body>
-                    </html>
+        </html>
