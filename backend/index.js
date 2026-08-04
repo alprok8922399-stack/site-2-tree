@@ -126,7 +126,86 @@ function processTableReferrals(username) {
 }
 
 /**
- * Алгоритм поиска свободной позиции и деления уровней структуры
+ * Вспомогательная функция: поиск всех глобальных индексов поддерева для заданного узла
+ */
+function getSubtreeIndices(rootGIdx, maxDepth = 12) {
+    let queue = [rootGIdx];
+    let result = [];
+    let depth = 0;
+
+    while (queue.length > 0 && depth < maxDepth) {
+        let levelSize = queue.length;
+        for (let i = 0; i < levelSize; i++) {
+            let current = queue.shift();
+            result.push(current);
+            let left = current * 2 + 1;
+            let right = current * 2 + 2;
+            queue.push(left, right);
+        }
+        depth++;
+    }
+    return result;
+}
+
+/**
+ * Преобразование глобального индекса gIdx в ID ячейки (например, A1, B2, C3)
+ */
+function gIdxToCellId(g) {
+    let levelIndex = 0;
+    while ((1 << (levelIndex + 1)) - 1 <= g) levelIndex++;
+    const levelStart = (1 << levelIndex) - 1;
+    const num = (g - levelStart) + 1;
+    const letter = getLevelLetter(levelIndex);
+    return `${letter}${num}`;
+}
+
+/**
+ * Умный алгоритм поиска свободной позиции СТРОГО внутри поддерева спонсора
+ */
+function findNextEmptyCellForSponsor(tree, sponsorUsername) {
+    // 1. Ищем все ячейки, которые занимает спонсор
+    const sponsorCells = Object.keys(tree).filter(id => 
+        tree[id] && tree[id].user && tree[id].user.toLowerCase() === sponsorUsername.toLowerCase()
+    );
+
+    // 2. Если у спонсора пока нет ячеек или это SYSTEM_ROOT, делаем каскадный поиск от корня
+    let targetGIndices = [];
+    if (sponsorCells.length > 0) {
+        sponsorCells.forEach(cellId => {
+            const gIdx = cellIdToGlobalIndex ? cellIdToGlobalIndex(cellId) : 0;
+            const subIndices = getSubtreeIndices(gIdx);
+            targetGIndices.push(...subIndices);
+        });
+    } else {
+        // Поддерево по умолчанию от корня A1 (gIdx = 0)
+        targetGIndices = getSubtreeIndices(0);
+    }
+
+    // Сортируем индексы, чтобы заполнять ветку строго сверху вниз, слева направо
+    targetGIndices.sort((a, b) => a - b);
+
+    // 3. Ищем первую свободную ячейку в поддереве спонсора
+    for (const gIdx of targetGIndices) {
+        const cellId = gIdxToCellId(gIdx);
+        
+        if (!tree[cellId]) {
+            let levelIndex = 0;
+            while ((1 << (levelIndex + 1)) - 1 <= gIdx) levelIndex++;
+            const letter = getLevelLetter(levelIndex);
+            tree[cellId] = { id: cellId, level: letter, user: null };
+        }
+
+        if (!tree[cellId].user) {
+            return cellId;
+        }
+    }
+
+    // Резервный поиск, если ветка спонсора полностью заполнена
+    return findNextEmptyCell(tree);
+}
+
+/**
+ * Резервный стандартный поиск (глобальная очередь)
  */
 function findNextEmptyCell(tree) {
     const orderABC = ['C1', 'C2', 'C3', 'C4'];
@@ -165,7 +244,7 @@ function findNextEmptyCell(tree) {
 
 // Проверка и вызов деления при заполнении 4 нижних позиций
 function checkAndSplitMatrix(cellId) {
-    const gIdx = cellIdToGlobalIndex(cellId);
+    const gIdx = cellIdToGlobalIndex ? cellIdToGlobalIndex(cellId) : 0;
     const parentGIdx = Math.floor((gIdx - 1) / 2);
     const topGIdx = Math.floor((parentGIdx - 1) / 2);
 
@@ -177,12 +256,8 @@ function checkAndSplitMatrix(cellId) {
     const c4G = b2G * 2 + 2;
 
     const getCellByGIdx = (g) => {
-        let levelIndex = 0;
-        while ((1 << (levelIndex + 1)) - 1 <= g) levelIndex++;
-        const levelStart = (1 << levelIndex) - 1;
-        const num = (g - levelStart) + 1;
-        const letter = getLevelLetter(levelIndex);
-        return treeDB[`${letter}${num}`];
+        const id = gIdxToCellId(g);
+        return treeDB[id];
     };
 
     const c1 = getCellByGIdx(c1G);
@@ -646,9 +721,10 @@ app.post('/api/shop/register', (req, res) => {
     
     lastRegisteredBot = trimmedUser; 
 
+    // Расставляем ячейки строго в ветке указанного спонсора
     const occupiedCells = [];
     for (let i = 0; i < count; i++) {
-        const cellId = findNextEmptyCell(treeDB);
+        const cellId = findNextEmptyCellForSponsor(treeDB, canonicalSponsor);
         treeDB[cellId].user = trimmedUser;
         occupiedCells.push(cellId);
         checkAndSplitMatrix(cellId);
