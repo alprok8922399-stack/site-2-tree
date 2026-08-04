@@ -1,21 +1,11 @@
 /**
  * Ядро сервера (Сайт 2 — Структура и Таблица)
  * Проект: MITRON
- * Срок действия таймера отказников/кешбэка: 33 дня
  */
 
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-
-// Импорт модуля Лидерской квалификации и Бонусов
-const {
-    router: leadersRouter,
-    getQualifiedLeaders,
-    calculateLeaderBranchBonuses,
-    toggleLeaderPayoutFreeze,
-    removeLeaderStatus
-} = require('./leaders');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -60,7 +50,6 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 let shopUsersDB = {};
 let wallets = createInitialWallets();
 let refundRecords = []; // Хранилище отказов
-let closedMatrixPayouts = []; // Реестр всех выплат по закрывшимся матрицам (с датами заморозки)
 
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
@@ -68,13 +57,6 @@ let referalsDB = {
     'LEADER_1': 'SYSTEM_ROOT',
     'LEADER_2': 'SYSTEM_ROOT'
 };
-
-// Передаем базы данных в Express locals для доступа из роутера leaders.js
-app.locals.shopUsersDB = shopUsersDB;
-app.locals.referalsDB = referalsDB;
-
-// Подключаем маршруты лидеров
-app.use(leadersRouter);
 
 let lastRegisteredBot = null;
 
@@ -95,12 +77,12 @@ let treeDB = createInitialTree();
 let activeMatricesList = ['A1']; // Список верхушек активных структурных уровней
 
 /**
- * Расчет 33-дневного реферального резерва в Таблице (50, 10, 10 M)
+ * Расчет 31-дневного реферального резерва в Таблице (50, 10, 10 M)
  */
 function processTableReferrals(username) {
     let current = referalsDB[username];
     const referralRates = [50, 10, 10]; // 1-й лидер: 50M, 2-й: 10M, 3-й: 10M
-    const unlockDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
+    const unlockDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
 
     for (let i = 0; i < referralRates.length; i++) {
         if (!current) break;
@@ -113,7 +95,7 @@ function processTableReferrals(username) {
             shopUsersDB[current].pendingReferralRewards = [];
         }
 
-        // Записываем резерв со сроком выдержки 33 дня
+        // Записываем резерв со сроком выдержки 31 день
         shopUsersDB[current].pendingReferralRewards.push({
             fromUser: username,
             amount: referralRates[i],
@@ -127,86 +109,7 @@ function processTableReferrals(username) {
 }
 
 /**
- * Поиск всех глобальных индексов поддерева для заданного узла (до 20 уровней глубины)
- */
-function getSubtreeIndices(rootGIdx, maxDepth = 20) {
-    let queue = [rootGIdx];
-    let result = [];
-    let depth = 0;
-
-    while (queue.length > 0 && depth < maxDepth) {
-        let levelSize = queue.length;
-        for (let i = 0; i < levelSize; i++) {
-            let current = queue.shift();
-            result.push(current);
-            let left = current * 2 + 1;
-            let right = current * 2 + 2;
-            queue.push(left, right);
-        }
-        depth++;
-    }
-    return result;
-}
-
-/**
- * Преобразование глобального индекса gIdx в ID ячейки (например, A1, B2, C3)
- */
-function gIdxToCellId(g) {
-    let levelIndex = 0;
-    while ((1 << (levelIndex + 1)) - 1 <= g) levelIndex++;
-    const levelStart = (1 << levelIndex) - 1;
-    const num = (g - levelStart) + 1;
-    const letter = getLevelLetter(levelIndex);
-    return `${letter}${num}`;
-}
-
-/**
- * Умный алгоритм поиска свободной позиции СТРОГО внутри поддерева спонсора
- */
-function findNextEmptyCellForSponsor(tree, sponsorUsername) {
-    // 1. Ищем все ячейки, которые занимает спонсор
-    const sponsorCells = Object.keys(tree).filter(id => 
-        tree[id] && tree[id].user && tree[id].user.toLowerCase() === sponsorUsername.toLowerCase()
-    );
-
-    // 2. Если у спонсора пока нет ячеек или это SYSTEM_ROOT, делаем каскадный поиск от корня
-    let targetGIndices = [];
-    if (sponsorCells.length > 0) {
-        sponsorCells.forEach(cellId => {
-            const gIdx = cellIdToGlobalIndex ? cellIdToGlobalIndex(cellId) : 0;
-            const subIndices = getSubtreeIndices(gIdx);
-            targetGIndices.push(...subIndices);
-        });
-    } else {
-        // Поддерево по умолчанию от корня A1 (gIdx = 0)
-        targetGIndices = getSubtreeIndices(0);
-    }
-
-    // Сортируем индексы, чтобы заполнять ветку строго сверху вниз, слева направо
-    targetGIndices.sort((a, b) => a - b);
-
-    // 3. Ищем первую свободную ячейку в поддереве спонсора
-    for (const gIdx of targetGIndices) {
-        const cellId = gIdxToCellId(gIdx);
-        
-        if (!tree[cellId]) {
-            let levelIndex = 0;
-            while ((1 << (levelIndex + 1)) - 1 <= gIdx) levelIndex++;
-            const letter = getLevelLetter(levelIndex);
-            tree[cellId] = { id: cellId, level: letter, user: null };
-        }
-
-        if (!tree[cellId].user) {
-            return cellId;
-        }
-    }
-
-    // Резервный поиск, если ветка спонсора полностью заполнена
-    return findNextEmptyCell(tree);
-}
-
-/**
- * Резервный стандартный поиск (глобальная очередь)
+ * Алгоритм поиска свободной позиции и деления уровней структуры
  */
 function findNextEmptyCell(tree) {
     const orderABC = ['C1', 'C2', 'C3', 'C4'];
@@ -245,7 +148,7 @@ function findNextEmptyCell(tree) {
 
 // Проверка и вызов деления при заполнении 4 нижних позиций
 function checkAndSplitMatrix(cellId) {
-    const gIdx = cellIdToGlobalIndex ? cellIdToGlobalIndex(cellId) : 0;
+    const gIdx = cellIdToGlobalIndex(cellId);
     const parentGIdx = Math.floor((gIdx - 1) / 2);
     const topGIdx = Math.floor((parentGIdx - 1) / 2);
 
@@ -257,8 +160,12 @@ function checkAndSplitMatrix(cellId) {
     const c4G = b2G * 2 + 2;
 
     const getCellByGIdx = (g) => {
-        const id = gIdxToCellId(g);
-        return treeDB[id];
+        let levelIndex = 0;
+        while ((1 << (levelIndex + 1)) - 1 <= g) levelIndex++;
+        const levelStart = (1 << levelIndex) - 1;
+        const num = (g - levelStart) + 1;
+        const letter = getLevelLetter(levelIndex);
+        return treeDB[`${letter}${num}`];
     };
 
     const c1 = getCellByGIdx(c1G);
@@ -273,19 +180,9 @@ function checkAndSplitMatrix(cellId) {
         const b2Cell = getCellByGIdx(b2G);
 
         if (topCell && topCell.user) {
-            const unlockDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
-            
-            // Записываем матричную выплату в реестр со статусом заморозки на 33 дня
-            closedMatrixPayouts.push({
-                user: topCell.user,
-                amount: 1000,
-                unlockDate: unlockDate,
-                timestamp: Date.now()
-            });
-
             if (shopUsersDB[topCell.user]) {
                 shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
-                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = unlockDate;
+                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
                 shopUsersDB[topCell.user].matrixPosition.reservedMatrixM = 1000;
             }
         }
@@ -298,64 +195,6 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
-// Общая логика симуляции 33 дней
-async function handleSimulate33Days(req, res) {
-    const pastTimestamp = Date.now() - (34 * 24 * 60 * 60 * 1000);
-    const pastIsoDate = new Date(pastTimestamp).toISOString();
-
-    let updatedProfiles = 0;
-
-    // 1. Размораживаем все закрывшиеся матрицы на Сайте 2
-    closedMatrixPayouts.forEach(payout => {
-        payout.unlockDate = pastIsoDate;
-    });
-
-    // 2. Размораживаем карточки пользователей на Сайте 2
-    Object.keys(shopUsersDB).forEach(username => {
-        const profile = shopUsersDB[username];
-        if (profile) {
-            profile.paymentDate = pastIsoDate;
-            
-            if (profile.matrixPosition) {
-                profile.matrixPosition.payoutEligibleDate = pastIsoDate;
-                if (profile.matrixPosition.status === 'payout_pending') {
-                    profile.matrixPosition.status = 'payout_ready';
-                }
-            }
-
-            if (profile.pendingReferralRewards && Array.isArray(profile.pendingReferralRewards)) {
-                profile.pendingReferralRewards.forEach(reward => {
-                    reward.unlockDate = pastIsoDate;
-                    if (reward.status === 'reserved') {
-                        reward.status = 'ready';
-                    }
-                });
-            }
-            updatedProfiles++;
-        }
-    });
-
-    // 3. Вызываем симуляцию 33 дней на бэкенде Сайта 1 (Backend-to-Backend)
-    try {
-        await fetch('https://site-1-registrar.onrender.com/api/admin/simulate-33-days', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-    } catch (err) {
-        console.error('Ошибка симуляции на Сайте 1:', err);
-    }
-
-    res.json({
-        success: true,
-        message: `Полный 33-дневный цикл пройден! Кешбэк, реферальные и заказы разморожены для ${updatedProfiles} профилей.`,
-        simulatedDate: pastIsoDate
-    });
-}
-
-// === ПОЛНАЯ СИМУЛЯЦИЯ ПРОХОЖДЕНИЯ 33 ДНЕЙ ДЛЯ ВСЕЙ КАРТОЧКИ АДМИНА ===
-app.post('/api/admin/simulate-33-days', handleSimulate33Days);
-app.post('/api/admin/simulate-31-days', handleSimulate33Days); // Обратная совместимость
-
 // === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО) ===
 app.post('/api/admin/refund-user', (req, res) => {
     const { username, amount, cellsCount, unitsCount } = req.body || {};
@@ -363,21 +202,25 @@ app.post('/api/admin/refund-user', (req, res) => {
 
     const cleanUser = username.trim();
     
+    // Рассчитываем точное количество возвращаемых ячеек
     let countToRefund = 1;
     if (unitsCount) countToRefund = parseInt(unitsCount);
     else if (cellsCount) countToRefund = parseInt(cellsCount);
     else if (amount) countToRefund = Math.max(1, Math.round(parseInt(amount) / 1000));
 
+    // 1. Создаем аккаунт Администратора, если его нет
     if (!shopUsersDB[ADMIN_OWNER_LOGIN]) {
         shopUsersDB[ADMIN_OWNER_LOGIN] = createNewUserCard(ADMIN_OWNER_LOGIN);
         shopUsersDB[ADMIN_OWNER_LOGIN].isPaid = true;
         shopUsersDB[ADMIN_OWNER_LOGIN].ownedByAdmin = true;
     }
 
+    // 2. Находим ВСЕ ячейки пользователя в матрице
     const userCells = Object.keys(treeDB).filter(cellId => 
         treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
     );
 
+    // Берем ровно столько ячеек, сколько указано в отказе (или все, если запрошено больше)
     const cellsToTransfer = userCells.slice(-countToRefund);
     let transferredCount = 0;
 
@@ -386,6 +229,7 @@ app.post('/api/admin/refund-user', (req, res) => {
         transferredCount++;
     });
 
+    // 3. Фиксируем лог отказа
     refundRecords.push({
         username: cleanUser,
         unitsCount: transferredCount,
@@ -393,6 +237,7 @@ app.post('/api/admin/refund-user', (req, res) => {
         timestamp: Date.now()
     });
 
+    // 4. Обновляем статус карточки пользователя
     if (shopUsersDB[cleanUser]) {
         const remainingCells = Object.keys(treeDB).filter(cellId => 
             treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
@@ -422,40 +267,28 @@ app.get('/api/admin/stats', (req, res) => {
     const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = now - (30 * 24 * 60 * 60 * 1000);
 
+    // 1. Все занятые ячейки в Матрице
     const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null && cell.user !== '');
     
-    // Административные сервисные логины
+    // Исключаем только строго системных пользователей
     const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
 
+    // 2. Активные ячейки Покупателей (любые пользовательские логины)
     const activeBuyerCells = allOccupiedCells.filter(cell => {
         if (!cell.user) return false;
         return !systemLogins.includes(cell.user.trim());
     });
 
+    // 3. Ячейки Администратора, полученные по отказам
     const adminRefundCells = allOccupiedCells.filter(cell => cell.user === ADMIN_OWNER_LOGIN);
 
+    // Считаем активные финансовые показатели
     const activeBuyerUnits = activeBuyerCells.length;
     const totalIncomeM = activeBuyerUnits * 1000;
 
     let incomeToday = 0;
     let incomeWeek = 0;
     let incomeMonth = 0;
-
-    let referralsPaidTotal = 0; 
-    let referralsReserveTotal = 0; 
-
-    // Вычисляем кешбэк (матричные выплаты) строго по пройденным 33 дню!
-    let cashbackPaidTotal = 0;
-    let cashbackReserveTotal = 0;
-
-    closedMatrixPayouts.forEach(payout => {
-        const unlockTime = new Date(payout.unlockDate).getTime();
-        if (now >= unlockTime) {
-            cashbackPaidTotal += payout.amount;
-        } else {
-            cashbackReserveTotal += payout.amount;
-        }
-    });
 
     activeBuyerCells.forEach(cell => {
         const user = shopUsersDB[cell.user];
@@ -464,36 +297,30 @@ app.get('/api/admin/stats', (req, res) => {
         if (pDate >= oneDayAgo) incomeToday += 1000;
         if (pDate >= oneWeekAgo) incomeWeek += 1000;
         if (pDate >= oneMonthAgo) incomeMonth += 1000;
-
-        const daysPassed = Math.floor((now - pDate) / (1000 * 60 * 60 * 24));
-        if (daysPassed >= 33) {
-            referralsPaidTotal += 70;
-        } else {
-            referralsReserveTotal += 70;
-        }
     });
 
+    // Если даты платежей не были сохранены, считаем всю текущую сумму за активные периоды
     if (activeBuyerUnits > 0 && incomeToday === 0) {
         incomeToday = totalIncomeM;
         incomeWeek = totalIncomeM;
         incomeMonth = totalIncomeM;
     }
 
+    // Действующие покупатели (у кого осталась хотя бы 1 активная ячейка)
     const activeBuyerUsernames = new Set(activeBuyerCells.map(c => c.user));
     const buyersCount = activeBuyerUsernames.size;
+
+    // Финансы по активным покупкам
     const goodsBoughtM = activeBuyerUnits * 450;
+    const systemReserveTotal = activeBuyerUnits * 250;
+    const refReserveTotal = activeBuyerUnits * 70;
     
+    // Базовый остаток = 1000 - 450 - 250 - 70 = 230 M на ячейку
     const baseRemainder = activeBuyerUnits * 230;
-    const daoFund = Math.round(baseRemainder * 0.10); 
+    const daoFund = Math.round(baseRemainder * 0.10); // 23 M на ячейку
+    const netProfit = baseRemainder - daoFund;         // 207 M на ячейку
 
-    // Расчет Лидерских бонусов (10 M с каждого новичка ветки)
-    const qualifiedLeaders = getQualifiedLeaders(referalsDB, shopUsersDB);
-    const leaderBonuses = calculateLeaderBranchBonuses(referalsDB, shopUsersDB);
-    
-    // Лидерские бонусы выплачиваются из Чистой Прибыли Админа
-    const totalLeaderPayout = leaderBonuses.totalLeaderBonusPaid;
-    const netProfit = Math.max(0, baseRemainder - daoFund - totalLeaderPayout);
-
+    // Отказы за сегодня и всего
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
     const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
     const todayRefusedUsers = new Set(todayRefunds.map(r => r.username)).size;
@@ -515,83 +342,16 @@ app.get('/api/admin/stats', (req, res) => {
             refusedCount: totalRefusedUnits,
             refusedTodayText: `${todayRefusedUsers} чел. (${todayRefusedUnits} яч.)`,
             refusedTotalText: `${totalRefusedUsers} чел. (${totalRefusedUnits} яч.)`,
-            cashbackPaid: cashbackPaidTotal,
-            referralsPaid: referralsPaidTotal, 
-            referralsReserve: referralsReserveTotal,
-            inReserve: cashbackReserveTotal, // Матричный кешбэк до разморозки отображается в резерве
+            cashbackPaid: 0,
+            referralsPaid: 0, 
+            referralsReserve: refReserveTotal,
+            inReserve: systemReserveTotal,
             netProfit,
             daoFund,
             totalLogins: activeBuyerUnits + adminRefundCells.length,
             adminLogins: 1,
-            userLogins: buyersCount,
-            // Данные по лидерскому модулю
-            qualifiedLeadersCount: qualifiedLeaders.length,
-            leaderBonusPaid: totalLeaderPayout,
-            leaderBonusReserve: leaderBonuses.totalLeaderBonusReserve
+            userLogins: buyersCount
         }
-    });
-});
-
-// === ЭНДПОИНТЫ УПРАВЛЕНИЯ ЛИДЕРАМИ ===
-
-// Получение списка всех Лидеров с деталями
-app.get('/api/admin/qualified-leaders', (req, res) => {
-    const qualifiedLeaders = getQualifiedLeaders(referalsDB, shopUsersDB);
-    const leaderBonuses = calculateLeaderBranchBonuses(referalsDB, shopUsersDB);
-
-    const detailedLeaders = qualifiedLeaders.map(leader => {
-        const bonusInfo = leaderBonuses.leaderRewardsMap[leader.username] || { paid: 0, reserve: 0, totalCount: 0 };
-        return {
-            username: leader.username,
-            activeDirectCount: leader.activeDirectCount,
-            payoutPaidM: bonusInfo.paid,
-            payoutReserveM: bonusInfo.reserve,
-            totalBranchMembers: bonusInfo.totalCount,
-            isPayoutFrozen: leader.isPayoutFrozen,
-            isExcludedFromLeaders: leader.isExcludedFromLeaders
-        };
-    });
-
-    res.json({ success: true, leaders: detailedLeaders });
-});
-
-// Совместимый маршрут для простой загрузки списка лидеров (для модального окна)
-app.get('/api/leaders/list', (req, res) => {
-    const qualifiedLeaders = getQualifiedLeaders(referalsDB, shopUsersDB);
-    res.json({
-        success: true,
-        totalLeaders: qualifiedLeaders.length,
-        leaders: qualifiedLeaders.map(l => ({
-            username: l.username,
-            activeReferralsCount: l.activeDirectCount,
-            isFrozen: l.isPayoutFrozen
-        }))
-    });
-});
-
-// Заморозить / разморозить лидерские выплаты пользователю
-app.post('/api/admin/toggle-leader-freeze', (req, res) => {
-    const { username } = req.body;
-    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-
-    const status = toggleLeaderPayoutFreeze(username.trim());
-    res.json({
-        success: true,
-        isPayoutFrozen: status.isPayoutFrozen,
-        message: status.isPayoutFrozen ? `Лидерские выплаты для ${username} заморожены` : `Лидерские выплаты для ${username} возобновлены`
-    });
-});
-
-// Удалить пользователя ИЗ ЛИДЕРОВ (он остается обычным участником системы)
-app.post('/api/admin/remove-leader-status', (req, res) => {
-    const { username } = req.body;
-    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-
-    const status = removeLeaderStatus(username.trim());
-    res.json({
-        success: true,
-        isExcludedFromLeaders: status.isExcludedFromLeaders,
-        message: `Пользователь ${username} удален из списка Лидеров`
     });
 });
 
@@ -681,9 +441,9 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-// Регистрация с поддержкой мультипокупки (1-5 единиц) и явным указанием спонсора
+// Регистрация с поддержкой мультипокупки (1-5 единиц) и транзитной обработкой через 3 кошелька
 app.post('/api/shop/register', (req, res) => {
-    const { username, hashId, uplineUser, sponsor, unitsCount, cellsCount = 1, amountMitrons = 1000 } = req.body;
+    const { username, hashId, uplineUser, unitsCount, cellsCount = 1, amountMitrons = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const trimmedUser = username.trim();
@@ -691,6 +451,7 @@ app.post('/api/shop/register', (req, res) => {
     const count = Math.min(Math.max(parseInt(countValue) || 1, 1), 5);
     const totalAmount = count * 1000;
 
+    // --- ТРАНЗИТНАЯ ЛОГИКА 3-Х КОШЕЛЬКОВ ---
     wallets.bufferWallet.balanceMitrons += totalAmount;
 
     const reserveForPayouts = count * (250 + 70);
@@ -709,23 +470,21 @@ app.post('/api/shop/register', (req, res) => {
         shopUsersDB[trimmedUser].hashId = hashId;
     }
     
-    // Ручное указание спонсора (берем uplineUser или sponsor)
-    let rawSponsor = uplineUser || sponsor;
-    let chosenSponsor = rawSponsor ? rawSponsor.trim() : 'SYSTEM_ROOT';
-
-    // Поиск совпадения без учета регистра
-    const canonicalSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === chosenSponsor.toLowerCase()) || chosenSponsor;
+    let chosenSponsor = uplineUser ? uplineUser.trim() : null;
+    if (!chosenSponsor) {
+        const availableSponsors = Object.keys(referalsDB);
+        chosenSponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)] || 'SYSTEM_ROOT';
+    }
 
     if (!referalsDB[trimmedUser]) {
-        referalsDB[trimmedUser] = canonicalSponsor;
+        referalsDB[trimmedUser] = chosenSponsor;
     }
     
     lastRegisteredBot = trimmedUser; 
 
-    // Расставляем ячейки строго в ветке указанного спонсора
     const occupiedCells = [];
     for (let i = 0; i < count; i++) {
-        const cellId = findNextEmptyCellForSponsor(treeDB, canonicalSponsor);
+        const cellId = findNextEmptyCell(treeDB);
         treeDB[cellId].user = trimmedUser;
         occupiedCells.push(cellId);
         checkAndSplitMatrix(cellId);
@@ -754,15 +513,12 @@ app.post('/api/reset', (req, res) => {
     activeMatricesList = ['A1'];
     shopUsersDB = {};
     refundRecords = [];
-    closedMatrixPayouts = [];
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
         'LEADER_1': 'SYSTEM_ROOT',
         'LEADER_2': 'SYSTEM_ROOT'
     };
-    app.locals.shopUsersDB = shopUsersDB;
-    app.locals.referalsDB = referalsDB;
     lastRegisteredBot = null;
     res.json({ success: true });
 });
@@ -770,8 +526,8 @@ app.post('/api/reset', (req, res) => {
 app.get('/api/user-details/:username', (req, res) => {
     const usernameParam = req.params.username.trim();
     const canonicalName = Object.keys(referalsDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                          || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                          || usernameParam;
+                         || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
+                         || usernameParam;
     
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
@@ -902,21 +658,20 @@ app.post('/api/admin/delete-user', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
     
-    const cleanUser = username.trim();
-    
-    delete shopUsersDB[cleanUser];
-    delete referalsDB[cleanUser];
+    delete shopUsersDB[username];
+    delete referalsDB[username];
     
     Object.keys(treeDB).forEach(cellId => {
-        if (treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()) {
+        if (treeDB[cellId].user === username) {
             treeDB[cellId].user = null;
         }
     });
-
-    res.json({ success: true, message: `Пользователь ${cleanUser} успешно удален из системы.` });
+    
+    res.json({ success: true });
 });
 
-// Запуск сервера
-app.listen(PORT, () => {
-    console.log(`Сервер Сайта 2 запущен на порту ${PORT}`);
+app.get('/api/sys-wallets', (req, res) => {
+    res.json({ success: true, wallets });
 });
+
+app.listen(PORT, () => console.log(`Backend server running on port ${PORT}`));
