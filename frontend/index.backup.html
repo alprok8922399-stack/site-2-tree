@@ -72,6 +72,14 @@
             padding: 12px 16px;
             border-radius: 8px;
             border-left: 4px solid #2ecc71;
+            transition: transform 0.2s;
+        }
+        .stat-item-clickable {
+            cursor: pointer;
+        }
+        .stat-item-clickable:hover {
+            transform: translateY(-2px);
+            background: #282830;
         }
         .stat-item .title { font-size: 13px; color: #a0a0ab; display: block; margin-bottom: 4px; }
         .stat-item .value { font-size: 18px; font-weight: bold; color: #ffffff; }
@@ -183,6 +191,40 @@
 
         .profile-info p { margin: 8px 0; font-size: 16px; }
 
+        /* МОДАЛЬНОЕ ОКНО ДЛЯ ЛИДЕРОВ */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: #17171c;
+            border: 1px solid #2ecc71;
+            padding: 25px;
+            border-radius: 12px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 0 20px rgba(46, 204, 113, 0.2);
+        }
+        .leader-item {
+            background: #202026;
+            border: 1px solid #2d2d35;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
             .search-date-panel { flex-direction: column; align-items: stretch; }
@@ -207,7 +249,7 @@
             <span style="color: #a0a0ab;">по</span>
             <input type="date" id="admin-date-to">
             <button onclick="filterLoginsByDate()">Найти</button>
-            <button id="simulate-31days-btn" class="btn-warning" onclick="simulate31Days()">⏩ Разморозить 31 день</button>
+            <button id="simulate-33days-btn" class="btn-warning" onclick="simulate33Days()">⏩ Разморозить 33 дня</button>
             <div id="logins-date-result" style="margin-left: 10px; font-weight: bold; color: #2ecc71;"></div>
         </div>
 
@@ -232,7 +274,7 @@
             <div class="stat-item" style="border-left-color: #3498db;">
                 <span class="title">Куплено товара на стороннем МП</span>
                 <span class="value" id="stat-goods-bought-m">0 M</span>
-                <span class="subtext">(одна покупка: 450 M)</span>
+                <span class="subtext">(макс. покупка: 450 M)</span>
             </div>
             <div class="stat-item" style="border-left-color: #3498db;">
                 <span class="title">Купило товара всего Покупателей</span>
@@ -266,6 +308,13 @@
                 <span class="title">В резерве на выплаты (всего)</span>
                 <span class="value" id="stat-in-reserve">0 M</span>
             </div>
+
+            <div class="stat-item stat-item-clickable" style="border-left-color: #e67e22;" onclick="showLeadersModal()">
+                <span class="title">Лидеры, получающие со своей ветки</span>
+                <span class="value" id="stat-leaders-count">0 чел.</span>
+                <span class="subtext">(Нажмите для просмотра и управления)</span>
+            </div>
+
             <div class="stat-item" style="border-left-color: #9b59b6;">
                 <span class="title">Фонд DAO (10%)</span>
                 <span class="value" id="stat-dao-fund">0 M</span>
@@ -274,7 +323,7 @@
             <div class="stat-item" style="border-left-color: #2ecc71;">
                 <span class="title">Чистая прибыль</span>
                 <span class="value" id="stat-net-profit">0 M</span>
-                <span class="subtext">(Приход минус расходы 450M, резерв и DAO)</span>
+                <span class="subtext">(Минус выкуп, резерв, DAO и лидерские 10M)</span>
             </div>
 
             <div class="stat-item" style="border-left-color: #9b59b6;">
@@ -335,8 +384,20 @@
     </div>
 </div>
 
-<script src="script.js?v=14"></script>
-<script src="matrix.js?v=14"></script>
-<script src="table.js?v=14"></script>
+<div id="leadersModal" class="modal-overlay">
+    <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2 style="margin: 0; border: none;">⭐ Лидеры ветки (10+ личников)</h2>
+            <button onclick="closeLeadersModal()" class="btn-danger" style="padding: 5px 12px;">✕ Закрыть</button>
+        </div>
+        <div id="leadersListContainer">
+            <p style="text-align: center;">Загрузка списка лидеров...</p>
+        </div>
+    </div>
+</div>
+
+<script src="script.js?v=15"></script>
+<script src="matrix.js?v=15"></script>
+<script src="table.js?v=15"></script>
 </body>
 </html>
