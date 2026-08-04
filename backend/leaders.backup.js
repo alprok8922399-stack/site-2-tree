@@ -1,6 +1,9 @@
 /**
- * Модуль Лидерской квалификации и Бонусов с Ветки (10 M)
- * Проект: MITRON (Сайт 2)
+ * =========================================================
+ * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
+ * Файловый путь: site-2-tree/backend/leaders.js
+ * Назначение: Модуль Лидерской квалификации и Бонусов с Ветки (10 M)
+ * =========================================================
  */
 
 // База заблокированных/замороженных именно в качестве Лидеров
@@ -101,7 +104,7 @@ function findBranchLeader(username, referalsDB, shopUsersDB) {
 }
 
 /**
- * Расчет лидерских бонусов (10 M) с новичков ветки по прошествии 31 дня.
+ * Расчет лидерских бонусов (10 M) с новичков ветки по прошествии 33 дней.
  * Начисления происходят из чистой прибыли Админа!
  */
 function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
@@ -134,8 +137,8 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
 
         leaderRewardsMap[leader].totalCount++;
 
-        // Если выплата заморожена, деньги падают в резерв, а не в выплачено
-        if (daysPassed >= 31 && !leaderStatus.isPayoutFrozen) {
+        // Срок выдержки выплат — строго 33 дня
+        if (daysPassed >= 33 && !leaderStatus.isPayoutFrozen) {
             leaderRewardsMap[leader].paid += 10;
             totalLeaderBonusPaid += 10;
         } else {
