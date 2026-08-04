@@ -26,7 +26,7 @@ function getSmartSponsor() {
     const availableSponsors = Object.keys(sponsorCounts).filter(user => sponsorCounts[user] < MAX_DIRECT_PER_SPONSOR);
 
     if (availableSponsors.length > 0) {
-        // Выбираем рандомного спонсора из доступных
+        // Выбираем случайного спонсора из доступных
         const randomIndex = Math.floor(Math.random() * availableSponsors.length);
         return availableSponsors[randomIndex];
     }
@@ -40,8 +40,9 @@ async function sendRequest(username, uplineUser) {
         const data = JSON.stringify({ 
             username, 
             uplineUser, 
+            sponsor: uplineUser,
             unitsCount: 1,
-            cellsCount: 1, // Сохраняем обратную совместимость
+            cellsCount: 1,
             amountMitrons: 1000 
         });
         
