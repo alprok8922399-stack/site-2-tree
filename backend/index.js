@@ -1,6 +1,9 @@
 /**
- * Ядро сервера (Сайт 2 — Структура и Таблица)
- * Проект: MITRON
+ * =========================================================
+ * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
+ * Файловый путь: site-2-tree/backend/index.js
+ * Назначение: Ядро сервера (Структура, Таблица и Лидерские бонусы)
+ * =========================================================
  */
 
 const express = require('express');
@@ -77,6 +80,22 @@ let treeDB = createInitialTree();
 let activeMatricesList = ['A1']; // Список верхушек активных структурных уровней
 
 /**
+ * Проверка наличия Лидера ветки в реферальной цепи вышестоящих
+ */
+function checkBranchLeaderExists(username) {
+    let current = referalsDB[username];
+    let visited = new Set();
+    while (current && !visited.has(current)) {
+        visited.add(current);
+        if (current.toUpperCase().includes('LEADER') || current === 'SYSTEM_ROOT') {
+            return true;
+        }
+        current = referalsDB[current];
+    }
+    return false;
+}
+
+/**
  * Расчет 31-дневного реферального резерва в Таблице (50, 10, 10 M)
  */
 function processTableReferrals(username) {
@@ -101,7 +120,7 @@ function processTableReferrals(username) {
             amount: referralRates[i],
             level: i + 1,
             unlockDate: unlockDate,
-            status: 'reserved' // reserved -> ready -> paid
+            status: 'reserved'
         });
 
         current = referalsDB[current];
@@ -195,14 +214,13 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
-// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ (ТОЧЕЧНО) ===
+// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ ===
 app.post('/api/admin/refund-user', (req, res) => {
     const { username, amount, cellsCount, unitsCount } = req.body || {};
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
 
     const cleanUser = username.trim();
     
-    // Рассчитываем точное количество возвращаемых ячеек
     let countToRefund = 1;
     if (unitsCount) countToRefund = parseInt(unitsCount);
     else if (cellsCount) countToRefund = parseInt(cellsCount);
@@ -220,7 +238,6 @@ app.post('/api/admin/refund-user', (req, res) => {
         treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
     );
 
-    // Берем ровно столько ячеек, сколько указано в отказе (или все, если запрошено больше)
     const cellsToTransfer = userCells.slice(-countToRefund);
     let transferredCount = 0;
 
@@ -267,22 +284,16 @@ app.get('/api/admin/stats', (req, res) => {
     const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = now - (30 * 24 * 60 * 60 * 1000);
 
-    // 1. Все занятые ячейки в Матрице
     const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null && cell.user !== '');
-    
-    // Исключаем только строго системных пользователей
     const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
 
-    // 2. Активные ячейки Покупателей (любые пользовательские логины)
     const activeBuyerCells = allOccupiedCells.filter(cell => {
         if (!cell.user) return false;
         return !systemLogins.includes(cell.user.trim());
     });
 
-    // 3. Ячейки Администратора, полученные по отказам
     const adminRefundCells = allOccupiedCells.filter(cell => cell.user === ADMIN_OWNER_LOGIN);
 
-    // Считаем активные финансовые показатели
     const activeBuyerUnits = activeBuyerCells.length;
     const totalIncomeM = activeBuyerUnits * 1000;
 
@@ -299,28 +310,23 @@ app.get('/api/admin/stats', (req, res) => {
         if (pDate >= oneMonthAgo) incomeMonth += 1000;
     });
 
-    // Если даты платежей не были сохранены, считаем всю текущую сумму за активные периоды
     if (activeBuyerUnits > 0 && incomeToday === 0) {
         incomeToday = totalIncomeM;
         incomeWeek = totalIncomeM;
         incomeMonth = totalIncomeM;
     }
 
-    // Действующие покупатели (у кого осталась хотя бы 1 активная ячейка)
     const activeBuyerUsernames = new Set(activeBuyerCells.map(c => c.user));
     const buyersCount = activeBuyerUsernames.size;
 
-    // Финансы по активным покупкам
     const goodsBoughtM = activeBuyerUnits * 450;
     const systemReserveTotal = activeBuyerUnits * 250;
     const refReserveTotal = activeBuyerUnits * 70;
     
-    // Базовый остаток = 1000 - 450 - 250 - 70 = 230 M на ячейку
     const baseRemainder = activeBuyerUnits * 230;
     const daoFund = Math.round(baseRemainder * 0.10); // 23 M на ячейку
     const netProfit = baseRemainder - daoFund;         // 207 M на ячейку
 
-    // Отказы за сегодня и всего
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
     const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
     const todayRefusedUsers = new Set(todayRefunds.map(r => r.username)).size;
@@ -441,7 +447,7 @@ app.get('/api/tree', (req, res) => {
     });
 });
 
-// Регистрация с поддержкой мультипокупки (1-5 единиц) и транзитной обработкой через 3 кошелька
+// Регистрация с поддержкой мультипокупки и проверкой Лидера ветки
 app.post('/api/shop/register', (req, res) => {
     const { username, hashId, uplineUser, unitsCount, cellsCount = 1, amountMitrons = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -499,12 +505,15 @@ app.post('/api/shop/register', (req, res) => {
     shopUsersDB[trimmedUser].matrixPosition.status = 'active';
     shopUsersDB[trimmedUser].matrixPosition.reservedPerCell = 250;
     
+    const hasBranchLeader = checkBranchLeaderExists(trimmedUser);
+
     res.json({ 
         success: true, 
         shopUserStatus: shopUsersDB[trimmedUser], 
         cellId: occupiedCells[0],
         occupiedCells,
-        walletsState: wallets
+        walletsState: wallets,
+        hasBranchLeader: hasBranchLeader
     });
 });
 
