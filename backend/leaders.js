@@ -2,7 +2,7 @@
  * =========================================================
  * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
  * Файловый путь: site-2-tree/backend/leaders.js
- * Назначение: Модуль Лидерской квалификации и Бонусов с Ветки (10 M)
+ * Назначение: Модуль Лидерской квалификации и Бонусов с Ветки (7 M)
  * =========================================================
  */
 
@@ -112,8 +112,8 @@ function findBranchLeader(username, referalsDB, shopUsersDB) {
 }
 
 /**
- * Расчет лидерских бонусов (10 M) с новичков ветки по прошествии 33 дней.
- * Начисления происходят из чистой прибыли Админа!
+ * Расчет лидерских бонусов (7 M) с новичков ветки по прошествии 33 дней.
+ * Заложено в общую математику обязательств экосистемы (777 M)!
  */
 function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
     const now = Date.now();
@@ -147,13 +147,13 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
 
         leaderRewardsMap[leader].totalCount++;
 
-        // Срок выдержки выплат — строго 33 дня
+        // Срок выдержки выплат — строго 33 дня, размер бонуса — 7 M
         if (daysPassed >= 33 && !leaderStatus.isPayoutFrozen) {
-            leaderRewardsMap[leader].paid += 10;
-            totalLeaderBonusPaid += 10;
+            leaderRewardsMap[leader].paid += 7;
+            totalLeaderBonusPaid += 7;
         } else {
-            leaderRewardsMap[leader].reserve += 10;
-            totalLeaderBonusReserve += 10;
+            leaderRewardsMap[leader].reserve += 7;
+            totalLeaderBonusReserve += 7;
         }
     });
 
