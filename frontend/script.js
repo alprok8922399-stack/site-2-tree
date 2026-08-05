@@ -158,7 +158,7 @@ async function showLeadersModal() {
                         <strong style="color: #2ecc71; font-size: 16px; cursor: pointer; text-decoration: underline;" onclick="loadUserProfile('${leader.username}')">${leader.username}</strong>
                         <div style="font-size: 12px; color: #a0a0ab; margin-top: 4px;">
                             Личников: <strong style="color: #fff;">${leader.activeDirectCount || 0}</strong> | 
-                            Статус: <span style="color: ${isFrozen ? '#e74c3c' : '#2ecc71'}; font-weight: bold;">${isFrozen ? 'Заморожен (+10 M на паузе)' : 'Активен (+10 M)'}</span>
+                            Статус: <span style="color: ${isFrozen ? '#e74c3c' : '#2ecc71'}; font-weight: bold;">${isFrozen ? 'Заморожен (+7 M на паузе)' : 'Активен (+7 M)'}</span>
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px;">
@@ -188,7 +188,7 @@ function closeLeadersModal() {
 
 async function toggleLeaderFreeze(username, freezeState) {
     const actionText = freezeState ? 'заморозить' : 'разморозить';
-    if (!confirm(`Вы действительно хотите ${actionText} лидерские выплаты (+10 M) для ${username}?`)) return;
+    if (!confirm(`Вы действительно хотите ${actionText} лидерские выплаты (+7 M) для ${username}?`)) return;
 
     try {
         const response = await fetch(`${API_URL}/api/admin/leaders/freeze`, {
@@ -210,7 +210,7 @@ async function toggleLeaderFreeze(username, freezeState) {
 }
 
 async function excludeLeader(username) {
-    if (!confirm(`Вы действительно хотите ИСКЛЮЧИТЬ ${username} из состава лидеров? Начисления по 10 M с ветки прекратятся! (Аккаунт и его ячейки останутся нетронутыми).`)) return;
+    if (!confirm(`Вы действительно хотите ИСКЛЮЧИТЬ ${username} из состава лидеров? Начисления по 7 M с вновь прибывших прекратятся! (Аккаунт и его ячейки останутся нетронутыми).`)) return;
 
     try {
         const response = await fetch(`${API_URL}/api/admin/leaders/exclude`, {
@@ -325,19 +325,19 @@ async function payCertificate() {
             const goodsCost = split.adminLogistics || 450;
             const cashbackReserve = split.cashbackReserve || 250;
             const refReserve = split.refReserve || 70;
-            const leaderBonus = split.leaderBonus !== undefined ? split.leaderBonus : (split.hasLeader ? 10 : 0);
-            const daoFund = split.daoPool !== undefined ? split.daoPool : (split.hasLeader ? 22 : 23);
-            const netProfit = split.netProfit !== undefined ? split.netProfit : (split.hasLeader ? 198 : 207);
+            const leaderBonus = split.leaderBonus !== undefined ? split.leaderBonus : (split.hasLeader ? 7 : 0);
+            const daoFund = split.daoPool !== undefined ? split.daoPool : 23;
+            const netProfit = split.netProfit !== undefined ? split.netProfit : 200;
 
             const splitInfo = `
 Активация успешна!
 Списано: ${split.totalMitrons || 1000} Митронов
 -----------------------------------------
-Распределение средств по ТЗ:
+Распределение средств по ТЗ (на 1000 M):
 💸 Закупка товара (сторонний МП): ${goodsCost} M
 🔒 Резерв вершины в Матрицу (100% кешбэк): ${cashbackReserve} M
 🤝 Реферальный резерв (50+10+10): ${refReserve} M
-${leaderBonus > 0 ? `👑 Лидерский бонус ветки (+10 M): ${leaderBonus} M\n` : ''}🛡️ Фонд DAO (${leaderBonus > 0 ? '10% от 220 M' : '10% от 230 M'}): ${daoFund} M
+${leaderBonus > 0 ? `👑 Лидерский бонус ветки (+7 M): ${leaderBonus} M\n` : ''}🛡️ Фонд DAO (10% от 223 M): ${daoFund} M
 💼 Чистая прибыль Админа: ${netProfit} M
             `;
             alert(splitInfo);
