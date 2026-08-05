@@ -91,6 +91,7 @@ let activeMatricesList = ['A1']; // Список верхушек активны
  * Подсчет реальных активных лично приглашенных у пользователя (без отказников)
  */
 function getDirectActiveInvitesCount(username) {
+    if (!username) return 0;
     const canonicalName = username.trim().toLowerCase();
     let count = 0;
     
@@ -110,6 +111,7 @@ function getDirectActiveInvitesCount(username) {
  * Поиск Лидера в вышестоящей ветке, у которого 10+ личников
  */
 function findBranchLeader(username) {
+    if (!username) return null;
     let current = referalsDB[username];
     let visited = new Set();
     while (current && !visited.has(current)) {
@@ -254,13 +256,18 @@ app.get('/api/admin/leaders', (req, res) => {
     const leadersList = [];
 
     Object.keys(referalsDB).forEach(user => {
+        if (!user || user === 'undefined') return;
         const profile = shopUsersDB[user] || {};
         if (!profile.isLeaderRemoved) {
             const count = getDirectActiveInvitesCount(user);
             if (count >= 10) {
                 leadersList.push({
+                    username: user,
                     login: user,
+                    activeDirectCount: count,
+                    directCount: count,
                     invitesCount: count,
+                    isPayoutFrozen: profile.isLeaderFrozen || false,
                     isFrozen: profile.isLeaderFrozen || false
                 });
             }
@@ -321,7 +328,7 @@ app.post('/api/admin/simulate-33days', (req, res) => {
             });
         }
 
-        // 2. Размораживаем матричные выплаты (кэшбэк) ТОЛЬКО при полной закрытой матрице (1000 M)
+        // 2. Размораживаем матричные выплаты (кэшбэк 1000 M)
         if (user.matrixPosition && user.matrixPosition.reservedMatrixM === 1000 && user.matrixPosition.status === 'payout_pending') {
             unlockedCashback += 1000;
             user.matrixPosition.status = 'payout_completed';
@@ -447,8 +454,16 @@ app.get('/api/admin/stats', (req, res) => {
 
     const goodsBoughtM = activeBuyerUnits * 450;
     
-    // В резерве всегда строго копится 250 M с каждой незавершенной ячейки
-    const systemReserveTotal = activeBuyerUnits * 250; 
+    // Подсчет зарезервированного кэшбэка
+    let reservedCashbackTotal = 0;
+    Object.values(shopUsersDB).forEach(u => {
+        if (u.matrixPosition && u.matrixPosition.status === 'payout_pending') {
+            reservedCashbackTotal += (u.matrixPosition.reservedMatrixM || 1000);
+        }
+    });
+
+    // Резерв: пропорциональные 250M плюс созревшие матричные 1000M
+    const systemReserveTotal = (activeBuyerUnits * 250) + reservedCashbackTotal; 
     const refReserveTotal = activeBuyerUnits * 70;
     
     // Формулы распределения финансов с учетом лидерских 10M
@@ -472,6 +487,7 @@ app.get('/api/admin/stats', (req, res) => {
 
     // Подсчет активных лидеров (10+ личников)
     const activeLeadersCount = Object.keys(referalsDB).filter(u => {
+        if (!u || u === 'undefined') return false;
         const profile = shopUsersDB[u] || {};
         return !profile.isLeaderRemoved && getDirectActiveInvitesCount(u) >= 10;
     }).length;
@@ -570,6 +586,7 @@ app.get('/api/admin/owned-logins', (req, res) => {
     const allLogins = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
 
     allLogins.forEach(login => {
+        if (!login || login === 'undefined') return;
         const profile = shopUsersDB[login] || {};
         if (profile.ownedByAdmin || login === 'SYSTEM_ROOT' || login === ADMIN_OWNER_LOGIN) {
             adminLogins.push({
@@ -679,8 +696,8 @@ app.post('/api/reset', (req, res) => {
 app.get('/api/user-details/:username', (req, res) => {
     const usernameParam = req.params.username.trim();
     const canonicalName = Object.keys(referalsDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                         || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                         || usernameParam;
+                          || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
+                          || usernameParam;
     
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
