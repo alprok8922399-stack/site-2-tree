@@ -3,7 +3,7 @@
  * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
  * Файловый путь: site-2-tree/frontend/script.js
  * Назначение: Основной клиентский скрипт управления структурой, 
- * аналитикой, модальными окнами и профилями.
+ * аналитикой, модальными окнами и профилями (согласно ТЗ).
  * =========================================================
  */
 
@@ -24,7 +24,7 @@ function setElementText(id, text) {
     }
 }
 
-// === 0. ФИНАНСОВАЯ АНАЛИТИКА АДМИНИСТРАТОРА ===
+// === 0. ФИНАНСОВАЯ АНАЛИТИКА АДМИНИСТРАТОРА (ПО ТЗ) ===
 
 async function loadAdminStats() {
     try {
@@ -42,8 +42,17 @@ async function loadAdminStats() {
             // Внешние закупки и статистика покупателей
             setElementText('stat-goods-bought-m', `${s.goodsBoughtM || 0} M`);
             setElementText('stat-buyers-count', `${s.buyersCount || 0} чел.`);
-            setElementText('stat-refused-today-count', `${s.refusedTodayCount || s.refusedTodayText || s.refusedToday || 0}`);
-            setElementText('stat-refused-count', `${s.refusedCount || s.refusedTotalText || 0}`);
+            
+            // Отказы за сегодня и за все время (по ТЗ)
+            const refusedTodayText = s.refusedTodayM !== undefined 
+                ? `${s.refusedTodayM} M (${s.refusedTodayCount || 0} чел.)` 
+                : `${s.refusedTodayCount || s.refusedToday || 0}`;
+            const refusedTotalText = s.refusedTotalM !== undefined 
+                ? `${s.refusedTotalM} M (${s.refusedTotalCount || 0} чел.)` 
+                : `${s.refusedCount || s.refusedTotalText || 0}`;
+
+            setElementText('stat-refused-today-count', refusedTodayText);
+            setElementText('stat-refused-count', refusedTotalText);
 
             // Выплаты, резервы, Фонд DAO и Чистая прибыль
             setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
@@ -316,9 +325,9 @@ async function payCertificate() {
             const goodsCost = split.adminLogistics || 450;
             const cashbackReserve = split.cashbackReserve || 250;
             const refReserve = split.refReserve || 70;
-            const leaderBonus = split.leaderBonus || (split.hasLeader ? 10 : 0);
-            const daoFund = split.daoPool || (split.hasLeader ? 22 : 23);
-            const netProfit = split.netProfit || (split.hasLeader ? 198 : 207);
+            const leaderBonus = split.leaderBonus !== undefined ? split.leaderBonus : (split.hasLeader ? 10 : 0);
+            const daoFund = split.daoPool !== undefined ? split.daoPool : (split.hasLeader ? 22 : 23);
+            const netProfit = split.netProfit !== undefined ? split.netProfit : (split.hasLeader ? 198 : 207);
 
             const splitInfo = `
 Активация успешна!
