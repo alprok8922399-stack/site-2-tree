@@ -30,13 +30,15 @@ try {
     // Резервные утилиты при запуске без внешних зависимостей
     getLevelLetter = (idx) => String.fromCharCode(65 + idx);
     cellIdToGlobalIndex = (id) => 0;
-    mitronsToUsd = (m) => m * 0.1;
+    mitronsToUsd = (m) => m * 0.13;
     createNewUserCard = (username) => ({
         username,
         isPaid: false,
         paymentDate: null,
         matrixPosition: { status: 'none', currentCellId: null, occupiedCells: [] },
-        pendingReferralRewards: []
+        pendingReferralRewards: [],
+        isLeaderFrozen: false,
+        isLeaderRemoved: false
     });
     createInitialWallets = () => ({
         bufferWallet: { balanceMitrons: 0 },
@@ -86,19 +88,46 @@ let treeDB = createInitialTree();
 let activeMatricesList = ['A1']; // Список верхушек активных структурных уровней
 
 /**
- * Проверка наличия Лидера ветки в реферальной цепи вышестоящих
+ * Подсчет реальных активных лично приглашенных у пользователя (без отказников)
  */
-function checkBranchLeaderExists(username) {
+function getDirectActiveInvitesCount(username) {
+    const canonicalName = username.trim().toLowerCase();
+    let count = 0;
+    
+    Object.entries(referalsDB).forEach(([user, sponsor]) => {
+        if (sponsor && sponsor.trim().toLowerCase() === canonicalName) {
+            // Проверяем, что пользователь активен и не отказник
+            const profile = shopUsersDB[user];
+            if (profile && profile.isPaid && profile.matrixPosition && profile.matrixPosition.status !== 'refunded') {
+                count++;
+            }
+        }
+    });
+    return count;
+}
+
+/**
+ * Поиск Лидера в вышестоящей ветке, у которого 10+ личников
+ */
+function findBranchLeader(username) {
     let current = referalsDB[username];
     let visited = new Set();
     while (current && !visited.has(current)) {
         visited.add(current);
-        if (current.toUpperCase().includes('LEADER') || current === 'SYSTEM_ROOT') {
-            return true;
+        const profile = shopUsersDB[current] || {};
+        if (!profile.isLeaderRemoved && getDirectActiveInvitesCount(current) >= 10) {
+            return current;
         }
         current = referalsDB[current];
     }
-    return false;
+    return null;
+}
+
+/**
+ * Проверка наличия Лидера ветки в реферальной цепи вышестоящих
+ */
+function checkBranchLeaderExists(username) {
+    return findBranchLeader(username) !== null;
 }
 
 /**
@@ -106,7 +135,7 @@ function checkBranchLeaderExists(username) {
  */
 function processTableReferrals(username) {
     let current = referalsDB[username];
-    const referralRates = [50, 10, 10]; // 1-й лидер: 50M, 2-й: 10M, 3-й: 10M
+    const referralRates = [50, 10, 10]; // 1-й уровень: 50M, 2-й: 10M, 3-й: 10M
     const unlockDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
 
     for (let i = 0; i < referralRates.length; i++) {
@@ -198,7 +227,7 @@ function checkAndSplitMatrix(cellId) {
     const c3 = getCellByGIdx(c3G);
     const c4 = getCellByGIdx(c4G);
 
-    // Заполнение 4 нижних мест
+    // Заполнение ВСЕХ 4 нижних мест
     if (c1 && c1.user && c2 && c2.user && c3 && c3.user && c4 && c4.user) {
         const topCell = getCellByGIdx(topGIdx);
         const b1Cell = getCellByGIdx(b1G);
@@ -220,6 +249,62 @@ function checkAndSplitMatrix(cellId) {
 
 // ================= API =================
 
+// === ПОЛУЧЕНИЕ СПИСКА ЛИДЕРОВ (10+ личников) ===
+app.get('/api/admin/leaders', (req, res) => {
+    const leadersList = [];
+
+    Object.keys(referalsDB).forEach(user => {
+        const profile = shopUsersDB[user] || {};
+        if (!profile.isLeaderRemoved) {
+            const count = getDirectActiveInvitesCount(user);
+            if (count >= 10) {
+                leadersList.push({
+                    login: user,
+                    invitesCount: count,
+                    isFrozen: profile.isLeaderFrozen || false
+                });
+            }
+        }
+    });
+
+    res.json({ success: true, leaders: leadersList });
+});
+
+// === ЗАМОРОЗКА ВЫПЛАТЫ ЛИДЕРА ===
+app.post('/api/admin/toggle-freeze-leader', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+
+    if (!shopUsersDB[username]) {
+        shopUsersDB[username] = createNewUserCard(username);
+    }
+
+    shopUsersDB[username].isLeaderFrozen = !shopUsersDB[username].isLeaderFrozen;
+
+    res.json({
+        success: true,
+        isFrozen: shopUsersDB[username].isLeaderFrozen,
+        message: shopUsersDB[username].isLeaderFrozen ? 'Лидерские выплаты заморожены' : 'Лидерские выплаты разморожены'
+    });
+});
+
+// === УДАЛЕНИЕ ИЗ ЛИДЕРОВ ===
+app.post('/api/admin/remove-leader', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+
+    if (!shopUsersDB[username]) {
+        shopUsersDB[username] = createNewUserCard(username);
+    }
+
+    shopUsersDB[username].isLeaderRemoved = true;
+
+    res.json({
+        success: true,
+        message: `Пользователь ${username} удален из состава Лидеров!`
+    });
+});
+
 // === СИМУЛЯЦИЯ РАЗМОРОЗКИ 33 ДНЕЙ ===
 app.post('/api/admin/simulate-33days', (req, res) => {
     let unlockedReferrals = 0;
@@ -236,26 +321,20 @@ app.post('/api/admin/simulate-33days', (req, res) => {
             });
         }
 
-        // 2. Размораживаем матричные выплаты (кэшбэк)
-        if (user.matrixPosition && user.matrixPosition.reservedMatrixM) {
-            unlockedCashback += user.matrixPosition.reservedMatrixM;
+        // 2. Размораживаем матричные выплаты (кэшбэк) ТОЛЬКО при полной закрытой матрице (1000 M)
+        if (user.matrixPosition && user.matrixPosition.reservedMatrixM === 1000 && user.matrixPosition.status === 'payout_pending') {
+            unlockedCashback += 1000;
             user.matrixPosition.status = 'payout_completed';
             user.matrixPosition.reservedMatrixM = 0;
         }
     });
 
-    // 3. Рассчитываем полный реферальный резерв со всех покупок (70M за ячейку), если реферальная цепь была не полной
-    const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
-    const activeBuyerCells = Object.values(treeDB).filter(cell => cell.user && !systemLogins.includes(cell.user.trim()));
-    const totalRefReserve = activeBuyerCells.length * 70;
-    const totalCashbackReserve = activeBuyerCells.length * 250;
-
-    simulatedPayouts.referralsPaid = Math.max(unlockedReferrals, totalRefReserve);
-    simulatedPayouts.cashbackPaid = Math.max(unlockedCashback, totalCashbackReserve);
+    simulatedPayouts.referralsPaid += unlockedReferrals;
+    simulatedPayouts.cashbackPaid += unlockedCashback;
 
     res.json({
         success: true,
-        message: 'Симуляция 33 дней успешно выполнена! Все средства разморожены.',
+        message: 'Симуляция 33 дней выполнена! Средства созревших выплат разморожены.',
         cashbackPaid: simulatedPayouts.cashbackPaid,
         referralsPaid: simulatedPayouts.referralsPaid
     });
@@ -367,12 +446,22 @@ app.get('/api/admin/stats', (req, res) => {
     const buyersCount = activeBuyerUsernames.size;
 
     const goodsBoughtM = activeBuyerUnits * 450;
-    const systemReserveTotal = Math.max(0, (activeBuyerUnits * 250) - simulatedPayouts.cashbackPaid);
-    const refReserveTotal = Math.max(0, (activeBuyerUnits * 70) - simulatedPayouts.referralsPaid);
     
-    const baseRemainder = activeBuyerUnits * 230;
-    const daoFund = Math.round(baseRemainder * 0.10); // 23 M на ячейку
-    const netProfit = baseRemainder - daoFund;         // 207 M на ячейку
+    // В резерве всегда строго копится 250 M с каждой незавершенной ячейки
+    const systemReserveTotal = activeBuyerUnits * 250; 
+    const refReserveTotal = activeBuyerUnits * 70;
+    
+    // Формулы распределения финансов с учетом лидерских 10M
+    let totalLeaderBonus = 0;
+    activeBuyerCells.forEach(cell => {
+        if (findBranchLeader(cell.user)) {
+            totalLeaderBonus += 10;
+        }
+    });
+
+    const baseRemainder = (activeBuyerUnits * 230) - totalLeaderBonus;
+    const daoFund = Math.round(baseRemainder * 0.10);
+    const netProfit = baseRemainder - daoFund;
 
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
     const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
@@ -380,6 +469,12 @@ app.get('/api/admin/stats', (req, res) => {
 
     const totalRefusedUnits = refundRecords.reduce((sum, r) => sum + r.unitsCount, 0);
     const totalRefusedUsers = new Set(refundRecords.map(r => r.username)).size;
+
+    // Подсчет активных лидеров (10+ личников)
+    const activeLeadersCount = Object.keys(referalsDB).filter(u => {
+        const profile = shopUsersDB[u] || {};
+        return !profile.isLeaderRemoved && getDirectActiveInvitesCount(u) >= 10;
+    }).length;
 
     res.json({
         success: true,
@@ -401,6 +496,7 @@ app.get('/api/admin/stats', (req, res) => {
             inReserve: systemReserveTotal,
             netProfit,
             daoFund,
+            leadersCount: activeLeadersCount,
             totalLogins: activeBuyerUnits + adminRefundCells.length,
             adminLogins: 1,
             userLogins: buyersCount
