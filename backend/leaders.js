@@ -13,13 +13,15 @@ const excludedLeadersDB = {}; // { username: { isExcludedFromLeaders: true, isPa
  * Получить/инициализировать лидерский статус пользователя
  */
 function getLeaderStatus(username) {
-    if (!excludedLeadersDB[username]) {
-        excludedLeadersDB[username] = {
+    if (!username) return { isExcludedFromLeaders: false, isPayoutFrozen: false };
+    const cleanUser = username.trim();
+    if (!excludedLeadersDB[cleanUser]) {
+        excludedLeadersDB[cleanUser] = {
             isExcludedFromLeaders: false,
             isPayoutFrozen: false
         };
     }
-    return excludedLeadersDB[username];
+    return excludedLeadersDB[cleanUser];
 }
 
 /**
@@ -51,10 +53,12 @@ function getActiveDirectReferrals(leaderUsername, referalsDB, shopUsersDB) {
  */
 function getQualifiedLeaders(referalsDB, shopUsersDB) {
     const qualifiedLeaders = [];
+    if (!referalsDB || !shopUsersDB) return qualifiedLeaders;
+
     const allUsers = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
 
     allUsers.forEach(username => {
-        if (['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER'].includes(username)) return;
+        if (!username || ['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER', 'undefined'].includes(username)) return;
 
         const leaderStatus = getLeaderStatus(username);
         // Если исключен из Лидеров — пропускаем
@@ -64,9 +68,12 @@ function getQualifiedLeaders(referalsDB, shopUsersDB) {
         if (activeReferrals.length >= 10) {
             qualifiedLeaders.push({
                 username: username,
+                login: username, // Дублируем для гарантии совместимости с API
                 activeDirectCount: activeReferrals.length,
+                directCount: activeReferrals.length,
                 referralsList: activeReferrals,
                 isPayoutFrozen: leaderStatus.isPayoutFrozen,
+                isLeaderFrozen: leaderStatus.isPayoutFrozen,
                 isExcludedFromLeaders: leaderStatus.isExcludedFromLeaders
             });
         }
@@ -79,13 +86,14 @@ function getQualifiedLeaders(referalsDB, shopUsersDB) {
  * Поиск первого квалифицированного Лидера вверх по реферальной цепочке ветки
  */
 function findBranchLeader(username, referalsDB, shopUsersDB) {
+    if (!username || !referalsDB) return null;
     let current = referalsDB[username];
     let visited = new Set();
 
     while (current && !visited.has(current)) {
         visited.add(current);
 
-        if (['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER'].includes(current)) break;
+        if (['SYSTEM_ROOT', 'ADMIN_REFUND_OWNER', 'undefined'].includes(current)) break;
 
         const leaderStatus = getLeaderStatus(current);
         
@@ -112,6 +120,8 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
     let totalLeaderBonusPaid = 0;
     let totalLeaderBonusReserve = 0;
     const leaderRewardsMap = {};
+
+    if (!shopUsersDB) return { totalLeaderBonusPaid: 0, totalLeaderBonusReserve: 0, leaderRewardsMap };
 
     Object.keys(shopUsersDB).forEach(newUser => {
         const profile = shopUsersDB[newUser];
