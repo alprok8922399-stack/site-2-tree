@@ -147,7 +147,7 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
 
         leaderRewardsMap[leader].totalCount++;
 
-        // Срок выдержки выплат — строго 33 дня, размер бонуса — 7 M
+        // Срок выдержки выплат — строго 33 дня, размер бонуса — 7 M по ТЗ
         if (daysPassed >= 33 && !leaderStatus.isPayoutFrozen) {
             leaderRewardsMap[leader].paid += 7;
             totalLeaderBonusPaid += 7;
