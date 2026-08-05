@@ -466,17 +466,19 @@ app.get('/api/admin/stats', (req, res) => {
     const systemReserveTotal = (activeBuyerUnits * 250) + reservedCashbackTotal; 
     const refReserveTotal = activeBuyerUnits * 70;
     
-    // Формулы распределения финансов с учетом лидерских 10M
+    // Формулы распределения финансов с учетом лидерских 7M
     let totalLeaderBonus = 0;
     activeBuyerCells.forEach(cell => {
         if (findBranchLeader(cell.user)) {
-            totalLeaderBonus += 10;
+            totalLeaderBonus += 7;
         }
     });
 
-    const baseRemainder = (activeBuyerUnits * 230) - totalLeaderBonus;
-    const daoFund = Math.round(baseRemainder * 0.10);
-    const netProfit = baseRemainder - daoFund;
+    // Обязательства: 450 (товар) + 250 (матрица) + 70 (реф) + 7 (лидер) = 777M
+    // Базовый остаток = 1000 - 777 = 223M
+    const baseRemainder = (activeBuyerUnits * 223) - (totalLeaderBonus - (activeBuyerCells.length * 7));
+    const daoFund = Math.round(baseRemainder * 0.10); // ~23 M
+    const netProfit = baseRemainder - daoFund;       // ~200 M
 
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
     const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
@@ -620,8 +622,8 @@ app.post('/api/shop/register', (req, res) => {
     // --- ТРАНЗИТНАЯ ЛОГИКА 3-Х КОШЕЛЬКОВ ---
     wallets.bufferWallet.balanceMitrons += totalAmount;
 
-    const reserveForPayouts = count * (250 + 70);
-    const adminProfit = totalAmount - reserveForPayouts;
+    const reserveForPayouts = count * (250 + 70 + 7);
+    const adminProfit = totalAmount - (count * 450) - reserveForPayouts;
 
     wallets.payoutReserveWallet.balanceMitrons += reserveForPayouts;
     wallets.adminProfitWallet.balanceMitrons += adminProfit;
