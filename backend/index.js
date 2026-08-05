@@ -464,9 +464,8 @@ app.get('/api/admin/stats', (req, res) => {
 
     // Резерв: пропорциональные 250M плюс созревшие матричные 1000M
     const systemReserveTotal = (activeBuyerUnits * 250) + reservedCashbackTotal; 
-    const refReserveTotal = activeBuyerUnits * 70;
     
-    // Формулы распределения финансов с учетом лидерских 7M
+    // Формулы распределения финансов с учетом 77M (50+10+10+7)
     let totalLeaderBonus = 0;
     activeBuyerCells.forEach(cell => {
         if (findBranchLeader(cell.user)) {
@@ -474,11 +473,13 @@ app.get('/api/admin/stats', (req, res) => {
         }
     });
 
-    // Обязательства: 450 (товар) + 250 (матрица) + 70 (реф) + 7 (лидер) = 777M
-    // Базовый остаток = 1000 - 777 = 223M
-    const baseRemainder = (activeBuyerUnits * 223) - (totalLeaderBonus - (activeBuyerCells.length * 7));
-    const daoFund = Math.round(baseRemainder * 0.10); // ~23 M
-    const netProfit = baseRemainder - daoFund;       // ~200 M
+    // Общий реферальный резерв: 70M реферальные + 7M Лидер ветки = 77M на ячейку
+    const refReserveTotal = (activeBuyerUnits * 70) + totalLeaderBonus;
+
+    // Базовый остаток при макс. товаре 450M: 1000 - (450 + 250 + 70 + 7) = 223M
+    const baseRemainder = activeBuyerUnits * 223;
+    const daoFund = Math.round(baseRemainder * 0.10); // Ровно 23 M на каждые 1000 M
+    const netProfit = baseRemainder - daoFund;       // Ровно 200 M на каждые 1000 M
 
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
     const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
