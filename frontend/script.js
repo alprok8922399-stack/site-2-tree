@@ -114,7 +114,7 @@ async function simulate33Days() {
     }
 }
 
-// === 0.1 МОДУЛЬ УПРАВЛЕНИЯ ЛИДЕРАМИ ===
+// === 0.1 МОДУЛЬ УПРАВЛЕНИЯ ЛИДЕРАМИ (ПО ТЗ) ===
 
 async function showLeadersModal() {
     const modal = document.getElementById('leadersModal');
@@ -122,7 +122,7 @@ async function showLeadersModal() {
     if (!modal || !container) return;
 
     modal.style.display = 'flex';
-    container.innerHTML = '<p style="text-align: center; color: #a0a0ab;">Загрузка списка лидеров...</p>';
+    container.innerHTML = '<p style="text-align: center; color: #a0a0ab;">Загрузка списка лидеров (10+ личников)...</p>';
 
     try {
         const response = await fetch(`${API_URL}/api/admin/leaders`);
@@ -138,25 +138,26 @@ async function showLeadersModal() {
             data.leaders.forEach(leader => {
                 const item = document.createElement('div');
                 item.className = 'leader-item';
+                item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: #1a1a20; padding: 10px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #333;';
 
                 const isFrozen = leader.isLeaderFrozen;
-                const freezeBtnText = isFrozen ? '▶️ Разморозить выплаты' : '❄️ Заморозить выплату';
+                const freezeBtnText = isFrozen ? '▶️ Разморозить выплату' : '❄️ Заморозить выплату';
                 const freezeBtnClass = isFrozen ? 'btn-warning' : 'btn-danger';
 
                 item.innerHTML = `
                     <div>
-                        <strong style="color: #2ecc71; font-size: 16px;">${leader.username}</strong>
+                        <strong style="color: #2ecc71; font-size: 16px; cursor: pointer; text-decoration: underline;" onclick="loadUserProfile('${leader.username}')">${leader.username}</strong>
                         <div style="font-size: 12px; color: #a0a0ab; margin-top: 4px;">
                             Личников: <strong style="color: #fff;">${leader.activeDirectCount || 0}</strong> | 
-                            Статус: <span style="color: ${isFrozen ? '#e74c3c' : '#2ecc71'};">${isFrozen ? 'Заморожен' : 'Активен'}</span>
+                            Статус: <span style="color: ${isFrozen ? '#e74c3c' : '#2ecc71'}; font-weight: bold;">${isFrozen ? 'Заморожен (+10 M на паузе)' : 'Активен (+10 M)'}</span>
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <button class="${freezeBtnClass}" style="padding: 6px 12px; font-size: 12px;" onclick="toggleLeaderFreeze('${leader.username}', ${!isFrozen})">
+                        <button class="${freezeBtnClass}" style="padding: 6px 12px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer;" onclick="toggleLeaderFreeze('${leader.username}', ${!isFrozen})">
                             ${freezeBtnText}
                         </button>
-                        <button class="btn-danger" style="padding: 6px 12px; font-size: 12px; background: #900C3F;" onclick="excludeLeader('${leader.username}')">
-                            ❌ Исключить
+                        <button class="btn-danger" style="padding: 6px 12px; font-size: 12px; background: #900C3F; color: #fff; border: none; border-radius: 4px; cursor: pointer;" onclick="excludeLeader('${leader.username}')">
+                            ❌ Исключить из лидеров
                         </button>
                     </div>
                 `;
@@ -178,7 +179,7 @@ function closeLeadersModal() {
 
 async function toggleLeaderFreeze(username, freezeState) {
     const actionText = freezeState ? 'заморозить' : 'разморозить';
-    if (!confirm(`Вы действительно хотите ${actionText} лидерские выплаты для ${username}?`)) return;
+    if (!confirm(`Вы действительно хотите ${actionText} лидерские выплаты (+10 M) для ${username}?`)) return;
 
     try {
         const response = await fetch(`${API_URL}/api/admin/leaders/freeze`, {
@@ -200,7 +201,7 @@ async function toggleLeaderFreeze(username, freezeState) {
 }
 
 async function excludeLeader(username) {
-    if (!confirm(`Вы действительно хотите ИСКЛЮЧИТЬ ${username} из состава лидеров? Начисления по ветке прекратятся!`)) return;
+    if (!confirm(`Вы действительно хотите ИСКЛЮЧИТЬ ${username} из состава лидеров? Начисления по 10 M с ветки прекратятся! (Аккаунт и его ячейки останутся нетронутыми).`)) return;
 
     try {
         const response = await fetch(`${API_URL}/api/admin/leaders/exclude`, {
@@ -211,7 +212,7 @@ async function excludeLeader(username) {
         const data = await response.json();
 
         if (data.success) {
-            alert(data.message || 'Пользователь исключен из лидеров!');
+            alert(data.message || 'Пользователь исключен из состава лидеров!');
             showLeadersModal();
             loadAdminStats();
         } else {
@@ -260,7 +261,7 @@ async function registerInMatrix() {
     }
 }
 
-// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА И ОПЛАТЫ ===
+// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА И ОПЛАТЫ (МАТЕМАТИКА РАЗДЕЛА 5 ТЗ) ===
 
 async function registerShopUser() {
     const shopUserField = document.getElementById('shop-username');
@@ -313,19 +314,22 @@ async function payCertificate() {
         if (result.success) {
             const split = result.split || {};
             const goodsCost = split.adminLogistics || 450;
-            const daoFund = split.daoPool || 23;
-            const netProfit = split.netProfit || 207;
+            const cashbackReserve = split.cashbackReserve || 250;
+            const refReserve = split.refReserve || 70;
+            const leaderBonus = split.leaderBonus || (split.hasLeader ? 10 : 0);
+            const daoFund = split.daoPool || (split.hasLeader ? 22 : 23);
+            const netProfit = split.netProfit || (split.hasLeader ? 198 : 207);
 
             const splitInfo = `
 Активация успешна!
 Списано: ${split.totalMitrons || 1000} Митронов
 -----------------------------------------
-Распределение:
-💸 Закупка товара (сторонний МП): ${goodsCost} Митронов
-🔒 Резерв 100% кешбэка: 250 Митронов
-🤝 Реферальный резерв (50+10+10): 70 Митронов
-🛡️ Фонд DAO (10% от остатка): ${daoFund} Митронов
-💼 Чистая прибыль Админа: ${netProfit} Митронов
+Распределение средств по ТЗ:
+💸 Закупка товара (сторонний МП): ${goodsCost} M
+🔒 Резерв вершины в Матрицу (100% кешбэк): ${cashbackReserve} M
+🤝 Реферальный резерв (50+10+10): ${refReserve} M
+${leaderBonus > 0 ? `👑 Лидерский бонус ветки (+10 M): ${leaderBonus} M\n` : ''}🛡️ Фонд DAO (${leaderBonus > 0 ? '10% от 220 M' : '10% от 230 M'}): ${daoFund} M
+💼 Чистая прибыль Админа: ${netProfit} M
             `;
             alert(splitInfo);
             
@@ -372,7 +376,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             const cellId = data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null;
             setElementText('profile-cell-id', cellId || 'Нет позиции');
             
-            // Расчет дней с момента активации и выбор цвета статус-бара (порог 33 дня)
+            // Расчет 33-дневного периода заморозки по ТЗ
             const statusEl = document.getElementById('profile-status');
             if (statusEl) {
                 if (data.profile.isPaid) {
@@ -380,14 +384,14 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                     const diffTime = Math.abs(new Date() - paidAt);
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                     
-                    statusEl.innerText = `Оплачен (${diffDays} дн.)`;
-                    if (diffDays > 33) {
-                        statusEl.style.backgroundColor = '#d9534f';
-                        statusEl.style.color = '#ffffff';
-                    } else {
+                    if (diffDays >= 33) {
+                        statusEl.innerText = `Оплачен (Период 33 дней прошел)`;
                         statusEl.style.backgroundColor = '#5cb85c';
-                        statusEl.style.color = '#ffffff';
+                    } else {
+                        statusEl.innerText = `Заморозка (${33 - diffDays} дн. до выплаты)`;
+                        statusEl.style.backgroundColor = '#f0ad4e';
                     }
+                    statusEl.style.color = '#ffffff';
                     statusEl.style.padding = '3px 8px';
                     statusEl.style.borderRadius = '4px';
                 } else {
@@ -399,13 +403,13 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 }
             }
             
-            // --- 3 КОШЕЛЬКА СУБЪЕКТА (Администрация / Выплатной / Буфер) ---
+            // --- 3 КОШЕЛЬКА СУБЪЕКТА (Пользовательский / Выплатной / Транзитный буфер) ---
             const balances = data.profile.balances || {};
             const cleanWithdraw = balances.cleanWithdraw || balances.mitrons || 0;
             const payoutReserve = balances.payoutReserve || 0;
             const transitBuffer = balances.transitBuffer || 0;
 
-            setElementText('balance-mitrons', `${cleanWithdraw} M (Вывод) | ${payoutReserve} M (Резерв) | ${transitBuffer} M (Буфер)`);
+            setElementText('balance-mitrons', `${cleanWithdraw} M (Баланс) | ${payoutReserve} M (Выплатной) | ${transitBuffer} M (Буфер)`);
             setElementText('balance-usd', `$${convertMitronsToUsd(cleanWithdraw)}`);
 
             setElementText('balance-clean-withdraw', `${cleanWithdraw} M`);
@@ -620,6 +624,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Привязка клика по элементу статистики лидеров для открытия модалки
+    const leadersStatCard = document.getElementById('stat-leaders-count')?.closest('.stat-card') || document.getElementById('stat-leaders-count');
+    if (leadersStatCard) {
+        leadersStatCard.style.cursor = 'pointer';
+        leadersStatCard.addEventListener('click', showLeadersModal);
+    }
+
     // === УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ЗАКРЫТИЯ КАРТОЧКИ ПО КЛИКУ ВНЕ ЕЁ ===
     document.addEventListener('click', (e) => {
         const modal = getProfileModalElement();
@@ -638,7 +649,8 @@ document.addEventListener('DOMContentLoaded', () => {
                           e.target.closest('.user-cell-card') ||
                           e.target.closest('[onclick*="showUserCard"]') ||
                           e.target.closest('[onclick*="viewUserCardTrigger"]') ||
-                          e.target.closest('#leadersModal');
+                          e.target.closest('#leadersModal') ||
+                          e.target.closest('#stat-leaders-count');
 
         if (isTrigger) return;
 
