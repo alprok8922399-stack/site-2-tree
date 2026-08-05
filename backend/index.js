@@ -465,7 +465,7 @@ app.get('/api/admin/stats', (req, res) => {
     // Резерв: пропорциональные 250M плюс созревшие матричные 1000M
     const systemReserveTotal = (activeBuyerUnits * 250) + reservedCashbackTotal; 
     
-    // Формулы распределения финансов с учетом 77M (50+10+10+7)
+    // Точный расчет Лидерских бонусов (по 7 M только для упавших под квалифицированных лидеров)
     let totalLeaderBonus = 0;
     activeBuyerCells.forEach(cell => {
         if (findBranchLeader(cell.user)) {
@@ -473,13 +473,19 @@ app.get('/api/admin/stats', (req, res) => {
         }
     });
 
-    // Общий реферальный резерв: 70M реферальные + 7M Лидер ветки = 77M на ячейку
+    // Реферальный резерв: базовые 70M + начисленные лидерские 7M (если есть лидер ветки)
     const refReserveTotal = (activeBuyerUnits * 70) + totalLeaderBonus;
 
-    // Базовый остаток при макс. товаре 450M: 1000 - (450 + 250 + 70 + 7) = 223M
-    const baseRemainder = activeBuyerUnits * 223;
-    const daoFund = Math.round(baseRemainder * 0.10); // Ровно 23 M на каждые 1000 M
-    const netProfit = baseRemainder - daoFund;       // Ровно 200 M на каждые 1000 M
+    // Динамический расчёт Базового остатка:
+    // Без лидера ветки: 1000 - 450 - 250 - 70 = 230 M на ячейку
+    // С лидером ветки: 1000 - 450 - 250 - 70 - 7 = 223 M на ячейку
+    const baseRemainder = totalIncomeM - goodsBoughtM - (activeBuyerUnits * 250) - refReserveTotal;
+
+    // Фонд DAO составляет ровно 10% от базового остатка (23 M при 230 M базового остатка)
+    const daoFund = Math.round(baseRemainder * 0.10); 
+    
+    // Чистая прибыль Администратора составляет оставшиеся 90% (207 M при 230 M базового остатка)
+    const netProfit = baseRemainder - daoFund;       
 
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
     const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
@@ -623,7 +629,8 @@ app.post('/api/shop/register', (req, res) => {
     // --- ТРАНЗИТНАЯ ЛОГИКА 3-Х КОШЕЛЬКОВ ---
     wallets.bufferWallet.balanceMitrons += totalAmount;
 
-    const reserveForPayouts = count * (250 + 70 + 7);
+    const leaderBonus = checkBranchLeaderExists(trimmedUser) ? 7 : 0;
+    const reserveForPayouts = count * (250 + 70 + leaderBonus);
     const adminProfit = totalAmount - (count * 450) - reserveForPayouts;
 
     wallets.payoutReserveWallet.balanceMitrons += reserveForPayouts;
