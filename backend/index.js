@@ -47,6 +47,14 @@ try {
     });
 }
 
+// Импортируем модуль работы с Лидерами
+let leadersModule;
+try {
+    leadersModule = require('./leaders');
+} catch (e) {
+    leadersModule = null;
+}
+
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend')));
@@ -88,16 +96,17 @@ let treeDB = createInitialTree();
 let activeMatricesList = ['A1']; // Список верхушек активных структурных уровней
 
 /**
- * Подсчет реальных активных лично приглашенных у пользователя (без отказников)
+ * Вспомогательные функции лидерской логики
  */
 function getDirectActiveInvitesCount(username) {
+    if (leadersModule && leadersModule.getActiveDirectReferrals) {
+        return leadersModule.getActiveDirectReferrals(username, referalsDB, shopUsersDB).length;
+    }
     if (!username) return 0;
     const canonicalName = username.trim().toLowerCase();
     let count = 0;
-    
     Object.entries(referalsDB).forEach(([user, sponsor]) => {
         if (sponsor && sponsor.trim().toLowerCase() === canonicalName) {
-            // Проверяем, что пользователь активен и не отказник
             const profile = shopUsersDB[user];
             if (profile && profile.isPaid && profile.matrixPosition && profile.matrixPosition.status !== 'refunded') {
                 count++;
@@ -107,10 +116,10 @@ function getDirectActiveInvitesCount(username) {
     return count;
 }
 
-/**
- * Поиск Лидера в вышестоящей ветке, у которого 10+ личников
- */
 function findBranchLeader(username) {
+    if (leadersModule && leadersModule.findBranchLeader) {
+        return leadersModule.findBranchLeader(username, referalsDB, shopUsersDB);
+    }
     if (!username) return null;
     let current = referalsDB[username];
     let visited = new Set();
@@ -125,9 +134,6 @@ function findBranchLeader(username) {
     return null;
 }
 
-/**
- * Проверка наличия Лидера ветки в реферальной цепи вышестоящих
- */
 function checkBranchLeaderExists(username) {
     return findBranchLeader(username) !== null;
 }
@@ -253,6 +259,11 @@ function checkAndSplitMatrix(cellId) {
 
 // === ПОЛУЧЕНИЕ СПИСКА ЛИДЕРОВ (10+ личников) ===
 app.get('/api/admin/leaders', (req, res) => {
+    if (leadersModule && leadersModule.getQualifiedLeaders) {
+        const qualified = leadersModule.getQualifiedLeaders(referalsDB, shopUsersDB);
+        return res.json({ success: true, leaders: qualified });
+    }
+
     const leadersList = [];
 
     Object.keys(referalsDB).forEach(user => {
@@ -282,6 +293,18 @@ app.post('/api/admin/toggle-freeze-leader', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
 
+    if (leadersModule && leadersModule.toggleLeaderPayoutFreeze) {
+        const status = leadersModule.toggleLeaderPayoutFreeze(username);
+        if (shopUsersDB[username]) {
+            shopUsersDB[username].isLeaderFrozen = status.isPayoutFrozen;
+        }
+        return res.json({
+            success: true,
+            isFrozen: status.isPayoutFrozen,
+            message: status.isPayoutFrozen ? 'Лидерские выплаты заморожены' : 'Лидерские выплаты разморожены'
+        });
+    }
+
     if (!shopUsersDB[username]) {
         shopUsersDB[username] = createNewUserCard(username);
     }
@@ -299,6 +322,10 @@ app.post('/api/admin/toggle-freeze-leader', (req, res) => {
 app.post('/api/admin/remove-leader', (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+
+    if (leadersModule && leadersModule.removeLeaderStatus) {
+        leadersModule.removeLeaderStatus(username);
+    }
 
     if (!shopUsersDB[username]) {
         shopUsersDB[username] = createNewUserCard(username);
@@ -465,26 +492,29 @@ app.get('/api/admin/stats', (req, res) => {
     // Резерв: пропорциональные 250M плюс созревшие матричные 1000M
     const systemReserveTotal = (activeBuyerUnits * 250) + reservedCashbackTotal; 
     
-    // Точный расчет Лидерских бонусов (по 7 M только для упавших под квалифицированных лидеров)
+    // Точный расчет Лидерских бонусов (по 7 M с участников начиная с 11-го личника)
     let totalLeaderBonus = 0;
-    activeBuyerCells.forEach(cell => {
-        if (findBranchLeader(cell.user)) {
-            totalLeaderBonus += 7;
-        }
-    });
+    if (leadersModule && leadersModule.calculateLeaderBranchBonuses) {
+        const branchBonuses = leadersModule.calculateLeaderBranchBonuses(referalsDB, shopUsersDB);
+        totalLeaderBonus = branchBonuses.totalLeaderBonusPaid + branchBonuses.totalLeaderBonusReserve;
+    } else {
+        activeBuyerCells.forEach(cell => {
+            if (findBranchLeader(cell.user)) {
+                totalLeaderBonus += 7;
+            }
+        });
+    }
 
-    // Реферальный резерв: базовые 70M + начисленные лидерские 7M (если есть лидер ветки)
+    // Реферальный резерв: базовые 70M + начисленные лидерские 7M
     const refReserveTotal = (activeBuyerUnits * 70) + totalLeaderBonus;
 
-    // Динамический расчёт Базового остатка:
-    // Без лидера ветки: 1000 - 450 - 250 - 70 = 230 M на ячейку
-    // С лидером ветки: 1000 - 450 - 250 - 70 - 7 = 223 M на ячейку
+    // Динамический расчёт Базового остатка
     const baseRemainder = totalIncomeM - goodsBoughtM - (activeBuyerUnits * 250) - refReserveTotal;
 
-    // Фонд DAO составляет ровно 10% от базового остатка (23 M при 230 M базового остатка)
+    // Фонд DAO составляет ровно 10% от базового остатка
     const daoFund = Math.round(baseRemainder * 0.10); 
     
-    // Чистая прибыль Администратора составляет оставшиеся 90% (207 M при 230 M базового остатка)
+    // Чистая прибыль Администратора составляет оставшиеся 90%
     const netProfit = baseRemainder - daoFund;       
 
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
@@ -495,11 +525,16 @@ app.get('/api/admin/stats', (req, res) => {
     const totalRefusedUsers = new Set(refundRecords.map(r => r.username)).size;
 
     // Подсчет активных лидеров (10+ личников)
-    const activeLeadersCount = Object.keys(referalsDB).filter(u => {
-        if (!u || u === 'undefined') return false;
-        const profile = shopUsersDB[u] || {};
-        return !profile.isLeaderRemoved && getDirectActiveInvitesCount(u) >= 10;
-    }).length;
+    let activeLeadersCount = 0;
+    if (leadersModule && leadersModule.getQualifiedLeaders) {
+        activeLeadersCount = leadersModule.getQualifiedLeaders(referalsDB, shopUsersDB).length;
+    } else {
+        activeLeadersCount = Object.keys(referalsDB).filter(u => {
+            if (!u || u === 'undefined') return false;
+            const profile = shopUsersDB[u] || {};
+            return !profile.isLeaderRemoved && getDirectActiveInvitesCount(u) >= 10;
+        }).length;
+    }
 
     res.json({
         success: true,
