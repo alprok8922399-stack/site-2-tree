@@ -270,7 +270,7 @@ async function registerInMatrix() {
     }
 }
 
-// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА И ОПЛАТЫ (МАТЕМАТИКА РАЗДЕЛА 5 ТЗ) ===
+// === 2. МОДУЛЬ МАРКЕТПЛЕЙСА И ОПЛАТЫ ===
 
 async function registerShopUser() {
     const shopUserField = document.getElementById('shop-username');
@@ -337,7 +337,7 @@ async function payCertificate() {
 💸 Закупка товара (сторонний МП): ${goodsCost} M
 🔒 Резерв вершины в Матрицу (100% кешбэк): ${cashbackReserve} M
 🤝 Реферальный резерв (50+10+10): ${refReserve} M
-${leaderBonus > 0 ? `👑 Лидерский бонус ветки (+7 M): ${leaderBonus} M\n` : ''}🛡️ Фонд DAO (10% от 223 M): ${daoFund} M
+${leaderBonus > 0 ? `👑 Лидерский бонус ветки (+7 M): ${leaderBonus} M\n` : ''}🛡️ Фонд DAO (23 M): ${daoFund} M
 💼 Чистая прибыль Админа: ${netProfit} M
             `;
             alert(splitInfo);
@@ -412,7 +412,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 }
             }
             
-            // --- 3 КОШЕЛЬКА СУБЪЕКТА (Пользовательский / Выплатной / Транзитный буфер) ---
+            // --- 3 КОШЕЛЬКА СУБЪЕКТА ---
             const balances = data.profile.balances || {};
             const cleanWithdraw = balances.cleanWithdraw || balances.mitrons || 0;
             const payoutReserve = balances.payoutReserve || 0;
