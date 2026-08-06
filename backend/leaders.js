@@ -27,13 +27,14 @@ function getLeaderStatus(username) {
 /**
  * Получить список всех активных прямо приглашенных у пользователя (1-я линия)
  * Учитываем только реально действующие профили (без отказников и без заблокированных)
+ * Сортируем по дате регистрации/оплаты для точного определения 11-го и последующих
  */
 function getActiveDirectReferrals(leaderUsername, referalsDB, shopUsersDB) {
     if (!leaderUsername || !referalsDB) return [];
 
     const leaderClean = leaderUsername.trim().toLowerCase();
 
-    return Object.keys(referalsDB).filter(user => {
+    const referrals = Object.keys(referalsDB).filter(user => {
         const sponsor = referalsDB[user];
         if (!sponsor || sponsor.trim().toLowerCase() !== leaderClean) return false;
 
@@ -45,6 +46,13 @@ function getActiveDirectReferrals(leaderUsername, referalsDB, shopUsersDB) {
         const isNotBlocked = !profile.isBlocked;
 
         return isPaid && isNotRefunded && isNotBlocked;
+    });
+
+    // Сортируем по дате оплаты (или регистрации) от старых к новым
+    return referrals.sort((a, b) => {
+        const timeA = shopUsersDB[a]?.paymentDate ? new Date(shopUsersDB[a].paymentDate).getTime() : 0;
+        const timeB = shopUsersDB[b]?.paymentDate ? new Date(shopUsersDB[b].paymentDate).getTime() : 0;
+        return timeA - timeB;
     });
 }
 
@@ -113,7 +121,8 @@ function findBranchLeader(username, referalsDB, shopUsersDB) {
 
 /**
  * Расчет лидерских бонусов (7 M) с новичков ветки по прошествии 33 дней.
- * Заложено в общую математику обязательств экосистемы (777 M)!
+ * Правило: Лидер начинает получать по 7 M с каждого участника, начиная с 11-го личника!
+ * Первые 10 личников квалификационные — с них 7 M не начисляются.
  */
 function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
     const now = Date.now();
@@ -123,6 +132,19 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
 
     if (!shopUsersDB) return { totalLeaderBonusPaid: 0, totalLeaderBonusReserve: 0, leaderRewardsMap };
 
+    // Собираем всех Лидеров и их личников начиная с 11-го
+    const leadersList = getQualifiedLeaders(referalsDB, shopUsersDB);
+    const eligibleBonusUsers = new Set();
+
+    leadersList.forEach(leaderInfo => {
+        const referrals = leaderInfo.referralsList;
+        // Начиная с 11-го (индекс 10 и выше)
+        if (referrals.length > 10) {
+            const extraReferrals = referrals.slice(10);
+            extraReferrals.forEach(u => eligibleBonusUsers.add(u));
+        }
+    });
+
     Object.keys(shopUsersDB).forEach(newUser => {
         const profile = shopUsersDB[newUser];
         if (!profile || !profile.isPaid) return;
@@ -130,6 +152,14 @@ function calculateLeaderBranchBonuses(referalsDB, shopUsersDB) {
 
         const leader = findBranchLeader(newUser, referalsDB, shopUsersDB);
         if (!leader) return;
+
+        // Если это личник данного Лидера, но он входит в первые 10 квалификационных — пропускаем!
+        const directSponsor = referalsDB[newUser];
+        if (directSponsor && directSponsor.trim().toLowerCase() === leader.trim().toLowerCase()) {
+            if (!eligibleBonusUsers.has(newUser)) {
+                return;
+            }
+        }
 
         const leaderStatus = getLeaderStatus(leader);
 
