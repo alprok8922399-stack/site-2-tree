@@ -2,7 +2,7 @@
  * =========================================================
  * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
  * Файловый путь: site-2-tree/backend/static.js
- * Назначение: Модуль хелперов и статики
+ * Назначение: Модуль хелперов и статики (Без ВИП/золота, строго 33 дня)
  * =========================================================
  */
 
@@ -58,6 +58,7 @@ function createNewUserCard(username) {
         isBlocked: false,
         ownedByAdmin: false,
         payoutsSuspended: false,
+        refundedCellsCount: 0, // Кол-во отменённых ячеек (100% возврат покупателю)
         balances: {
             mitrons: 0,
             usd: 0
@@ -66,8 +67,8 @@ function createNewUserCard(username) {
             currentCellId: null,
             occupiedCells: [],
             status: 'inactive', // inactive -> active -> payout_pending -> completed
-            reservedPerCell: 0,  // 250 M с каждой единицы
-            reservedMatrixM: 0,  // 1000 M при заполнении 4 позиций
+            reservedPerCell: 0,   // 250 M с каждой единицы
+            reservedMatrixM: 0,   // 1000 M при заполнении 4 позиций (на верхнего)
             payoutEligibleDate: null // Дата разблокировки через 33 дня
         },
         pendingReferralRewards: [] // Резерв рефералок: [{ fromUser, amount, level, unlockDate, status }]
@@ -75,19 +76,20 @@ function createNewUserCard(username) {
 }
 
 /**
- * Инициализация 3-х системных кошельков
+ * Инициализация 3-х системных кошельков экосистемы MITRON
+ * (Распределение 1000 M: 200 M — Админ, 800 M — Выплатной, Буфер — Всегда 0)
  */
 function createInitialWallets() {
     return {
         adminProfitWallet: {
             id: 'admin_profit',
-            name: 'Кошелек Администратора (Моя Чистая Прибыль)',
+            name: 'Кошелек Администратора (Чистая Прибыль — 200 M с каждой ячейки)',
             balanceMitrons: 0,
             hasFullAccess: true
         },
         payoutReserveWallet: {
             id: 'payout_reserve',
-            name: 'Выплатной Кошелек (250 M Резерв + 70 M Рефералка + DAO + Выкуп)',
+            name: 'Выплатной Кошелек (450M Товар + 250M Матрица + 70M Рефералка + 7M Лидер + 23M DAO = 800M)',
             balanceMitrons: 0,
             hasFullAccess: true
         },
