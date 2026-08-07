@@ -13,7 +13,7 @@ const API_URL = window.location.origin;
 const MITRON_RATE_USD = 130 / 1000; 
 
 function convertMitronsToUsd(mitrons) {
-    return (mitrons * MITRON_RATE_USD).toFixed(2);
+    return (Number(mitrons || 0) * MITRON_RATE_USD).toFixed(2);
 }
 
 // Вспомогательная функция для безопасного обновления текста в DOM
@@ -92,7 +92,7 @@ async function filterLoginsByDate() {
 
         if (data.success) {
             if (resultEl) {
-                resultEl.innerText = `Найдено: ${data.count} логинов (${data.logins.join(', ') || 'нет'})`;
+                resultEl.innerText = `Найдено: ${data.count} логинов (${data.logins ? data.logins.join(', ') : 'нет'})`;
             }
         } else {
             alert(`Ошибка поиска: ${data.error}`);
@@ -487,6 +487,7 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
 }
 
 // Рендер секции личников внутри карточки
+let searchTimeout = null;
 function renderReferralsSection(username, refData, currentSearch) {
     let container = document.getElementById('profile-referrals-section');
     if (!container) {
@@ -506,7 +507,7 @@ function renderReferralsSection(username, refData, currentSearch) {
 
     const header = document.createElement('div');
     header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; color: #a0a0ab; font-size: 13px;';
-    header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount}</strong></span>`;
+    header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount || 0}</strong></span>`;
     wrapper.appendChild(header);
 
     // Строка поиска по личникам
@@ -520,11 +521,11 @@ function renderReferralsSection(username, refData, currentSearch) {
         input.value = currentSearch;
         input.style.cssText = 'flex: 1; padding: 5px 8px; background: #0e0e12; border: 1px solid #333; color: #fff; border-radius: 4px; font-size: 12px;';
         
-        let timeout = null;
         input.oninput = (e) => {
-            clearTimeout(timeout);
-            timeout = setTimeout(() => {
-                loadUserProfile(username, e.target.value, 1);
+            if (searchTimeout) clearTimeout(searchTimeout);
+            const val = e.target.value;
+            searchTimeout = setTimeout(() => {
+                loadUserProfile(username, val, 1);
             }, 300);
         };
 
@@ -657,6 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
                           e.target.closest('.dropdown-btn') || 
                           e.target.closest('.user-cell-card') ||
                           e.target.closest('[onclick*="showUserCard"]') ||
+                          e.target.closest('[onclick*="loadUserProfile"]') ||
                           e.target.closest('[onclick*="viewUserCardTrigger"]') ||
                           e.target.closest('#leadersModal') ||
                           e.target.closest('#stat-leaders-count');
