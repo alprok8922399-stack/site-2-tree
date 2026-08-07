@@ -887,38 +887,21 @@ app.get('/api/get-referral-chain', (req, res) => {
     const { login } = req.query;
     if (!login) return res.status(400).json({ error: 'Параметр login обязателен' });
 
-    const targetUser = Object.keys(referalsDB).find(k => k.toLowerCase() === login.trim().toLowerCase());
-    if (!targetUser) return res.status(404).json({ error: 'Пользователь не найден' });
+    const targetUser = Object.keys(referalsDB).find(k => k.toLowerCase() === login.trim().toLowerCase()) || login.trim();
+    let chain = [targetUser];
+    let current = referalsDB[targetUser];
+    let visited = new Set([targetUser.toLowerCase()]);
 
-    let chain = [];
-    let current = targetUser;
-    let visited = new Set();
-
-    while (current && !visited.has(current)) {
-        visited.add(current);
-        chain.push(current);
-        const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === referalsDB[current]?.toLowerCase());
-        current = nextSponsorKey ? nextSponsorKey : referalsDB[current];
+    while (current && !visited.has(current.toLowerCase())) {
+        visited.add(current.toLowerCase());
+        const canonicalSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === current.toLowerCase()) || current;
+        chain.push(canonicalSponsor);
+        current = referalsDB[canonicalSponsor];
     }
 
-    chain.reverse();
     res.json({ success: true, chain });
 });
 
-app.post('/api/admin/delete-user', (req, res) => {
-    const { username } = req.body;
-    if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
-    
-    delete shopUsersDB[username];
-    delete referalsDB[username];
-    
-    Object.keys(treeDB).forEach(cellId => {
-        if (treeDB[cellId].user === username) {
-            treeDB[cellId].user = null;
-        }
-    });
-
-    res.json({ success: true, message: `Пользователь ${username} успешно удален.` });
+app.listen(PORT, () => {
+    console.log(`Сервер Сайта 2 запущен на порту ${PORT}`);
 });
-
-app.listen(PORT, () => console.log(`Site 2 Engine Server running on port ${PORT}`));
