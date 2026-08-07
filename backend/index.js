@@ -108,7 +108,7 @@ function getDirectActiveInvitesCount(username) {
     Object.entries(referalsDB).forEach(([user, sponsor]) => {
         if (sponsor && sponsor.trim().toLowerCase() === canonicalName) {
             const profile = shopUsersDB[user];
-            if (profile && profile.isPaid && profile.matrixPosition && profile.matrixPosition.status !== 'refunded') {
+            if (profile && profile.isPaid && profile.matrixPosition && profile.matrixPosition.status !== 'refunded' && !profile.isBlocked) {
                 count++;
             }
         }
@@ -355,7 +355,7 @@ app.post('/api/admin/simulate-33days', (req, res) => {
             });
         }
 
-        // 2. Размораживаем матричные выплаты (кэшбэк 1000 M)
+        // 2. Размораживаем матричные выплаты (кэшбэк 1000 M), включая SYSTEM_ROOT
         if (user.matrixPosition && user.matrixPosition.reservedMatrixM === 1000 && user.matrixPosition.status === 'payout_pending') {
             unlockedCashback += 1000;
             user.matrixPosition.status = 'payout_completed';
@@ -489,34 +489,44 @@ app.get('/api/admin/stats', (req, res) => {
         }
     });
 
-    // Резерв: базовые 250M плюс созревшие матричные 1000M
+    // Резерв матричных выплат: строго 250M с каждого активного купленного места (плюс незавершенные 1000M)
     const systemReserveTotal = Math.max(0, (activeBuyerUnits * 250) + reservedCashbackTotal - simulatedPayouts.cashbackPaid); 
     
     // Точный расчет Лидерских бонусов (по 7 M с участников начиная с 11-го личника)
     let totalLeaderBonus = 0;
+    let totalLeaderBonusPaid = 0;
+    let totalLeaderBonusReserve = 0;
+
     if (leadersModule && leadersModule.calculateLeaderBranchBonuses) {
         const branchBonuses = leadersModule.calculateLeaderBranchBonuses(referalsDB, shopUsersDB);
-        totalLeaderBonus = branchBonuses.totalLeaderBonusPaid + branchBonuses.totalLeaderBonusReserve;
+        totalLeaderBonusPaid = branchBonuses.totalLeaderBonusPaid;
+        totalLeaderBonusReserve = branchBonuses.totalLeaderBonusReserve;
+        totalLeaderBonus = totalLeaderBonusPaid + totalLeaderBonusReserve;
     } else {
         activeBuyerCells.forEach(cell => {
             if (findBranchLeader(cell.user)) {
+                totalLeaderBonusReserve += 7;
                 totalLeaderBonus += 7;
             }
         });
     }
 
-    // Реферальный резерв: базовые 70M + начисленные лидерские 7M - размороженные реферальные
-    const refReserveTotal = Math.max(0, (activeBuyerUnits * 70) + totalLeaderBonus - simulatedPayouts.referralsPaid);
+    // Базовый резерв реферальных выплат 70M с каждой активации
+    const baseRefReserve = activeBuyerUnits * 70;
+    const refReserveTotal = Math.max(0, baseRefReserve + totalLeaderBonusReserve - simulatedPayouts.referralsPaid);
+    const refPaidTotal = simulatedPayouts.referralsPaid + totalLeaderBonusPaid;
 
-    // Расчет базовых обязательств при товаре 450M = 450 + 250 + 70 = 770 M
-    // Базовый остаток = 1000 M - 770 M = 230 M (на 1000 M оборота)
-    const baseRemainder = Math.max(0, totalIncomeM - (activeBuyerUnits * 770) - totalLeaderBonus);
+    // Расчет согласно формуле ТЗ при выкупе товара по 450 M:
+    // Обязательства = 450 + 250 + 70 + 7 (лидеру если есть) = 777 M (или 770 M без лидера)
+    // Базовый остаток = 1000 - Обязательства = 223 M (или 230 M)
+    const totalObligations = (activeBuyerUnits * 770) + totalLeaderBonus;
+    const baseRemainder = Math.max(0, totalIncomeM - (activeBuyerUnits * 450) - totalObligations + (activeBuyerUnits * 450));
 
-    // Фонд DAO составляет 10% от базового остатка (23 M с каждых 1000 M)
+    // DAO (10% от базового остатка): 23 M с 1000 M
     const daoFund = Math.round(baseRemainder * 0.10); 
     
-    // Чистая прибыль Администратора составляет 90% от базового остатка (207 M с каждых 1000 M)
-    const netProfit = baseRemainder - daoFund;       
+    // Чистая прибыль Администратора (90% от базового остатка): 200 M с 1000 M
+    const netProfit = Math.round(baseRemainder * 0.90);        
 
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
     const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
@@ -552,7 +562,7 @@ app.get('/api/admin/stats', (req, res) => {
             refusedTodayText: `${todayRefusedUsers} чел. (${todayRefusedUnits} яч.)`,
             refusedTotalText: `${totalRefusedUsers} чел. (${totalRefusedUnits} яч.)`,
             cashbackPaid: simulatedPayouts.cashbackPaid,
-            referralsPaid: simulatedPayouts.referralsPaid, 
+            referralsPaid: refPaidTotal, 
             referralsReserve: refReserveTotal,
             inReserve: systemReserveTotal,
             netProfit,
