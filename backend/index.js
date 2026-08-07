@@ -2,7 +2,8 @@
  * =========================================================
  * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
  * Файловый путь: site-2-tree/backend/index.js
- * Назначение: Ядро сервера (Структура, Таблица и Лидерские бонусы)
+ * Назначение: Ядро сервера (Структура, Таблица, Лидерские бонусы и Статистика)
+ * Соответствует новому окончательному ТЗ проекта «MITRON»
  * =========================================================
  */
 
@@ -27,7 +28,6 @@ try {
     createNewUserCard = staticUtils.createNewUserCard;
     createInitialWallets = staticUtils.createInitialWallets;
 } catch (e) {
-    // Резервные утилиты при запуске без внешних зависимостей
     getLevelLetter = (idx) => String.fromCharCode(65 + idx);
     cellIdToGlobalIndex = (id) => 0;
     mitronsToUsd = (m) => m * 0.13;
@@ -489,8 +489,8 @@ app.get('/api/admin/stats', (req, res) => {
         }
     });
 
-    // Резерв: пропорциональные 250M плюс созревшие матричные 1000M
-    const systemReserveTotal = (activeBuyerUnits * 250) + reservedCashbackTotal; 
+    // Резерв: базовые 250M плюс созревшие матричные 1000M
+    const systemReserveTotal = Math.max(0, (activeBuyerUnits * 250) + reservedCashbackTotal - simulatedPayouts.cashbackPaid); 
     
     // Точный расчет Лидерских бонусов (по 7 M с участников начиная с 11-го личника)
     let totalLeaderBonus = 0;
@@ -505,16 +505,17 @@ app.get('/api/admin/stats', (req, res) => {
         });
     }
 
-    // Реферальный резерв: базовые 70M + начисленные лидерские 7M
-    const refReserveTotal = (activeBuyerUnits * 70) + totalLeaderBonus;
+    // Реферальный резерв: базовые 70M + начисленные лидерские 7M - размороженные реферальные
+    const refReserveTotal = Math.max(0, (activeBuyerUnits * 70) + totalLeaderBonus - simulatedPayouts.referralsPaid);
 
-    // Динамический расчёт Базового остатка
-    const baseRemainder = totalIncomeM - goodsBoughtM - (activeBuyerUnits * 250) - refReserveTotal;
+    // Расчет базовых обязательств при товаре 450M = 450 + 250 + 70 = 770 M
+    // Базовый остаток = 1000 M - 770 M = 230 M (на 1000 M оборота)
+    const baseRemainder = Math.max(0, totalIncomeM - (activeBuyerUnits * 770) - totalLeaderBonus);
 
-    // Фонд DAO составляет ровно 10% от базового остатка
+    // Фонд DAO составляет 10% от базового остатка (23 M с каждых 1000 M)
     const daoFund = Math.round(baseRemainder * 0.10); 
     
-    // Чистая прибыль Администратора составляет оставшиеся 90%
+    // Чистая прибыль Администратора составляет 90% от базового остатка (207 M с каждых 1000 M)
     const netProfit = baseRemainder - daoFund;       
 
     const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
