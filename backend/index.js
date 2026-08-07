@@ -10,9 +10,13 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fetch = require('node-fetch');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Адрес Сайта 1 на Render
+const SITE1_URL = 'https://site-1-registrar.onrender.com';
 
 // Системный логин Администратора для приема отказных единиц
 const ADMIN_OWNER_LOGIN = 'ADMIN_REFUND_OWNER';
@@ -340,7 +344,7 @@ app.post('/api/admin/remove-leader', (req, res) => {
 });
 
 // === СИМУЛЯЦИЯ РАЗМОРОЗКИ 33 ДНЕЙ ===
-app.post('/api/admin/simulate-33days', (req, res) => {
+app.post('/api/admin/simulate-33days', async (req, res) => {
     let unlockedReferrals = 0;
     let unlockedCashback = 0;
 
@@ -366,9 +370,20 @@ app.post('/api/admin/simulate-33days', (req, res) => {
     simulatedPayouts.referralsPaid += unlockedReferrals;
     simulatedPayouts.cashbackPaid += unlockedCashback;
 
+    // 3. Отправляем сигнал на Сайт 1, что 33 дня «истекли», и теперь кнопка возврата блокируется!
+    try {
+        await fetch(`${SITE1_URL}/api/shop/expire-33days`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ forceExpire: true })
+        });
+    } catch (err) {
+        console.error('Ошибка уведомления Сайта 1 про разморозку 33 дней:', err);
+    }
+
     res.json({
         success: true,
-        message: 'Симуляция 33 дней выполнена! Средства созревших выплат разморожены.',
+        message: 'Симуляция 33 дней выполнена! Средства созревших выплат разморожены, возвраты на Сайте 1 заблокированы.',
         cashbackPaid: simulatedPayouts.cashbackPaid,
         referralsPaid: simulatedPayouts.referralsPaid
     });
@@ -733,7 +748,7 @@ app.post('/api/shop/register', (req, res) => {
     });
 });
 
-app.post('/api/reset', (req, res) => {
+app.post('/api/reset', async (req, res) => {
     treeDB = createInitialTree();
     activeMatricesList = ['A1'];
     shopUsersDB = {};
@@ -746,6 +761,16 @@ app.post('/api/reset', (req, res) => {
         'LEADER_2': 'SYSTEM_ROOT'
     };
     lastRegisteredBot = null;
+
+    // При сбросе системы возвращаем блокировку на Сайте 1 в исходное состояние
+    try {
+        await fetch(`${SITE1_URL}/api/shop/expire-33days`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ forceExpire: false })
+        });
+    } catch (e) {}
+
     res.json({ success: true });
 });
 
@@ -892,12 +917,8 @@ app.post('/api/admin/delete-user', (req, res) => {
             treeDB[cellId].user = null;
         }
     });
-    
-    res.json({ success: true });
+
+    res.json({ success: true, message: `Пользователь ${username} успешно удален.` });
 });
 
-app.get('/api/sys-wallets', (req, res) => {
-    res.json({ success: true, wallets });
-});
-
-app.listen(PORT, () => console.log(`Backend server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Site 2 Engine Server running on port ${PORT}`));
