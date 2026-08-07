@@ -10,7 +10,6 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const fetch = require('node-fetch');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -666,7 +665,6 @@ app.get('/api/admin/owned-logins', (req, res) => {
             });
         }
     });
-
     res.json({ success: true, logins: adminLogins });
 });
 
@@ -905,3 +903,4 @@ app.get('/api/get-referral-chain', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Сервер Сайта 2 запущен на порту ${PORT}`);
 });
+    
