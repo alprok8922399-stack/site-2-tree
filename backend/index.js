@@ -2,7 +2,7 @@
  * =========================================================
  * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
  * Файловый путь: site-2-tree/backend/index.js
- * Назначение: Ядро сервера (Структура, Таблица, Лидерские бонусы, Финансы и Статистика)
+ * Назначение: Ядро сервера (Структура, Матрицы, Таблица, Лидерские бонусы, Финансы и Статистика)
  * =========================================================
  */
 
@@ -76,7 +76,7 @@ let shopUsersDB = {};
 let wallets = createInitialWallets();
 let refundRecords = [];
 
-// Гарантируем наличие буферного кошелька при инициализации
+// Гарантируем наличие системных кошельков
 if (!wallets.bufferWallet) wallets.bufferWallet = { balanceMitrons: 0 };
 if (!wallets.payoutReserveWallet) wallets.payoutReserveWallet = { balanceMitrons: 0 };
 if (!wallets.adminProfitWallet) wallets.adminProfitWallet = { balanceMitrons: 0 };
@@ -117,7 +117,7 @@ let splitMatrixCount = 0; // Счетчик поделившихся матри�
  * =========================================================
  */
 
-// Получение количества реально действующих (без отказников и банов) лично-приглашенных
+// Получение количества реально действующих лично-приглашенных
 function getDirectActiveInvitesCount(username) {
     if (leadersModule && leadersModule.getActiveDirectReferrals) {
         return leadersModule.getActiveDirectReferrals(username, referalsDB, shopUsersDB).length;
@@ -206,7 +206,14 @@ function processTableReferrals(username) {
     }
 }
 
-// Поиск свободной ячейки в нижнем ряду слева направо
+/**
+ * =========================================================
+ * МАТРИЧНЫЙ ДВИЖОК (ПСЕВДОКОД В ДЕЙСТВИИ)
+ * Почкование, веерное заполнение и независимая механика
+ * =========================================================
+ */
+
+// Поиск следующей пустой ячейки по алгоритму веерного заполнения
 function findNextEmptyCell(tree) {
     const keys = Object.keys(tree);
     for (let key of keys) {
@@ -215,9 +222,10 @@ function findNextEmptyCell(tree) {
     return 'C1';
 }
 
-// Проверка и деление матрицы при заполнении 4-й ячейки
+// Проверка и веерное деление матрицы при заполнении замыкающей ячейки
 function checkAndSplitMatrix(cellId) {
-    if (cellId === 'C4' || cellId.endsWith('4')) {
+    // В соответствии с псевдокодом, при закрытии замыкающих ячеек происходит почкование
+    if (cellId === 'C4' || cellId.endsWith('4') || cellId.endsWith('8')) {
         splitMatrixCount++;
     }
 }
@@ -228,7 +236,7 @@ function checkAndSplitMatrix(cellId) {
  * =========================================================
  */
 
-// Покупка / Регистрация с идеальным распределением по ТЗ (на 1000 M)
+// Покупка / Регистрация с расчетом по ТЗ (на 1000 M)
 app.post('/api/shop/register', (req, res) => {
     const { username, hashId, uplineUser, unitsCount, cellsCount = 1, itemCost = 450 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
@@ -238,10 +246,10 @@ app.post('/api/shop/register', (req, res) => {
     const count = Math.min(Math.max(parseInt(countValue) || 1, 1), 5);
     const totalAmount = count * 1000;
 
-    // Шлюз 3. Буферный кошелек принимает средства
+    // Буферный кошелек принимает средства
     wallets.bufferWallet.balanceMitrons = (wallets.bufferWallet.balanceMitrons || 0) + totalAmount;
 
-    // Динамический расчет финансов согласно формуле ТЗ
+    // Расчет финансов согласно формуле ТЗ
     const X = Math.min(Math.max(parseFloat(itemCost) || 450, 0), 450);
     
     for (let i = 0; i < count; i++) {
@@ -357,13 +365,10 @@ app.get('/api/admin/stats', (req, res) => {
     let cashbackPaid = 0;
     let matrixReserveTotal = 0;
 
-    // Считаем совокупный пул со всех занятых ячеек в матрице (по 250 M с ячейки)
     const totalMatrixPool = totalPurchasesCount * 250;
 
     if (is33DaysExpired) {
-        // Учитываем все выбывшие верхние ячейки (включая SYSTEM_ROOT и админские)
         cashbackPaid = splitMatrixCount * 1000;
-        // Накопительный остаток = Занятые ячейки * 250M - Выплаченные 1000M
         matrixReserveTotal = Math.max(totalMatrixPool - cashbackPaid, 0);
     } else {
         cashbackPaid = 0;
@@ -429,7 +434,7 @@ app.get('/api/admin/stats', (req, res) => {
 
 // Отказ от покупки (до 33 дней)
 app.post('/api/shop/refund', (req, res) => {
-    const { username, cellsToRefundCount = 1 } = req.body;
+    const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
 
     if (is33DaysExpired) {
