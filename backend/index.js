@@ -886,21 +886,25 @@ app.get('/api/get-referral-chain', (req, res) => {
     if (!login) return res.status(400).json({ error: 'Параметр login обязателен' });
 
     const targetUser = Object.keys(referalsDB).find(k => k.toLowerCase() === login.trim().toLowerCase()) || login.trim();
-    let chain = [targetUser];
+    
+    let chain = [];
     let current = referalsDB[targetUser];
-    let visited = new Set([targetUser.toLowerCase()]);
+    let visited = new Set();
 
-    while (current && !visited.has(current.toLowerCase())) {
-        visited.add(current.toLowerCase());
-        const canonicalSponsor = Object.keys(referalsDB).find(k => k.toLowerCase() === current.toLowerCase()) || current;
-        chain.push(canonicalSponsor);
-        current = referalsDB[canonicalSponsor];
+    while (current && !visited.has(current)) {
+        visited.add(current);
+        chain.push(current);
+        const nextKey = Object.keys(referalsDB).find(k => k.toLowerCase() === current.toLowerCase());
+        current = nextKey ? referalsDB[nextKey] : null;
     }
 
-    res.json({ success: true, chain });
+    res.json({
+        success: true,
+        login: targetUser,
+        chain: chain
+    });
 });
 
 app.listen(PORT, () => {
-    console.log(`Сервер Сайта 2 запущен на порту ${PORT}`);
+    console.log(`[САЙТ 2] Сервер успешно запущен на порту ${PORT}`);
 });
-    
