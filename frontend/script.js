@@ -3,7 +3,7 @@
  * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
  * Файловый путь: site-2-tree/frontend/script.js
  * Назначение: Основной клиентский скрипт управления структурой, 
- * аналитикой, модальными окнами и профилями (согласно ТЗ).
+ * аналитикой, модальными окнами и профилями.
  * =========================================================
  */
 
@@ -24,7 +24,7 @@ function setElementText(id, text) {
     }
 }
 
-// === 0. ФИНАНСОВАЯ АНАЛИТИКА АДМИНИСТРАТОРА (ПО ТЗ) ===
+// === 0. ФИНАНСОВАЯ АНАЛИТИКА АДМИНИСТРАТОРА ===
 
 async function loadAdminStats() {
     try {
@@ -34,42 +34,40 @@ async function loadAdminStats() {
 
         if (data.success && data.stats) {
             const s = data.stats;
+            
+            // Основной финансовый поток
             setElementText('stat-total-balance', `${s.totalBalance || 0} M`);
             setElementText('stat-income-today', `${s.incomeToday || 0} M`);
             setElementText('stat-income-week', `${s.incomeWeek || 0} M`);
             setElementText('stat-income-month', `${s.incomeMonth || 0} M`);
 
             // Внешние закупки и статистика покупателей
-            setElementText('stat-goods-bought-m', `${s.goodsBoughtM || 0} M`);
-            setElementText('stat-buyers-count', `${s.buyersCount || 0} чел.`);
+            setElementText('stat-goods-bought-m', `${s.externalMPPurchases || 0} M`);
+            setElementText('stat-buyers-count', `${s.totalBuyersCount || s.buyersCount || 0} чел.`);
             
-            // Отказы за сегодня и за все время (по ТЗ)
-            const refusedTodayText = s.refusedTodayM !== undefined 
-                ? `${s.refusedTodayM} M (${s.refusedTodayCount || 0} чел.)` 
-                : `${s.refusedTodayCount || s.refusedToday || 0}`;
-            const refusedTotalText = s.refusedTotalM !== undefined 
-                ? `${s.refusedTotalM} M (${s.refusedTotalCount || 0} чел.)` 
-                : `${s.refusedCount || s.refusedTotalText || 0}`;
+            // Отказы за сегодня и за все время
+            const refusedTodayText = `${s.refundsTodayCount || 0} чел.`;
+            const refusedTotalText = `${s.refundsTotalCount || 0} чел.`;
 
             setElementText('stat-refused-today-count', refusedTodayText);
             setElementText('stat-refused-count', refusedTotalText);
 
             // Выплаты, резервы, Фонд DAO и Чистая прибыль
-            setElementText('stat-cashback-paid', `${s.cashbackPaid || 0} M`);
-            setElementText('stat-referrals-paid', `${s.referralsPaid || 0} M`);
-            setElementText('stat-referrals-reserve', `${s.referralsReserve || 0} M`);
-            setElementText('stat-in-reserve', `${s.inReserve || 0} M`);
+            setElementText('stat-cashback-paid', `${s.cashbackPaidTotal || 0} M`);
+            setElementText('stat-referrals-paid', `${s.referralsPaidTotal || 0} M`);
+            setElementText('stat-referrals-reserve', `${s.referralsInReserve || 0} M`);
+            setElementText('stat-in-reserve', `${s.payoutsInReserveTotal || 0} M`);
             
             // Количество лидеров
-            setElementText('stat-leaders-count', `${s.leadersCount || 0} чел.`);
+            setElementText('stat-leaders-count', `${s.qualifyingLeadersCount || 0} чел.`);
 
             setElementText('stat-dao-fund', `${s.daoFund || 0} M`);
-            setElementText('stat-net-profit', `${s.netProfit || 0} M`);
+            setElementText('stat-net-profit', `${s.netAdminProfit || 0} M`);
 
             // Логины
-            setElementText('stat-total-logins', s.totalLogins || 0);
-            setElementText('stat-admin-logins', s.adminLogins || 0);
-            setElementText('stat-user-logins', s.userLogins || 0);
+            setElementText('stat-total-logins', s.totalLoginsCount || 0);
+            setElementText('stat-admin-logins', s.adminLoginsCount || 0);
+            setElementText('stat-user-logins', s.buyerLoginsCount || 0);
         }
     } catch (error) {
         console.error('Ошибка загрузки статистики администратора:', error);
@@ -103,10 +101,10 @@ async function filterLoginsByDate() {
 }
 
 async function simulate33Days() {
-    if (!confirm('Вы действительно хотите симулировать прохождение 33 дней для разморозки всех заблокированных средств?')) return;
+    if (!confirm('Вы действительно хотите разморозить 33 дня и списать средства по выбывшим ячейкам?')) return;
     
     try {
-        const response = await fetch(`${API_URL}/api/admin/simulate-33days`, { method: 'POST' });
+        const response = await fetch(`${API_URL}/api/admin/expire-33days`, { method: 'POST' });
         const data = await response.json();
         
         if (data.success) {
@@ -123,7 +121,7 @@ async function simulate33Days() {
     }
 }
 
-// === 0.1 МОДУЛЬ УПРАВЛЕНИЯ ЛИДЕРАМИ (ПО ТЗ) ===
+// === 0.1 МОДУЛЬ УПРАВЛЕНИЯ ЛИДЕРАМИ ===
 
 async function showLeadersModal() {
     const modal = document.getElementById('leadersModal');
@@ -210,7 +208,7 @@ async function toggleLeaderFreeze(username, freezeState) {
 }
 
 async function excludeLeader(username) {
-    if (!confirm(`Вы действительно хотите ИСКЛЮЧИТЬ ${username} из состава лидеров? Начисления по 7 M с вновь прибывших прекратятся! (Аккаунт и его ячейки останутся нетронутыми).`)) return;
+    if (!confirm(`Вы действительно хотите ИСКЛЮЧИТЬ ${username} из состава лидеров? Начисления по 7 M с вновь прибывших прекратятся!`)) return;
 
     try {
         const response = await fetch(`${API_URL}/api/admin/leaders/exclude`, {
@@ -245,11 +243,11 @@ async function registerInMatrix() {
 
     const payload = {
         username: usernameInput.value.trim(),
-        sponsor: sponsorInput ? sponsorInput.value.trim() : ''
+        uplineUser: sponsorInput ? sponsorInput.value.trim() : ''
     };
 
     try {
-        const response = await fetch(`${API_URL}/api/register`, {
+        const response = await fetch(`${API_URL}/api/shop/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -289,7 +287,7 @@ async function registerShopUser() {
         const response = await fetch(`${API_URL}/api/shop/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: shopUserStr, sponsor: shopSponsorStr })
+            body: JSON.stringify({ username: shopUserStr, uplineUser: shopSponsorStr })
         });
         const result = await response.json();
         
@@ -302,56 +300,6 @@ async function registerShopUser() {
         }
     } catch (error) {
         console.error('Ошибка регистрации покупателя:', error);
-    }
-}
-
-async function payCertificate() {
-    const username = document.getElementById('current-profile-user')?.innerText;
-    if (!username || username === '—') {
-        alert('Сначала выберите или загрузите профиль пользователя');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_URL}/api/shop/pay`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username })
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            const split = result.split || {};
-            const goodsCost = split.adminLogistics || 450;
-            const cashbackReserve = split.cashbackReserve || 250;
-            const refReserve = split.refReserve || 70;
-            const leaderBonus = split.leaderBonus !== undefined ? split.leaderBonus : (split.hasLeader ? 7 : 0);
-            const daoFund = split.daoPool !== undefined ? split.daoPool : 23;
-            const netProfit = split.netProfit !== undefined ? split.netProfit : 200;
-
-            const splitInfo = `
-Активация успешна!
-Списано: ${split.totalMitrons || 1000} Митронов
------------------------------------------
-Распределение средств по ТЗ (на 1000 M):
-💸 Закупка товара (сторонний МП): ${goodsCost} M
-🔒 Резерв вершины в Матрицу (100% кешбэк): ${cashbackReserve} M
-🤝 Реферальный резерв (50+10+10): ${refReserve} M
-${leaderBonus > 0 ? `👑 Лидерский бонус ветки (+7 M): ${leaderBonus} M\n` : ''}🛡️ Фонд DAO (23 M): ${daoFund} M
-💼 Чистая прибыль Админа: ${netProfit} M
-            `;
-            alert(splitInfo);
-            
-            loadUserProfile(username);
-            if (typeof window.renderMatrixTree === 'function') {
-                window.renderMatrixTree();
-            }
-            loadAdminStats();
-        } else {
-            alert(`Ошибка оплаты: ${result.error}`);
-        }
-    } catch (error) {
-        console.error('Ошибка при оплате тарифа:', error);
     }
 }
 
@@ -385,7 +333,6 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
             const cellId = data.profile.matrixPosition ? data.profile.matrixPosition.currentCellId : null;
             setElementText('profile-cell-id', cellId || 'Нет позиции');
             
-            // Расчет 33-дневного периода заморозки по ТЗ
             const statusEl = document.getElementById('profile-status');
             if (statusEl) {
                 if (data.profile.isPaid) {
@@ -478,7 +425,6 @@ async function loadUserProfile(username, searchQuery = '', page = 1) {
                 }
             }
 
-            // --- БЛОК СПИСКА ЛИЧНИКОВ С ПОИСКОМ И ПАГИНАЦИЕЙ ---
             renderReferralsSection(data.username, data.referralsData, searchQuery);
         }
     } catch (error) {
@@ -510,7 +456,6 @@ function renderReferralsSection(username, refData, currentSearch) {
     header.innerHTML = `<span>Лично приглашенные: <strong style="color:#3498db;">${refData.totalCount || 0}</strong></span>`;
     wrapper.appendChild(header);
 
-    // Строка поиска по личникам
     if (refData.totalCount > 0) {
         const searchBox = document.createElement('div');
         searchBox.style.cssText = 'margin-bottom: 8px; display: flex; gap: 6px;';
@@ -533,7 +478,6 @@ function renderReferralsSection(username, refData, currentSearch) {
         wrapper.appendChild(searchBox);
     }
 
-    // Список личников
     const listDiv = document.createElement('div');
     listDiv.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-height: 150px; overflow-y: auto; padding: 4px;';
 
@@ -554,7 +498,6 @@ function renderReferralsSection(username, refData, currentSearch) {
 
     wrapper.appendChild(listDiv);
 
-    // Кнопка "Загрузить ещё"
     if (refData.hasMore) {
         const moreBtn = document.createElement('button');
         moreBtn.innerText = 'Показать ещё...';
@@ -634,14 +577,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Привязка клика по элементу статистики лидеров для открытия модалки
     const leadersStatCard = document.getElementById('stat-leaders-count')?.closest('.stat-card') || document.getElementById('stat-leaders-count');
     if (leadersStatCard) {
         leadersStatCard.style.cursor = 'pointer';
         leadersStatCard.addEventListener('click', showLeadersModal);
     }
 
-    // === УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ЗАКРЫТИЯ КАРТОЧКИ ПО КЛИКУ ВНЕ ЕЁ ===
     document.addEventListener('click', (e) => {
         const modal = getProfileModalElement();
         if (!modal) return;
