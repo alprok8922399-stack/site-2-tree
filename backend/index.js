@@ -70,6 +70,18 @@ let shopUsersDB = {};
 let wallets = createInitialWallets();
 let refundRecords = [];
 
+let statsCounters = {
+    totalIncoming: 0,
+    todayIncoming: 0,
+    weekIncoming: 0,
+    monthIncoming: 0,
+    buyersCount: 0,
+    refundedToday: 0,
+    refundedTotal: 0,
+    cashbackPaid: 0,
+    referralsPaid: 0
+};
+
 let simulatedPayouts = {
     cashbackPaid: 0,
     referralsPaid: 0
@@ -187,7 +199,44 @@ function checkAndSplitMatrix(cellId) {
     // Внутренняя логика разделения матриц
 }
 
+// Функция сборки финансовой аналитики
+function getAdminStatsData() {
+    const totalUsers = Object.keys(shopUsersDB).length;
+    const adminLoginsCount = Object.values(shopUsersDB).filter(u => u.ownedByAdmin || u.username === 'SYSTEM_ROOT').length;
+    const regularBuyersCount = Math.max(0, totalUsers - adminLoginsCount);
+
+    return {
+        totalIncoming: statsCounters.totalIncoming,
+        todayIncoming: statsCounters.todayIncoming,
+        weekIncoming: statsCounters.weekIncoming,
+        monthIncoming: statsCounters.monthIncoming,
+        externalPurchases: statsCounters.totalIncoming * 0.45,
+        buyersCount: regularBuyersCount || statsCounters.buyersCount,
+        refundedToday: statsCounters.refundedToday,
+        refundedTotal: statsCounters.refundedTotal,
+        cashbackPaid: statsCounters.cashbackPaid,
+        referralsPaid: statsCounters.referralsPaid,
+        referralReserve: wallets.payoutReserveWallet.balanceMitrons,
+        payoutReserveTotal: wallets.payoutReserveWallet.balanceMitrons,
+        activeLeadersCount: 0,
+        daoFund: wallets.adminProfitWallet.balanceMitrons * 0.10,
+        adminNetProfit: wallets.adminProfitWallet.balanceMitrons * 0.90,
+        totalLogins: totalUsers,
+        adminLogins: adminLoginsCount,
+        buyerLogins: regularBuyersCount,
+        wallets: wallets
+    };
+}
+
 /* ================= API ЭНДПОИНТЫ ================= */
+
+app.get('/api/stats', (req, res) => {
+    res.json({ success: true, stats: getAdminStatsData() });
+});
+
+app.get('/api/admin/stats', (req, res) => {
+    res.json({ success: true, stats: getAdminStatsData() });
+});
 
 app.post('/api/admin/block-and-transfer', (req, res) => {
     const { username } = req.body;
@@ -240,6 +289,13 @@ app.post('/api/shop/register', (req, res) => {
     const countValue = unitsCount || cellsCount;
     const count = Math.min(Math.max(parseInt(countValue) || 1, 1), 5);
     const totalAmount = count * 1000;
+
+    // Обновляем статистику поступлений
+    statsCounters.totalIncoming += totalAmount;
+    statsCounters.todayIncoming += totalAmount;
+    statsCounters.weekIncoming += totalAmount;
+    statsCounters.monthIncoming += totalAmount;
+    statsCounters.buyersCount += 1;
 
     wallets.bufferWallet.balanceMitrons += totalAmount;
 
@@ -298,6 +354,7 @@ app.post('/api/shop/register', (req, res) => {
         cellId: occupiedCells[0],
         occupiedCells,
         walletsState: wallets,
+        stats: getAdminStatsData(),
         hasBranchLeader: hasBranchLeader
     });
 });
@@ -308,6 +365,17 @@ app.post('/api/reset', async (req, res) => {
     shopUsersDB = {};
     refundRecords = [];
     simulatedPayouts = { cashbackPaid: 0, referralsPaid: 0 };
+    statsCounters = {
+        totalIncoming: 0,
+        todayIncoming: 0,
+        weekIncoming: 0,
+        monthIncoming: 0,
+        buyersCount: 0,
+        refundedToday: 0,
+        refundedTotal: 0,
+        cashbackPaid: 0,
+        referralsPaid: 0
+    };
     wallets = createInitialWallets();
     referalsDB = {
         'SYSTEM_ROOT': null,
@@ -327,7 +395,7 @@ app.post('/api/reset', async (req, res) => {
         });
     } catch (e) {}
 
-    res.json({ success: true });
+    res.json({ success: true, stats: getAdminStatsData() });
 });
 
 app.get('/api/user-details/:username', (req, res) => {
