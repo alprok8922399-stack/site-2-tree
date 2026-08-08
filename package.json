@@ -1,0 +1,14 @@
+{
+  "name": "site-2-tree",
+  "version": "1.0.0",
+  "description": "Автономное ядро и матрицы Сайта 2",
+  "main": "backend/index.js",
+  "scripts": {
+    "start": "node backend/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "node-fetch": "^2.7.0"
+  }
+}
