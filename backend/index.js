@@ -20,6 +20,14 @@ const SITE1_URL = process.env.SITE1_URL || 'https://site-1-registrar.onrender.co
 // Системный логин Администратора для приема отказных единиц
 const ADMIN_OWNER_LOGIN = 'ADMIN_REFUND_OWNER';
 
+// Функция безопасного создания кошельков по умолчанию
+const defaultCreateWallets = () => ({
+    bufferWallet: { balanceMitrons: 0 },
+    payoutReserveWallet: { balanceMitrons: 0 },
+    adminProfitWallet: { balanceMitrons: 0 },
+    daoWallet: { balanceMitrons: 0 }
+});
+
 // Импортируем утилиты из модуля статики
 let getLevelLetter, cellIdToGlobalIndex, mitronsToUsd, createNewUserCard, createInitialWallets;
 
@@ -29,7 +37,7 @@ try {
     cellIdToGlobalIndex = staticUtils.cellIdToGlobalIndex;
     mitronsToUsd = staticUtils.mitronsToUsd;
     createNewUserCard = staticUtils.createNewUserCard;
-    createInitialWallets = staticUtils.createInitialWallets;
+    createInitialWallets = staticUtils.createInitialWallets || defaultCreateWallets;
 } catch (e) {
     getLevelLetter = (idx) => String.fromCharCode(65 + idx);
     cellIdToGlobalIndex = (id) => 0;
@@ -45,12 +53,7 @@ try {
         isBlocked: false,
         ownedByAdmin: false
     });
-    createInitialWallets = () => ({
-        bufferWallet: { balanceMitrons: 0 },
-        payoutReserveWallet: { balanceMitrons: 0 },
-        adminProfitWallet: { balanceMitrons: 0 },
-        daoWallet: { balanceMitrons: 0 }
-    });
+    createInitialWallets = defaultCreateWallets;
 }
 
 // Импортируем модуль работы с Лидерами
@@ -72,6 +75,12 @@ app.use(verifyInternalRequest);
 let shopUsersDB = {};
 let wallets = createInitialWallets();
 let refundRecords = [];
+
+// Гарантируем наличие буферного кошелька при инициализации
+if (!wallets.bufferWallet) wallets.bufferWallet = { balanceMitrons: 0 };
+if (!wallets.payoutReserveWallet) wallets.payoutReserveWallet = { balanceMitrons: 0 };
+if (!wallets.adminProfitWallet) wallets.adminProfitWallet = { balanceMitrons: 0 };
+if (!wallets.daoWallet) wallets.daoWallet = { balanceMitrons: 0 };
 
 // Флаг ускорения времени (симуляция 33 дней)
 let is33DaysExpired = false;
@@ -179,7 +188,6 @@ function processTableReferrals(username) {
     const branchLeader = findBranchLeader(username);
     if (branchLeader) {
         const activeCount = getDirectActiveInvitesCount(branchLeader);
-        // Выплачивается начиная с 11-го лично приглашенного
         if (activeCount >= 11) {
             if (!shopUsersDB[branchLeader]) {
                 shopUsersDB[branchLeader] = createNewUserCard(branchLeader);
@@ -210,7 +218,7 @@ function findNextEmptyCell(tree) {
 // Проверка и деление матрицы при заполнении 4-й ячейки
 function checkAndSplitMatrix(cellId) {
     if (cellId === 'C4' || cellId.endsWith('4')) {
-        splitMatrixCount++; // Увеличиваем счетчик делений
+        splitMatrixCount++;
     }
 }
 
@@ -227,32 +235,29 @@ app.post('/api/shop/register', (req, res) => {
     
     const trimmedUser = username.trim();
     const countValue = unitsCount || cellsCount;
-    const count = Math.min(Math.max(parseInt(countValue) || 1, 1), 5); // Ограничение корзины до 5 ячеек (5000 M)
+    const count = Math.min(Math.max(parseInt(countValue) || 1, 1), 5);
     const totalAmount = count * 1000;
 
-    // Шлюз 3. Буферный кошелек принимае средства (всегда очищается за секунду)
-    wallets.bufferWallet.balanceMitrons += totalAmount;
+    // Шлюз 3. Буферный кошелек принимает средства
+    wallets.bufferWallet.balanceMitrons = (wallets.bufferWallet.balanceMitrons || 0) + totalAmount;
 
-    // Динамический расчет финансов согласно формуле ТЗ:
-    // Базовый остаток = 1000 - X - 250 - 70 - (7 если 11+ личник)
-    const X = Math.min(Math.max(parseFloat(itemCost) || 450, 0), 450); // Реальная цена выкупа
+    // Динамический расчет финансов согласно формуле ТЗ
+    const X = Math.min(Math.max(parseFloat(itemCost) || 450, 0), 450);
     
     for (let i = 0; i < count; i++) {
         const branchLeader = findBranchLeader(trimmedUser);
         const hasLeaderBonus = branchLeader && getDirectActiveInvitesCount(branchLeader) >= 11;
         const leaderBonus = hasLeaderBonus ? 7 : 0;
 
-        const baseBalance = 1000 - X - 250 - 70 - leaderBonus; // Базовый остаток
-        const daoShare = baseBalance * 0.10;                   // 10% DAO
-        const adminProfit = baseBalance * 0.90;                // 90% Чистая прибыль Админа
+        const baseBalance = 1000 - X - 250 - 70 - leaderBonus;
+        const daoShare = baseBalance * 0.10;
+        const adminProfit = baseBalance * 0.90;
 
-        // Распределение по кошелькам:
-        // Выплатной кошелек аккумулирует обязательства: X (выкуп) + 250 (матрица) + 70 (реф) + 7 (лидер) + DAO
         const payoutReserve = X + 250 + 70 + leaderBonus + daoShare;
         
-        wallets.payoutReserveWallet.balanceMitrons += payoutReserve;
-        wallets.adminProfitWallet.balanceMitrons += adminProfit;
-        wallets.daoWallet.balanceMitrons += daoShare;
+        wallets.payoutReserveWallet.balanceMitrons = (wallets.payoutReserveWallet.balanceMitrons || 0) + payoutReserve;
+        wallets.adminProfitWallet.balanceMitrons = (wallets.adminProfitWallet.balanceMitrons || 0) + adminProfit;
+        wallets.daoWallet.balanceMitrons = (wallets.daoWallet.balanceMitrons || 0) + daoShare;
     }
 
     // Очистка Буферного кошелька
@@ -303,11 +308,10 @@ app.post('/api/shop/register', (req, res) => {
     });
 });
 
-// Кнопка «Разморозить 33 дня» (Ускорение времени на 33 дня)
+// Кнопка «Разморозить 33 дня»
 app.post('/api/admin/expire-33days', async (req, res) => {
     is33DaysExpired = true;
 
-    // Синхронизация с Сайтом 1 (блокировка кнопки «Отказаться от покупки»)
     try {
         await fetch(`${SITE1_URL}/api/shop/expire-33days`, {
             method: 'POST',
@@ -348,25 +352,20 @@ app.get('/api/admin/stats', (req, res) => {
         }
     });
 
-    const totalPurchasedOnExternalMP = totalPurchasesCount * 450; // Покупка товара на стороннем МП (макс. 450 M)
+    const totalPurchasedOnExternalMP = totalPurchasesCount * 450;
 
-    // 1. Выплаты по акции (Кешбэк 100%)
-    // С каждой поделившейся матрицы выходит 1 логин на 1000 M (включая SYSTEM_ROOT)
     let cashbackPaid = 0;
     let matrixReserveTotal = 0;
 
     if (is33DaysExpired) {
         cashbackPaid = splitMatrixCount * 1000;
-        // После 33 дней в резерве матрицы остается только неподелившийся остаток
         const totalMatrixReservePool = totalPurchasesCount * 250;
         matrixReserveTotal = Math.max(totalMatrixReservePool - cashbackPaid, 0);
     } else {
         cashbackPaid = 0;
-        // До прошествия 33 дней: за каждую поделившуюся матрицу пишется ровно 1000 M резерва
         matrixReserveTotal = splitMatrixCount * 1000;
     }
 
-    // 2. Расчет Реферальных выплат и Резерва
     let reservedReferrals = 0;
     let paidReferrals = 0;
 
@@ -374,14 +373,12 @@ app.get('/api/admin/stats', (req, res) => {
         if (profile.pendingReferralRewards && Array.isArray(profile.pendingReferralRewards)) {
             profile.pendingReferralRewards.forEach(reward => {
                 if (reward.amount === 7) {
-                    // Лидерский бонус 7 M с 11-го человека
                     if (is33DaysExpired) {
                         paidReferrals += 7;
                     } else {
                         reservedReferrals += 7;
                     }
                 } else if (reward.amount === 50 || reward.amount === 10) {
-                    // Базовые реферальные (50, 10, 10)
                     if (is33DaysExpired) {
                         paidReferrals += reward.amount;
                     } else {
@@ -392,11 +389,9 @@ app.get('/api/admin/stats', (req, res) => {
         }
     });
 
-    // 3. Отказы
     const todayRefundsCount = refundRecords.filter(r => (Date.now() - new Date(r.date).getTime()) <= 24 * 60 * 60 * 1000).length;
     const totalRefundsCount = refundRecords.length;
 
-    // 4. Расчет лидеров
     let activeLeadersList = [];
     Object.keys(referalsDB).forEach(login => {
         if (getDirectActiveInvitesCount(login) >= 10) {
@@ -404,7 +399,6 @@ app.get('/api/admin/stats', (req, res) => {
         }
     });
 
-    // 5. Итоговые фонды
     const daoFund = totalPurchasesCount * 23;
     const netAdminProfit = totalPurchasesCount * 200;
 
@@ -449,10 +443,8 @@ app.post('/api/shop/refund', (req, res) => {
         return res.status(400).json({ error: 'У пользователя нет активных покупок' });
     }
 
-    // Запись отказа
     refundRecords.push({ username, date: new Date().toISOString() });
 
-    // Передача ячеек Администратору
     profile.ownedByAdmin = true;
     profile.matrixPosition.status = 'refunded';
 
@@ -508,6 +500,7 @@ app.post('/api/reset', async (req, res) => {
     refundRecords = [];
     is33DaysExpired = false;
     wallets = createInitialWallets();
+    if (!wallets.bufferWallet) wallets.bufferWallet = { balanceMitrons: 0 };
     referalsDB = {
         'SYSTEM_ROOT': null,
         'LEADER_1': 'SYSTEM_ROOT',
@@ -539,8 +532,8 @@ app.get('/api/tree', (req, res) => {
 app.get('/api/user-details/:username', (req, res) => {
     const usernameParam = req.params.username.trim();
     const canonicalName = Object.keys(referalsDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                          || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
-                          || usernameParam;
+                         || Object.keys(shopUsersDB).find(k => k.toLowerCase() === usernameParam.toLowerCase())
+                         || usernameParam;
     
     const userCells = Object.values(treeDB)
         .filter(cell => cell.user && cell.user.toLowerCase() === canonicalName.toLowerCase())
