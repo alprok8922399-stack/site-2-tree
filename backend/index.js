@@ -357,13 +357,17 @@ app.get('/api/admin/stats', (req, res) => {
     let cashbackPaid = 0;
     let matrixReserveTotal = 0;
 
+    // Считаем совокупный пул со всех занятых ячеек в матрице (по 250 M с ячейки)
+    const totalMatrixPool = totalPurchasesCount * 250;
+
     if (is33DaysExpired) {
+        // Учитываем все выбывшие верхние ячейки (включая SYSTEM_ROOT и админские)
         cashbackPaid = splitMatrixCount * 1000;
-        const totalMatrixReservePool = totalPurchasesCount * 250;
-        matrixReserveTotal = Math.max(totalMatrixReservePool - cashbackPaid, 0);
+        // Накопительный остаток = Занятые ячейки * 250M - Выплаченные 1000M
+        matrixReserveTotal = Math.max(totalMatrixPool - cashbackPaid, 0);
     } else {
         cashbackPaid = 0;
-        matrixReserveTotal = splitMatrixCount * 1000;
+        matrixReserveTotal = totalMatrixPool;
     }
 
     let reservedReferrals = 0;
@@ -372,13 +376,7 @@ app.get('/api/admin/stats', (req, res) => {
     Object.values(shopUsersDB).forEach(profile => {
         if (profile.pendingReferralRewards && Array.isArray(profile.pendingReferralRewards)) {
             profile.pendingReferralRewards.forEach(reward => {
-                if (reward.amount === 7) {
-                    if (is33DaysExpired) {
-                        paidReferrals += 7;
-                    } else {
-                        reservedReferrals += 7;
-                    }
-                } else if (reward.amount === 50 || reward.amount === 10) {
+                if (reward.amount === 7 || reward.amount === 50 || reward.amount === 10) {
                     if (is33DaysExpired) {
                         paidReferrals += reward.amount;
                     } else {
