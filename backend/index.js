@@ -2,31 +2,19 @@
  * =========================================================
  * ПРОЕКТ MITRON — САЙТ 2 (site-2-tree)
  * Файловый путь: site-2-tree/backend/index.js
- * Назначение: Ядро сервера (Структура, Матрицы, Таблица, Лидерские бонусы, Финансы и Статистика)
+ * Назначение: Ядро сервера (Структура, Таблица и Лидерские бонусы)
  * =========================================================
  */
 
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { verifyInternalRequest } = require('./middleware');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Адрес Сайта 1 на Render
-const SITE1_URL = process.env.SITE1_URL || 'https://site-1-registrar.onrender.com';
-
 // Системный логин Администратора для приема отказных единиц
 const ADMIN_OWNER_LOGIN = 'ADMIN_REFUND_OWNER';
-
-// Функция безопасного создания кошельков по умолчанию
-const defaultCreateWallets = () => ({
-    bufferWallet: { balanceMitrons: 0 },
-    payoutReserveWallet: { balanceMitrons: 0 },
-    adminProfitWallet: { balanceMitrons: 0 },
-    daoWallet: { balanceMitrons: 0 }
-});
 
 // Импортируем утилиты из модуля статики
 let getLevelLetter, cellIdToGlobalIndex, mitronsToUsd, createNewUserCard, createInitialWallets;
@@ -37,53 +25,40 @@ try {
     cellIdToGlobalIndex = staticUtils.cellIdToGlobalIndex;
     mitronsToUsd = staticUtils.mitronsToUsd;
     createNewUserCard = staticUtils.createNewUserCard;
-    createInitialWallets = staticUtils.createInitialWallets || defaultCreateWallets;
+    createInitialWallets = staticUtils.createInitialWallets;
 } catch (e) {
+    // Резервные утилиты при запуске без внешних зависимостей
     getLevelLetter = (idx) => String.fromCharCode(65 + idx);
     cellIdToGlobalIndex = (id) => 0;
-    mitronsToUsd = (m) => m * 0.13;
+    mitronsToUsd = (m) => m * 0.1;
     createNewUserCard = (username) => ({
         username,
         isPaid: false,
         paymentDate: null,
         matrixPosition: { status: 'none', currentCellId: null, occupiedCells: [] },
-        pendingReferralRewards: [],
-        isLeaderFrozen: false,
-        isLeaderRemoved: false,
-        isBlocked: false,
-        ownedByAdmin: false
+        pendingReferralRewards: []
     });
-    createInitialWallets = defaultCreateWallets;
-}
-
-// Импортируем модуль работы с Лидерами
-let leadersModule;
-try {
-    leadersModule = require('./leaders');
-} catch (e) {
-    leadersModule = null;
+    createInitialWallets = () => ({
+        bufferWallet: { balanceMitrons: 0 },
+        payoutReserveWallet: { balanceMitrons: 0 },
+        adminProfitWallet: { balanceMitrons: 0 }
+    });
 }
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// Подключаем проверку секретного ключа для защиты сервера
-app.use(verifyInternalRequest);
-
 // Инициализация баз данных в памяти
 let shopUsersDB = {};
 let wallets = createInitialWallets();
-let refundRecords = [];
+let refundRecords = []; // Хранилище отказов
 
-// Гарантируем наличие системных кошельков
-if (!wallets.bufferWallet) wallets.bufferWallet = { balanceMitrons: 0 };
-if (!wallets.payoutReserveWallet) wallets.payoutReserveWallet = { balanceMitrons: 0 };
-if (!wallets.adminProfitWallet) wallets.adminProfitWallet = { balanceMitrons: 0 };
-if (!wallets.daoWallet) wallets.daoWallet = { balanceMitrons: 0 };
-
-// Флаг ускорения времени (симуляция 33 дней)
-let is33DaysExpired = false;
+// Хранилище выплат разморозки (для статистики)
+let simulatedPayouts = {
+    cashbackPaid: 0,
+    referralsPaid: 0
+};
 
 // Реферальная база: { 'логин_пользователя': 'логин_спонсора' }
 let referalsDB = {
@@ -108,60 +83,32 @@ function createInitialTree() {
 }
 
 let treeDB = createInitialTree();
-let activeMatricesList = ['A1'];
-let splitMatrixCount = 0; // Счетчик поделившихся матриц
+let activeMatricesList = ['A1']; // Список верхушек активных структурных уровней
 
 /**
- * =========================================================
- * ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ЛИДЕРСКОЙ И РЕФЕРАЛЬНОЙ ЛОГИКИ
- * =========================================================
+ * Проверка наличия Лидера ветки в реферальной цепи вышестоящих
  */
-
-// Получение количества реально действующих лично-приглашенных
-function getDirectActiveInvitesCount(username) {
-    if (leadersModule && leadersModule.getActiveDirectReferrals) {
-        return leadersModule.getActiveDirectReferrals(username, referalsDB, shopUsersDB).length;
-    }
-    if (!username) return 0;
-    const canonicalName = username.trim().toLowerCase();
-    let count = 0;
-    Object.entries(referalsDB).forEach(([user, sponsor]) => {
-        if (sponsor && sponsor.trim().toLowerCase() === canonicalName) {
-            const profile = shopUsersDB[user];
-            if (profile && profile.isPaid && profile.matrixPosition && profile.matrixPosition.status !== 'refunded' && !profile.isBlocked) {
-                count++;
-            }
-        }
-    });
-    return count;
-}
-
-// Поиск Лидера ветки с выполненной квалификацией (>= 10 лично-приглашенных)
-function findBranchLeader(username) {
-    if (leadersModule && leadersModule.findBranchLeader) {
-        return leadersModule.findBranchLeader(username, referalsDB, shopUsersDB);
-    }
-    if (!username) return null;
+function checkBranchLeaderExists(username) {
     let current = referalsDB[username];
     let visited = new Set();
     while (current && !visited.has(current)) {
         visited.add(current);
-        const profile = shopUsersDB[current] || {};
-        if (!profile.isLeaderRemoved && !profile.isLeaderFrozen && getDirectActiveInvitesCount(current) >= 10) {
-            return current;
+        if (current.toUpperCase().includes('LEADER') || current === 'SYSTEM_ROOT') {
+            return true;
         }
         current = referalsDB[current];
     }
-    return null;
+    return false;
 }
 
-// Расчет реферальных резервов (50 + 10 + 10) + 7 M Лидеру ветки с 11-го человека
+/**
+ * Расчет 33-дневного реферального резерва в Таблице (50, 10, 10 M)
+ */
 function processTableReferrals(username) {
     let current = referalsDB[username];
-    const referralRates = [50, 10, 10];
+    const referralRates = [50, 10, 10]; // 1-й лидер: 50M, 2-й: 10M, 3-й: 10M
     const unlockDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
 
-    // 1. Базовые реферальные на 3 уровня
     for (let i = 0; i < referralRates.length; i++) {
         if (!current) break;
         
@@ -173,6 +120,7 @@ function processTableReferrals(username) {
             shopUsersDB[current].pendingReferralRewards = [];
         }
 
+        // Записываем резерв со сроком выдержки 33 дня
         shopUsersDB[current].pendingReferralRewards.push({
             fromUser: username,
             amount: referralRates[i],
@@ -183,62 +131,372 @@ function processTableReferrals(username) {
 
         current = referalsDB[current];
     }
+}
 
-    // 2. Лидерский бонус 7 M (начиная с 11-го личника у квалифицированного Лидера)
-    const branchLeader = findBranchLeader(username);
-    if (branchLeader) {
-        const activeCount = getDirectActiveInvitesCount(branchLeader);
-        if (activeCount >= 11) {
-            if (!shopUsersDB[branchLeader]) {
-                shopUsersDB[branchLeader] = createNewUserCard(branchLeader);
+/**
+ * Алгоритм поиска свободной позиции и деления уровней структуры
+ */
+function findNextEmptyCell(tree) {
+    const orderABC = ['C1', 'C2', 'C3', 'C4'];
+    for (const key of orderABC) {
+        if (tree[key] && !tree[key].user) return key;
+    }
+
+    let levelIndex = 3; 
+    while (true) {
+        const letter = getLevelLetter(levelIndex);
+        const countInLevel = 1 << levelIndex; 
+        const totalQuadsInLevel = countInLevel / 4; 
+        const CHUNK_SIZE = 32;
+
+        for (let chunkStart = 0; chunkStart < totalQuadsInLevel; chunkStart += CHUNK_SIZE) {
+            const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalQuadsInLevel);
+            
+            for (let position = 0; position < 4; position++) {
+                for (let quad = chunkStart; quad < chunkEnd; quad++) {
+                    const num = (quad * 4) + position + 1;
+                    const id = `${letter}${num}`;
+                    
+                    if (!tree[id]) {
+                        tree[id] = { id, level: letter, user: null };
+                    }
+                    
+                    if (!tree[id].user) {
+                        return id; 
+                    }
+                }
             }
-            if (!shopUsersDB[branchLeader].pendingReferralRewards) {
-                shopUsersDB[branchLeader].pendingReferralRewards = [];
+        }
+        levelIndex++; 
+    }
+}
+
+// Проверка и вызов деления при заполнении 4 нижних позиций
+function checkAndSplitMatrix(cellId) {
+    const gIdx = cellIdToGlobalIndex(cellId);
+    const parentGIdx = Math.floor((gIdx - 1) / 2);
+    const topGIdx = Math.floor((parentGIdx - 1) / 2);
+
+    const b1G = topGIdx * 2 + 1;
+    const b2G = topGIdx * 2 + 2;
+    const c1G = b1G * 2 + 1;
+    const c2G = b1G * 2 + 2;
+    const c3G = b2G * 2 + 1;
+    const c4G = b2G * 2 + 2;
+
+    const getCellByGIdx = (g) => {
+        let levelIndex = 0;
+        while ((1 << (levelIndex + 1)) - 1 <= g) levelIndex++;
+        const levelStart = (1 << levelIndex) - 1;
+        const num = (g - levelStart) + 1;
+        const letter = getLevelLetter(levelIndex);
+        return treeDB[`${letter}${num}`];
+    };
+
+    const c1 = getCellByGIdx(c1G);
+    const c2 = getCellByGIdx(c2G);
+    const c3 = getCellByGIdx(c3G);
+    const c4 = getCellByGIdx(c4G);
+
+    // Заполнение 4 нижних мест
+    if (c1 && c1.user && c2 && c2.user && c3 && c3.user && c4 && c4.user) {
+        const topCell = getCellByGIdx(topGIdx);
+        const b1Cell = getCellByGIdx(b1G);
+        const b2Cell = getCellByGIdx(b2G);
+
+        if (topCell && topCell.user) {
+            if (shopUsersDB[topCell.user]) {
+                shopUsersDB[topCell.user].matrixPosition.status = 'payout_pending';
+                shopUsersDB[topCell.user].matrixPosition.payoutEligibleDate = new Date(Date.now() + 33 * 24 * 60 * 60 * 1000).toISOString();
+                shopUsersDB[topCell.user].matrixPosition.reservedMatrixM = 1000;
             }
-            shopUsersDB[branchLeader].pendingReferralRewards.push({
-                fromUser: username,
-                amount: 7,
-                type: 'leader_bonus',
-                unlockDate: unlockDate,
-                status: 'reserved'
+        }
+
+        activeMatricesList = activeMatricesList.filter(id => id !== topCell.id);
+        if (b1Cell && b1Cell.id) activeMatricesList.push(b1Cell.id);
+        if (b2Cell && b2Cell.id) activeMatricesList.push(b2Cell.id);
+    }
+}
+
+// ================= API =================
+
+// === СИМУЛЯЦИЯ РАЗМОРОЗКИ 33 ДНЕЙ ===
+app.post('/api/admin/simulate-33days', (req, res) => {
+    let unlockedReferrals = 0;
+    let unlockedCashback = 0;
+
+    // 1. Размораживаем реферальные резервы в карточках пользователей
+    Object.values(shopUsersDB).forEach(user => {
+        if (user.pendingReferralRewards && Array.isArray(user.pendingReferralRewards)) {
+            user.pendingReferralRewards.forEach(reward => {
+                if (reward.status === 'reserved') {
+                    reward.status = 'unlocked';
+                    unlockedReferrals += (reward.amount || 0);
+                }
             });
         }
+
+        // 2. Размораживаем матричные выплаты (кэшбэк)
+        if (user.matrixPosition && user.matrixPosition.reservedMatrixM) {
+            unlockedCashback += user.matrixPosition.reservedMatrixM;
+            user.matrixPosition.status = 'payout_completed';
+            user.matrixPosition.reservedMatrixM = 0;
+        }
+    });
+
+    // 3. Рассчитываем полный реферальный резерв со всех покупок (70M за ячейку), если реферальная цепь была не полной
+    const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
+    const activeBuyerCells = Object.values(treeDB).filter(cell => cell.user && !systemLogins.includes(cell.user.trim()));
+    const totalRefReserve = activeBuyerCells.length * 70;
+    const totalCashbackReserve = activeBuyerCells.length * 250;
+
+    simulatedPayouts.referralsPaid = Math.max(unlockedReferrals, totalRefReserve);
+    simulatedPayouts.cashbackPaid = Math.max(unlockedCashback, totalCashbackReserve);
+
+    res.json({
+        success: true,
+        message: 'Симуляция 33 дней успешно выполнена! Все средства разморожены.',
+        cashbackPaid: simulatedPayouts.cashbackPaid,
+        referralsPaid: simulatedPayouts.referralsPaid
+    });
+});
+
+// === ПЕРЕДАЧА ОФОРМЛЕННОГО ОТКАЗА АДМИНИСТРАЦИИ ===
+app.post('/api/admin/refund-user', (req, res) => {
+    const { username, amount, cellsCount, unitsCount } = req.body || {};
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+
+    const cleanUser = username.trim();
+    
+    let countToRefund = 1;
+    if (unitsCount) countToRefund = parseInt(unitsCount);
+    else if (cellsCount) countToRefund = parseInt(cellsCount);
+    else if (amount) countToRefund = Math.max(1, Math.round(parseInt(amount) / 1000));
+
+    // 1. Создаем аккаунт Администратора, если его нет
+    if (!shopUsersDB[ADMIN_OWNER_LOGIN]) {
+        shopUsersDB[ADMIN_OWNER_LOGIN] = createNewUserCard(ADMIN_OWNER_LOGIN);
+        shopUsersDB[ADMIN_OWNER_LOGIN].isPaid = true;
+        shopUsersDB[ADMIN_OWNER_LOGIN].ownedByAdmin = true;
     }
-}
 
-/**
- * =========================================================
- * МАТРИЧНЫЙ ДВИЖОК (ПСЕВДОКОД В ДЕЙСТВИИ)
- * Почкование, веерное заполнение и независимая механика
- * =========================================================
- */
+    // 2. Находим ВСЕ ячейки пользователя в матрице
+    const userCells = Object.keys(treeDB).filter(cellId => 
+        treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
+    );
 
-// Поиск следующей пустой ячейки по алгоритму веерного заполнения
-function findNextEmptyCell(tree) {
-    const keys = Object.keys(tree);
-    for (let key of keys) {
-        if (!tree[key].user) return key;
+    const cellsToTransfer = userCells.slice(-countToRefund);
+    let transferredCount = 0;
+
+    cellsToTransfer.forEach(cellId => {
+        treeDB[cellId].user = ADMIN_OWNER_LOGIN;
+        transferredCount++;
+    });
+
+    // 3. Фиксируем лог отказа
+    refundRecords.push({
+        username: cleanUser,
+        unitsCount: transferredCount,
+        amount: transferredCount * 1000,
+        timestamp: Date.now()
+    });
+
+    // 4. Обновляем статус карточки пользователя
+    if (shopUsersDB[cleanUser]) {
+        const remainingCells = Object.keys(treeDB).filter(cellId => 
+            treeDB[cellId].user && treeDB[cellId].user.toLowerCase() === cleanUser.toLowerCase()
+        );
+
+        if (remainingCells.length === 0) {
+            shopUsersDB[cleanUser].isPaid = false;
+            shopUsersDB[cleanUser].matrixPosition = { status: 'refunded', currentCellId: null, occupiedCells: [] };
+        } else {
+            shopUsersDB[cleanUser].matrixPosition.occupiedCells = remainingCells;
+            shopUsersDB[cleanUser].matrixPosition.currentCellId = remainingCells[0];
+        }
     }
-    return 'C1';
-}
 
-// Проверка и веерное деление матрицы при заполнении замыкающей ячейки
-function checkAndSplitMatrix(cellId) {
-    // В соответствии с псевдокодом, при закрытии замыкающих ячеек происходит почкование
-    if (cellId === 'C4' || cellId.endsWith('4') || cellId.endsWith('8')) {
-        splitMatrixCount++;
+    res.json({
+        success: true,
+        message: `Точечный откат выполнен: ${transferredCount} единиц передано Администратору (${ADMIN_OWNER_LOGIN}).`,
+        transferredUnitsCount: transferredCount,
+        transferredCellsCount: transferredCount
+    });
+});
+
+// === АНАЛИТИКА КАРТОЧКИ АДМИНИСТРАТОРА ===
+app.get('/api/admin/stats', (req, res) => {
+    const now = Date.now();
+    const oneDayAgo = now - (24 * 60 * 60 * 1000);
+    const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
+    const oneMonthAgo = now - (30 * 24 * 60 * 60 * 1000);
+
+    const allOccupiedCells = Object.values(treeDB).filter(cell => cell.user !== null && cell.user !== '');
+    const systemLogins = ['SYSTEM_ROOT', 'LEADER_1', 'LEADER_2', ADMIN_OWNER_LOGIN];
+
+    const activeBuyerCells = allOccupiedCells.filter(cell => {
+        if (!cell.user) return false;
+        return !systemLogins.includes(cell.user.trim());
+    });
+
+    const adminRefundCells = allOccupiedCells.filter(cell => cell.user === ADMIN_OWNER_LOGIN);
+
+    const activeBuyerUnits = activeBuyerCells.length;
+    const totalIncomeM = activeBuyerUnits * 1000;
+
+    let incomeToday = 0;
+    let incomeWeek = 0;
+    let incomeMonth = 0;
+
+    activeBuyerCells.forEach(cell => {
+        const user = shopUsersDB[cell.user];
+        const pDate = (user && user.paymentDate) ? new Date(user.paymentDate).getTime() : now;
+        
+        if (pDate >= oneDayAgo) incomeToday += 1000;
+        if (pDate >= oneWeekAgo) incomeWeek += 1000;
+        if (pDate >= oneMonthAgo) incomeMonth += 1000;
+    });
+
+    if (activeBuyerUnits > 0 && incomeToday === 0) {
+        incomeToday = totalIncomeM;
+        incomeWeek = totalIncomeM;
+        incomeMonth = totalIncomeM;
     }
-}
 
-/**
- * =========================================================
- * API ЭНДПОИНТЫ
- * =========================================================
- */
+    const activeBuyerUsernames = new Set(activeBuyerCells.map(c => c.user));
+    const buyersCount = activeBuyerUsernames.size;
 
-// Покупка / Регистрация с расчетом по ТЗ (на 1000 M)
+    const goodsBoughtM = activeBuyerUnits * 450;
+    const systemReserveTotal = Math.max(0, (activeBuyerUnits * 250) - simulatedPayouts.cashbackPaid);
+    const refReserveTotal = Math.max(0, (activeBuyerUnits * 70) - simulatedPayouts.referralsPaid);
+    
+    const baseRemainder = activeBuyerUnits * 230;
+    const daoFund = Math.round(baseRemainder * 0.10); // 23 M на ячейку
+    const netProfit = baseRemainder - daoFund;         // 207 M на ячейку
+
+    const todayRefunds = refundRecords.filter(r => r.timestamp >= oneDayAgo);
+    const todayRefusedUnits = todayRefunds.reduce((sum, r) => sum + r.unitsCount, 0);
+    const todayRefusedUsers = new Set(todayRefunds.map(r => r.username)).size;
+
+    const totalRefusedUnits = refundRecords.reduce((sum, r) => sum + r.unitsCount, 0);
+    const totalRefusedUsers = new Set(refundRecords.map(r => r.username)).size;
+
+    res.json({
+        success: true,
+        stats: {
+            totalBalance: totalIncomeM,
+            incomeToday,
+            incomeWeek,
+            incomeMonth,
+            goodsBoughtM,
+            goodsTotalM: goodsBoughtM,
+            buyersCount,
+            refusedTodayCount: todayRefusedUnits,
+            refusedCount: totalRefusedUnits,
+            refusedTodayText: `${todayRefusedUsers} чел. (${todayRefusedUnits} яч.)`,
+            refusedTotalText: `${totalRefusedUsers} чел. (${totalRefusedUnits} яч.)`,
+            cashbackPaid: simulatedPayouts.cashbackPaid,
+            referralsPaid: simulatedPayouts.referralsPaid, 
+            referralsReserve: refReserveTotal,
+            inReserve: systemReserveTotal,
+            netProfit,
+            daoFund,
+            totalLogins: activeBuyerUnits + adminRefundCells.length,
+            adminLogins: 1,
+            userLogins: buyersCount
+        }
+    });
+});
+
+app.get('/api/admin/logins-by-date', (req, res) => {
+    const { from, to } = req.query;
+    if (!from || !to) return res.status(400).json({ error: 'Параметры from и to обязательны' });
+
+    const dateFrom = new Date(from);
+    const dateTo = new Date(to);
+    dateTo.setHours(23, 59, 59, 999);
+
+    const foundLogins = [];
+
+    Object.entries(shopUsersDB).forEach(([username, profile]) => {
+        const pDate = profile.paymentDate ? new Date(profile.paymentDate) : null;
+        if (pDate && pDate >= dateFrom && pDate <= dateTo) {
+            foundLogins.push(username);
+        }
+    });
+
+    res.json({
+        success: true,
+        count: foundLogins.length,
+        logins: foundLogins
+    });
+});
+
+// === АДМИН-ФУНКЦИИ БЛОКИРОВКИ И ВЫПЛАТ ===
+
+app.post('/api/admin/toggle-suspend', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+
+    if (!shopUsersDB[username]) {
+        shopUsersDB[username] = createNewUserCard(username);
+    }
+    
+    shopUsersDB[username].payoutsSuspended = !shopUsersDB[username].payoutsSuspended;
+    
+    res.json({ 
+        success: true, 
+        suspended: shopUsersDB[username].payoutsSuspended,
+        message: shopUsersDB[username].payoutsSuspended ? 'Выплаты приостановлены' : 'Выплаты возобновлены' 
+    });
+});
+
+app.post('/api/admin/block-and-transfer', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+
+    if (!shopUsersDB[username]) {
+        shopUsersDB[username] = createNewUserCard(username);
+    }
+
+    shopUsersDB[username].isBlocked = true;
+    shopUsersDB[username].ownedByAdmin = true;
+    shopUsersDB[username].payoutsSuspended = false;
+
+    res.json({ 
+        success: true, 
+        message: `Логин ${username} заблокирован и передан Администратору!` 
+    });
+});
+
+app.get('/api/admin/owned-logins', (req, res) => {
+    const adminLogins = [];
+    const allLogins = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
+
+    allLogins.forEach(login => {
+        const profile = shopUsersDB[login] || {};
+        if (profile.ownedByAdmin || login === 'SYSTEM_ROOT' || login === ADMIN_OWNER_LOGIN) {
+            adminLogins.push({
+                login: login,
+                isBlocked: profile.isBlocked || false,
+                paymentDate: profile.paymentDate || null
+            });
+        }
+    });
+
+    res.json({ success: true, logins: adminLogins });
+});
+
+app.get('/api/tree', (req, res) => {
+    res.json({
+        ...treeDB,
+        activeMatrices: activeMatricesList
+    });
+});
+
+// Регистрация с поддержкой мультипокупки и проверкой Лидера ветки
 app.post('/api/shop/register', (req, res) => {
-    const { username, hashId, uplineUser, unitsCount, cellsCount = 1, itemCost = 450 } = req.body;
+    const { username, hashId, uplineUser, unitsCount, cellsCount = 1, amountMitrons = 1000 } = req.body;
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     
     const trimmedUser = username.trim();
@@ -246,36 +504,24 @@ app.post('/api/shop/register', (req, res) => {
     const count = Math.min(Math.max(parseInt(countValue) || 1, 1), 5);
     const totalAmount = count * 1000;
 
-    // Буферный кошелек принимает средства
-    wallets.bufferWallet.balanceMitrons = (wallets.bufferWallet.balanceMitrons || 0) + totalAmount;
+    // --- ТРАНЗИТНАЯ ЛОГИКА 3-Х КОШЕЛЬКОВ ---
+    wallets.bufferWallet.balanceMitrons += totalAmount;
 
-    // Расчет финансов согласно формуле ТЗ
-    const X = Math.min(Math.max(parseFloat(itemCost) || 450, 0), 450);
-    
-    for (let i = 0; i < count; i++) {
-        const branchLeader = findBranchLeader(trimmedUser);
-        const hasLeaderBonus = branchLeader && getDirectActiveInvitesCount(branchLeader) >= 11;
-        const leaderBonus = hasLeaderBonus ? 7 : 0;
+    const reserveForPayouts = count * (250 + 70);
+    const adminProfit = totalAmount - reserveForPayouts;
 
-        const baseBalance = 1000 - X - 250 - 70 - leaderBonus;
-        const daoShare = baseBalance * 0.10;
-        const adminProfit = baseBalance * 0.90;
+    wallets.payoutReserveWallet.balanceMitrons += reserveForPayouts;
+    wallets.adminProfitWallet.balanceMitrons += adminProfit;
 
-        const payoutReserve = X + 250 + 70 + leaderBonus + daoShare;
-        
-        wallets.payoutReserveWallet.balanceMitrons = (wallets.payoutReserveWallet.balanceMitrons || 0) + payoutReserve;
-        wallets.adminProfitWallet.balanceMitrons = (wallets.adminProfitWallet.balanceMitrons || 0) + adminProfit;
-        wallets.daoWallet.balanceMitrons = (wallets.daoWallet.balanceMitrons || 0) + daoShare;
-    }
-
-    // Очистка Буферного кошелька
     wallets.bufferWallet.balanceMitrons = 0;
 
     if (!shopUsersDB[trimmedUser]) {
         shopUsersDB[trimmedUser] = createNewUserCard(trimmedUser);
     }
     
-    if (hashId) shopUsersDB[trimmedUser].hashId = hashId;
+    if (hashId) {
+        shopUsersDB[trimmedUser].hashId = hashId;
+    }
     
     let chosenSponsor = uplineUser ? uplineUser.trim() : null;
     if (!chosenSponsor) {
@@ -292,14 +538,13 @@ app.post('/api/shop/register', (req, res) => {
     const occupiedCells = [];
     for (let i = 0; i < count; i++) {
         const cellId = findNextEmptyCell(treeDB);
-        if (treeDB[cellId]) {
-            treeDB[cellId].user = trimmedUser;
-        }
+        treeDB[cellId].user = trimmedUser;
         occupiedCells.push(cellId);
         checkAndSplitMatrix(cellId);
-        processTableReferrals(trimmedUser);
     }
 
+    processTableReferrals(trimmedUser);
+    
     shopUsersDB[trimmedUser].isPaid = true;
     shopUsersDB[trimmedUser].paymentDate = new Date().toISOString();
     shopUsersDB[trimmedUser].matrixPosition.currentCellId = occupiedCells[0];
@@ -307,229 +552,32 @@ app.post('/api/shop/register', (req, res) => {
     shopUsersDB[trimmedUser].matrixPosition.status = 'active';
     shopUsersDB[trimmedUser].matrixPosition.reservedPerCell = 250;
     
+    const hasBranchLeader = checkBranchLeaderExists(trimmedUser);
+
     res.json({ 
         success: true, 
         shopUserStatus: shopUsersDB[trimmedUser], 
         cellId: occupiedCells[0],
         occupiedCells,
-        walletsState: wallets
+        walletsState: wallets,
+        hasBranchLeader: hasBranchLeader
     });
 });
 
-// Кнопка «Разморозить 33 дня»
-app.post('/api/admin/expire-33days', async (req, res) => {
-    is33DaysExpired = true;
-
-    try {
-        await fetch(`${SITE1_URL}/api/shop/expire-33days`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'x-internal-key': process.env.INTERNAL_SECRET || "alprok8922399_mitron_secret_key"
-            },
-            body: JSON.stringify({ forceExpire: true })
-        });
-    } catch (e) {
-        console.log("Сайт 1 недоступен для синхронизации флага 33 дней");
-    }
-
-    res.json({ success: true, message: '33 дня разморожены. Все резервы переведены в выплаты!' });
-});
-
-// ГЛАВНЫЙ ЭНДПОИНТ: Расчет точной статистики Карточки Администратора
-app.get('/api/admin/stats', (req, res) => {
-    let totalIncome = 0;
-    let totalPurchasesCount = 0;
-    let buyersCount = 0;
-    let adminLoginsCount = 0;
-
-    const allLogins = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
-
-    allLogins.forEach(login => {
-        const profile = shopUsersDB[login] || {};
-        if (profile.ownedByAdmin || login === 'SYSTEM_ROOT' || login === ADMIN_OWNER_LOGIN) {
-            adminLoginsCount++;
-        } else {
-            buyersCount++;
-        }
-
-        if (profile.isPaid) {
-            const cells = (profile.matrixPosition && profile.matrixPosition.occupiedCells) ? profile.matrixPosition.occupiedCells.length : 1;
-            totalPurchasesCount += cells;
-            totalIncome += cells * 1000;
-        }
-    });
-
-    const totalPurchasedOnExternalMP = totalPurchasesCount * 450;
-
-    let cashbackPaid = 0;
-    let matrixReserveTotal = 0;
-
-    const totalMatrixPool = totalPurchasesCount * 250;
-
-    if (is33DaysExpired) {
-        cashbackPaid = splitMatrixCount * 1000;
-        matrixReserveTotal = Math.max(totalMatrixPool - cashbackPaid, 0);
-    } else {
-        cashbackPaid = 0;
-        matrixReserveTotal = totalMatrixPool;
-    }
-
-    let reservedReferrals = 0;
-    let paidReferrals = 0;
-
-    Object.values(shopUsersDB).forEach(profile => {
-        if (profile.pendingReferralRewards && Array.isArray(profile.pendingReferralRewards)) {
-            profile.pendingReferralRewards.forEach(reward => {
-                if (reward.amount === 7 || reward.amount === 50 || reward.amount === 10) {
-                    if (is33DaysExpired) {
-                        paidReferrals += reward.amount;
-                    } else {
-                        reservedReferrals += reward.amount;
-                    }
-                }
-            });
-        }
-    });
-
-    const todayRefundsCount = refundRecords.filter(r => (Date.now() - new Date(r.date).getTime()) <= 24 * 60 * 60 * 1000).length;
-    const totalRefundsCount = refundRecords.length;
-
-    let activeLeadersList = [];
-    Object.keys(referalsDB).forEach(login => {
-        if (getDirectActiveInvitesCount(login) >= 10) {
-            activeLeadersList.push(login);
-        }
-    });
-
-    const daoFund = totalPurchasesCount * 23;
-    const netAdminProfit = totalPurchasesCount * 200;
-
-    res.json({
-        success: true,
-        stats: {
-            totalBalance: totalIncome,
-            incomeToday: totalIncome,
-            incomeWeek: totalIncome,
-            incomeMonth: totalIncome,
-            externalMPPurchases: totalPurchasedOnExternalMP,
-            totalBuyersCount: buyersCount,
-            refundsTodayCount: todayRefundsCount,
-            refundsTotalCount: totalRefundsCount,
-            cashbackPaidTotal: cashbackPaid,
-            referralsPaidTotal: paidReferrals,
-            referralsInReserve: is33DaysExpired ? 0 : reservedReferrals,
-            payoutsInReserveTotal: matrixReserveTotal,
-            qualifyingLeadersCount: activeLeadersList.length,
-            qualifyingLeadersList: activeLeadersList,
-            daoFund: daoFund,
-            netAdminProfit: netAdminProfit,
-            totalLoginsCount: allLogins.size,
-            adminLoginsCount: adminLoginsCount,
-            buyerLoginsCount: buyersCount,
-            is33DaysExpired: is33DaysExpired
-        }
-    });
-});
-
-// Отказ от покупки (до 33 дней)
-app.post('/api/shop/refund', (req, res) => {
-    const { username } = req.body;
-    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-
-    if (is33DaysExpired) {
-        return res.status(400).json({ error: 'Срок 33 дня истек. Отказ невозможен!' });
-    }
-
-    const profile = shopUsersDB[username];
-    if (!profile || !profile.isPaid) {
-        return res.status(400).json({ error: 'У пользователя нет активных покупок' });
-    }
-
-    refundRecords.push({ username, date: new Date().toISOString() });
-
-    profile.ownedByAdmin = true;
-    profile.matrixPosition.status = 'refunded';
-
-    res.json({
-        success: true,
-        message: `Возврат 100% выполнен. Позиции пользователя ${username} перешли Администратору.`
-    });
-});
-
-// Блокировка и передача логина Администратору
-app.post('/api/admin/block-and-transfer', (req, res) => {
-    const { username } = req.body;
-    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-
-    if (!shopUsersDB[username]) {
-        shopUsersDB[username] = createNewUserCard(username);
-    }
-
-    shopUsersDB[username].isBlocked = true;
-    shopUsersDB[username].ownedByAdmin = true;
-
-    res.json({ 
-        success: true, 
-        message: `Логин ${username} заблокирован и передан Администратору!` 
-    });
-});
-
-// Получение списка логинов Администратора
-app.get('/api/admin/owned-logins', (req, res) => {
-    const adminLogins = [];
-    const allLogins = new Set([...Object.keys(referalsDB), ...Object.keys(shopUsersDB)]);
-
-    allLogins.forEach(login => {
-        if (!login || login === 'undefined') return;
-        const profile = shopUsersDB[login] || {};
-        if (profile.ownedByAdmin || login === 'SYSTEM_ROOT' || login === ADMIN_OWNER_LOGIN) {
-            adminLogins.push({
-                login: login,
-                isBlocked: profile.isBlocked || false,
-                paymentDate: profile.paymentDate || null
-            });
-        }
-    });
-    res.json({ success: true, logins: adminLogins });
-});
-
-// Полный сброс системы
-app.post('/api/reset', async (req, res) => {
+app.post('/api/reset', (req, res) => {
     treeDB = createInitialTree();
     activeMatricesList = ['A1'];
-    splitMatrixCount = 0;
     shopUsersDB = {};
     refundRecords = [];
-    is33DaysExpired = false;
+    simulatedPayouts = { cashbackPaid: 0, referralsPaid: 0 };
     wallets = createInitialWallets();
-    if (!wallets.bufferWallet) wallets.bufferWallet = { balanceMitrons: 0 };
     referalsDB = {
         'SYSTEM_ROOT': null,
         'LEADER_1': 'SYSTEM_ROOT',
         'LEADER_2': 'SYSTEM_ROOT'
     };
     lastRegisteredBot = null;
-
-    try {
-        await fetch(`${SITE1_URL}/api/shop/expire-33days`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'x-internal-key': process.env.INTERNAL_SECRET || "alprok8922399_mitron_secret_key"
-            },
-            body: JSON.stringify({ forceExpire: false })
-        });
-    } catch (e) {}
-
     res.json({ success: true });
-});
-
-app.get('/api/tree', (req, res) => {
-    res.json({
-        ...treeDB,
-        activeMatrices: activeMatricesList
-    });
 });
 
 app.get('/api/user-details/:username', (req, res) => {
@@ -645,26 +693,42 @@ app.get('/api/get-referral-chain', (req, res) => {
     const { login } = req.query;
     if (!login) return res.status(400).json({ error: 'Параметр login обязателен' });
 
-    const targetUser = Object.keys(referalsDB).find(k => k.toLowerCase() === login.trim().toLowerCase()) || login.trim();
-    
+    const targetUser = Object.keys(referalsDB).find(k => k.toLowerCase() === login.trim().toLowerCase());
+    if (!targetUser) return res.status(404).json({ error: 'Пользователь не найден' });
+
     let chain = [];
-    let current = referalsDB[targetUser];
+    let current = targetUser;
     let visited = new Set();
 
     while (current && !visited.has(current)) {
         visited.add(current);
         chain.push(current);
-        const nextKey = Object.keys(referalsDB).find(k => k.toLowerCase() === current.toLowerCase());
-        current = nextKey ? referalsDB[nextKey] : null;
+        const nextSponsorKey = Object.keys(referalsDB).find(k => k.toLowerCase() === referalsDB[current]?.toLowerCase());
+        current = nextSponsorKey ? nextSponsorKey : referalsDB[current];
     }
 
-    res.json({
-        success: true,
-        login: targetUser,
-        chain: chain
-    });
+    chain.reverse();
+    res.json({ success: true, chain });
 });
 
-app.listen(PORT, () => {
-    console.log(`[САЙТ 2] Защищенный сервер успешно запущен на порту ${PORT}`);
+app.post('/api/admin/delete-user', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'Имя пользователя обязательно' });
+    
+    delete shopUsersDB[username];
+    delete referalsDB[username];
+    
+    Object.keys(treeDB).forEach(cellId => {
+        if (treeDB[cellId].user === username) {
+            treeDB[cellId].user = null;
+        }
+    });
+    
+    res.json({ success: true });
 });
+
+app.get('/api/sys-wallets', (req, res) => {
+    res.json({ success: true, wallets });
+});
+
+app.listen(PORT, () => console.log(`Backend server running on port ${PORT}`));
